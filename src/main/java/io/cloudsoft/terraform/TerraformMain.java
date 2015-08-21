@@ -21,15 +21,15 @@ import io.cloudsoft.terraform.sample.app.*;
  * It inherits the standard Brooklyn CLI options from {@link Main},
  * plus adds a few more shortcuts for favourite blueprints to the {@link LaunchCommand}.
  */
-public class SampleMain extends Main {
+public class TerraformMain extends Main {
     
-    private static final Logger log = LoggerFactory.getLogger(SampleMain.class);
+    private static final Logger log = LoggerFactory.getLogger(TerraformMain.class);
     
     public static final String DEFAULT_LOCATION = "localhost";
 
     public static void main(String... args) {
         log.debug("CLI invoked with args "+Arrays.asList(args));
-        new SampleMain().execCli(args);
+        new TerraformMain().execCli(args);
     }
 
     @Override

@@ -21,7 +21,7 @@
   </description>
 
   <properties>
-    <project.entry>io.cloudsoft.terraform.SampleMain</project.entry>
+    <project.entry>io.cloudsoft.terraform.TerraformMain</project.entry>
   </properties>
 
   <dependencies>
