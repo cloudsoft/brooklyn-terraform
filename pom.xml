@@ -57,7 +57,7 @@
 				  <descriptors>
 					  <descriptor>src/main/assembly/assembly.xml</descriptor>
 				  </descriptors>
-				  <finalName>brooklyn-spark</finalName>
+				  <finalName>brooklyn-terraform</finalName>
 			  </configuration>
 			  <executions>
 				  <execution>
