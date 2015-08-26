@@ -1,21 +1,26 @@
 package io.cloudsoft.terraform;
 
+import static java.lang.String.format;
+import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAs;
+
 import java.io.InputStream;
+import java.util.LinkedList;
+import java.util.List;
 
 import org.apache.brooklyn.api.entity.EntityLocal;
+import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.entity.java.JavaSoftwareProcessSshDriver;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.ResourceUtils;
+import org.apache.brooklyn.util.os.Os;
+import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
 import org.apache.brooklyn.util.text.Strings;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableMap;
 
 public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements TerraformDriver {
-
-    private static final Logger log = LoggerFactory.getLogger(TerraformSshDriver.class);
 
     public TerraformSshDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
@@ -38,8 +43,23 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
     }
 
     @Override
+    public void preInstall() {
+        resolver = Entities.newDownloader(this, ImmutableMap.of("filename", format("terraform-%s.zip", getVersion())));
+        setExpandedInstallDir(Os.mergePaths(getInstallDir(), resolver.getUnpackedDirectoryName(format("terraform-%s.zip", getVersion()))));
+    }
+
+    @Override
     public void install() {
-        log.info("Terraform CLI assumed to be installed -- taking no action.");
+        List<String> urls = resolver.getTargets();
+        String saveAs = resolver.getFilename();
+
+        List<String> commands = new LinkedList<String>();
+        commands.add(BashCommands.INSTALL_ZIP);
+        commands.add(BashCommands.INSTALL_CURL);
+        commands.addAll(commandsToDownloadUrlsAs(urls, saveAs));
+        commands.add(format("unzip %s", saveAs));
+
+        newScript(INSTALLING).body.append(commands).execute();
     }
 
     @Override
@@ -50,6 +70,9 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
         boolean hasConfiguration = copyConfiguration();
         if (!hasConfiguration)
             throw new IllegalStateException("No Terraform configuration could be resolved.");
+
+        //TODO Display meaningful message indicating that the config file is invalid
+        newScript(CUSTOMIZING).updateTaskAndFailOnNonZeroResultCode().body.append(makeTerraformCommand("plan")).execute();
     }
 
     @Override
@@ -80,5 +103,10 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     private String getConfigurationFilePath() {
         return getRunDir() + "/configuration.tf";
+    }
+
+    @Override
+    public String makeTerraformCommand(String argument) {
+        return format("cd %s && %s/terraform %s", getRunDir(), getInstallDir(), argument);
     }
 }
