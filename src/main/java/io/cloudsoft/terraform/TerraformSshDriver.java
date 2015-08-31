@@ -3,9 +3,13 @@ package io.cloudsoft.terraform;
 import static java.lang.String.format;
 import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAs;
 
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.core.entity.Entities;
@@ -17,6 +21,9 @@ import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
 import org.apache.brooklyn.util.text.Strings;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 
@@ -105,8 +112,18 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
         return getRunDir() + "/configuration.tf";
     }
 
+    private String getStateFilePath() {
+        return getRunDir() + "/terraform.tfstate";
+    }
+
     @Override
     public String makeTerraformCommand(String argument) {
         return format("cd %s && %s/terraform %s", getRunDir(), getInstallDir(), argument);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Map<String, Object> getState() throws JsonParseException, JsonMappingException, IOException {
+        return ImmutableMap.copyOf(new ObjectMapper().readValue(new File(getStateFilePath()), LinkedHashMap.class));
     }
 }

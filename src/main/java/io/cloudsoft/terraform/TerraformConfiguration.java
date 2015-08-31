@@ -1,10 +1,13 @@
 package io.cloudsoft.terraform;
 
+import java.util.Map;
+
 import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Attributes;
+import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensorAndConfigKey.StringAttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.Sensors;
@@ -41,4 +44,8 @@ public interface TerraformConfiguration extends SoftwareProcess {
 
     AttributeSensor<String> PLAN = Sensors.newStringSensor("plan",
             "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.");
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    AttributeSensor<Map<String, Object>> STATE = new BasicAttributeSensor(Map.class, "state",
+            "A map constructed from the state file on disk which contains the state of all managed infrastructure.");
 }

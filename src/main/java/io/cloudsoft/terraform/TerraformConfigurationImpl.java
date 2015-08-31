@@ -1,5 +1,7 @@
 package io.cloudsoft.terraform;
 
+import java.util.Map;
+
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.core.location.Locations;
@@ -13,6 +15,7 @@ import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
 
 import com.google.common.base.Function;
+import com.google.common.collect.ImmutableMap;
 
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
 
@@ -33,7 +36,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         if (machine.isPresent()) {
             sshFeed = SshFeed.builder()
                     .entity(this)
-                    .period(Duration.TEN_SECONDS)
+                    .period(Duration.seconds(30))
                     .machine(machine.get())
                     .poll(new SshPollConfig<String>(SHOW)
                             .command(getDriver().makeTerraformCommand("show"))
@@ -48,19 +51,22 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                                     ServiceStateLogic.setExpectedState(TerraformConfigurationImpl.this, Lifecycle.ON_FIRE);
                                     return input.getStderr();
                                 }}))
-//                    .poll(new SshPollConfig<String>(STATE)
-//                            .command(getDriver().makeTerraformCommand("state"))
-//                            .onSuccess(new Function<SshPollValue, String>() {
-//                                @Override
-//                                public String apply(SshPollValue input) {
-//                                    return input.getStdout();
-//                                }})
-//                            .onFailure(new Function<SshPollValue, String>() {
-//                                @Override
-//                                public String apply(SshPollValue input) {
-//                                    ServiceStateLogic.setExpectedState(TerraformConfigurationImpl.this, Lifecycle.ON_FIRE);
-//                                    return input.getStderr();
-//                                }}))
+                    .poll(new SshPollConfig<Map<String, Object>>(STATE)
+                            .command(getDriver().makeTerraformCommand("refresh"))
+                            .onSuccess(new Function<SshPollValue, Map<String, Object>>() {
+                                @Override
+                                public Map<String, Object> apply(SshPollValue input) {
+                                    try {
+                                        return getDriver().getState();
+                                    } catch (Exception e) {
+                                        return ImmutableMap.<String, Object> of("ERROR", "Failed to parse state file.");
+                                    }
+                                }})
+                            .onFailure(new Function<SshPollValue, Map<String, Object>>() {
+                                @Override
+                                public Map<String, Object> apply(SshPollValue input) {
+                                    return ImmutableMap.<String, Object> of("ERROR", "Failed to refresh state.");
+                                }}))
                     .poll(new SshPollConfig<String>(PLAN)
                             .command(getDriver().makeTerraformCommand("plan"))
                             .onSuccess(new Function<SshPollValue, String>() {
