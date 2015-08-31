@@ -5,7 +5,9 @@ import java.util.Map;
 import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.config.ConfigKey;
+import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.config.ConfigKeys;
+import org.apache.brooklyn.core.effector.MethodEffector;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensorAndConfigKey;
@@ -48,4 +50,12 @@ public interface TerraformConfiguration extends SoftwareProcess {
     @SuppressWarnings({ "rawtypes", "unchecked" })
     AttributeSensor<Map<String, Object>> STATE = new BasicAttributeSensor(Map.class, "state",
             "A map constructed from the state file on disk which contains the state of all managed infrastructure.");
+
+    MethodEffector<Void> APPLY = new MethodEffector<Void>(TerraformConfiguration.class, "apply");
+
+    @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
+    void apply();
+
+    @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
+    void destroy();
 }

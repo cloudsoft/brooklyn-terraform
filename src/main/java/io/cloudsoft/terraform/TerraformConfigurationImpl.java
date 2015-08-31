@@ -2,6 +2,8 @@ package io.cloudsoft.terraform;
 
 import java.util.Map;
 
+import org.apache.brooklyn.core.annotation.Effector;
+import org.apache.brooklyn.core.effector.ssh.SshEffectorTasks;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.core.location.Locations;
@@ -10,6 +12,9 @@ import org.apache.brooklyn.feed.ssh.SshFeed;
 import org.apache.brooklyn.feed.ssh.SshPollConfig;
 import org.apache.brooklyn.feed.ssh.SshPollValue;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
+import org.apache.brooklyn.util.core.task.DynamicTasks;
+import org.apache.brooklyn.util.core.task.system.ProcessTaskStub.ScriptReturnType;
+import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
@@ -109,5 +114,37 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public TerraformDriver getDriver() {
         return (TerraformDriver) super.getDriver();
+    }
+
+    @Override
+    @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
+    public void apply() {
+        String command = getDriver().makeTerraformCommand("apply");
+        SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
+
+        ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
+                .returning(ScriptReturnType.EXIT_CODE)
+                .requiringExitCodeZero()
+                .machine(machine)
+                .summary(command)
+                .newTask();
+
+        DynamicTasks.queue(task).asTask();
+    }
+
+    @Override
+    @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
+    public void destroy() {
+        String command = getDriver().makeTerraformCommand("destroy -force");
+        SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
+
+        ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
+                .returning(ScriptReturnType.EXIT_CODE)
+                .requiringExitCodeZero()
+                .machine(machine)
+                .summary(command)
+                .newTask();
+
+        DynamicTasks.queue(task).asTask();
     }
 }
