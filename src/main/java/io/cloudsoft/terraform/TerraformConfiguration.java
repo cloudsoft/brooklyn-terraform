@@ -26,32 +26,34 @@ public interface TerraformConfiguration extends SoftwareProcess {
     BasicAttributeSensorAndConfigKey<String> DOWNLOAD_URL = new StringAttributeSensorAndConfigKey(
             Attributes.DOWNLOAD_URL, "https://dl.bintray.com/mitchellh/terraform/terraform_${version}_darwin_amd64.zip");
 
-    @SetFromFlag("configurationContents")
+    @SetFromFlag("tfConfigurationContents")
     ConfigKey<String> CONFIGURATION_CONTENTS = ConfigKeys.newStringConfigKey(
-            "configuration.contents",
+            "tf.configuration.contents",
             "Contents of the configuration file that will be applied by Terraform.",
             "");
 
-    @SetFromFlag("configurationUrl")
+    @SetFromFlag("tfConfigurationUrl")
     ConfigKey<String> CONFIGURATION_URL = ConfigKeys.newStringConfigKey(
-            "configuration.url",
+            "tf.configuration.url",
             "URL of the configuration file that will be applied by Terraform.",
             "");
 
-    AttributeSensor<Boolean> CONFIGURATION_IS_APPLIED = Sensors.newBooleanSensor("configuration.isApplied",
+    AttributeSensor<Boolean> CONFIGURATION_IS_APPLIED = Sensors.newBooleanSensor("tf.configuration.isApplied",
             "Whether the supplied Terraform configuration has been successfully applied.");
 
-    AttributeSensor<String> SHOW = Sensors.newStringSensor("show",
+    AttributeSensor<String> SHOW = Sensors.newStringSensor("tf.show",
             "The contents of the Terraform show command which provides a human-readable view of the state of the configuration.");
 
-    AttributeSensor<String> PLAN = Sensors.newStringSensor("plan",
+    AttributeSensor<String> PLAN = Sensors.newStringSensor("tf.plan",
             "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.");
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    AttributeSensor<Map<String, Object>> STATE = new BasicAttributeSensor(Map.class, "state",
+    AttributeSensor<Map<String, Object>> STATE = new BasicAttributeSensor(Map.class, "tf.state",
             "A map constructed from the state file on disk which contains the state of all managed infrastructure.");
 
     MethodEffector<Void> APPLY = new MethodEffector<Void>(TerraformConfiguration.class, "apply");
+
+    MethodEffector<Void> DESTROY = new MethodEffector<Void>(TerraformConfiguration.class, "destroy");
 
     @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
     void apply();
