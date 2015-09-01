@@ -46,7 +46,7 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     @Override
     public void stop() {
-        // TODO Auto-generated method stub
+        ((TerraformConfiguration) entity).destroy();
     }
 
     @Override
@@ -84,7 +84,7 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     @Override
     public void launch() {
-        // TODO Auto-generated method stub
+        ((TerraformConfiguration) entity).apply();
     }
 
     private boolean copyConfiguration() {
