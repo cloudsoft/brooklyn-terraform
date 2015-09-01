@@ -52,83 +52,84 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         connectServiceUpIsRunning();
 
         functionFeed = FunctionFeed.builder()
-                .entity(this)
-                .period(FEED_UPDATE_PERIOD)
-                .poll(new FunctionPollConfig<Object, Boolean>(CONFIGURATION_IS_APPLIED)
-                    .callable(new Callable<Boolean>() {
-                        @Override
-                        public Boolean call() throws Exception {
-                            return configurationIsApplied.get();
-                        }
-                    }))
-                .build();
+            .entity(this)
+            .period(FEED_UPDATE_PERIOD)
+            .poll(new FunctionPollConfig<Object, Boolean>(CONFIGURATION_IS_APPLIED)
+                .callable(new Callable<Boolean>() {
+                    @Override
+                    public Boolean call() throws Exception {
+                        return configurationIsApplied.get();
+                    }
+                }))
+            .build();
 
         Maybe<SshMachineLocation> machine = Locations.findUniqueSshMachineLocation(getLocations());
         if (machine.isPresent()) {
             sshFeed = SshFeed.builder()
-                    .entity(this)
-                    .period(FEED_UPDATE_PERIOD)
-                    .machine(machine.get())
-                    .poll(new SshPollConfig<String>(SHOW)
-                            .command(getDriver().makeTerraformCommand("show -no-color"))
-                            .onSuccess(new Function<SshPollValue, String>() {
-                                @Override
-                                public String apply(SshPollValue input) {
-                                    String output = input.getStdout();
-                                    lastCommandOutputs.put(SHOW.getName(), output);
+                .entity(this)
+                .period(FEED_UPDATE_PERIOD)
+                .machine(machine.get())
+                .poll(new SshPollConfig<String>(SHOW)
+                    .command(getDriver().makeTerraformCommand("show -no-color"))
+                    .onSuccess(new Function<SshPollValue, String>() {
+                        @Override
+                        public String apply(SshPollValue input) {
+                            String output = input.getStdout();
+                            if (Strings.isBlank(output)) output = "No configuration is applied.";
+                            lastCommandOutputs.put(SHOW.getName(), output);
 
-                                    return output;
-                                }})
-                            .onFailure(new Function<SshPollValue, String>() {
-                                @Override
-                                public String apply(SshPollValue input) {
-                                    if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(SHOW.getName()))
-                                        return (String) lastCommandOutputs.get(SHOW.getName());
-                                    else
-                                        return input.getStderr();
-                                }}))
-                    .poll(new SshPollConfig<Map<String, Object>>(STATE)
-                            .command(getDriver().makeTerraformCommand("refresh -no-color"))
-                            .onSuccess(new Function<SshPollValue, Map<String, Object>>() {
-                                @Override
-                                public Map<String, Object> apply(SshPollValue input) {
-                                    try {
-                                        Map<String, Object> state = getDriver().getState();
-                                        lastCommandOutputs.put(STATE.getName(), state);
+                            return output;
+                        }})
+                    .onFailure(new Function<SshPollValue, String>() {
+                        @Override
+                        public String apply(SshPollValue input) {
+                            if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(SHOW.getName()))
+                                return (String) lastCommandOutputs.get(SHOW.getName());
+                            else
+                                return input.getStderr();
+                        }}))
+                .poll(new SshPollConfig<Map<String, Object>>(STATE)
+                    .command(getDriver().makeTerraformCommand("refresh -no-color"))
+                    .onSuccess(new Function<SshPollValue, Map<String, Object>>() {
+                        @Override
+                        public Map<String, Object> apply(SshPollValue input) {
+                            try {
+                                Map<String, Object> state = getDriver().getState();
+                                lastCommandOutputs.put(STATE.getName(), state);
 
-                                        return state;
-                                    } catch (Exception e) {
-                                        return ImmutableMap.<String, Object> of("ERROR", "Failed to parse state file.");
-                                    }
-                                }})
-                            .onFailure(new Function<SshPollValue, Map<String, Object>>() {
-                                @SuppressWarnings("unchecked")
-                                @Override
-                                public Map<String, Object> apply(SshPollValue input) {
-                                    if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(STATE.getName()))
-                                        return (Map<String, Object>) lastCommandOutputs.get(STATE.getName());
-                                    else
-                                        return ImmutableMap.<String, Object> of("ERROR", "Failed to refresh state file.");
-                                }}))
-                    .poll(new SshPollConfig<String>(PLAN)
-                            .command(getDriver().makeTerraformCommand("plan -no-color"))
-                            .onSuccess(new Function<SshPollValue, String>() {
-                                @Override
-                                public String apply(SshPollValue input) {
-                                    String output = input.getStdout();
-                                    lastCommandOutputs.put(PLAN.getName(), output);
+                                return state;
+                            } catch (Exception e) {
+                                return ImmutableMap.<String, Object> of("ERROR", "Failed to parse state file.");
+                            }
+                        }})
+                    .onFailure(new Function<SshPollValue, Map<String, Object>>() {
+                        @SuppressWarnings("unchecked")
+                        @Override
+                        public Map<String, Object> apply(SshPollValue input) {
+                            if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(STATE.getName()))
+                                return (Map<String, Object>) lastCommandOutputs.get(STATE.getName());
+                            else
+                                return ImmutableMap.<String, Object> of("ERROR", "Failed to refresh state file.");
+                        }}))
+                .poll(new SshPollConfig<String>(PLAN)
+                    .command(getDriver().makeTerraformCommand("plan -no-color"))
+                    .onSuccess(new Function<SshPollValue, String>() {
+                        @Override
+                        public String apply(SshPollValue input) {
+                            String output = input.getStdout();
+                            lastCommandOutputs.put(PLAN.getName(), output);
 
-                                    return output;
-                                }})
-                            .onFailure(new Function<SshPollValue, String>() {
-                                @Override
-                                public String apply(SshPollValue input) {
-                                    if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(PLAN.getName()))
-                                        return (String) lastCommandOutputs.get(PLAN.getName());
-                                    else
-                                        return input.getStderr();
-                                }}))
-                    .build();
+                            return output;
+                        }})
+                    .onFailure(new Function<SshPollValue, String>() {
+                        @Override
+                        public String apply(SshPollValue input) {
+                            if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(PLAN.getName()))
+                                return (String) lastCommandOutputs.get(PLAN.getName());
+                            else
+                                return input.getStderr();
+                        }}))
+                .build();
         }
     }
 
