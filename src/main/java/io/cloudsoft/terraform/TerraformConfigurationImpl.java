@@ -1,6 +1,7 @@
 package io.cloudsoft.terraform;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.effector.ssh.SshEffectorTasks;
@@ -26,6 +27,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     private SshFeed sshFeed;
 
+    private final AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
+
+    private final AtomicBoolean configurationIsApplied = new AtomicBoolean(false);
+
     @Override
     public void init() {
         super.init();
@@ -43,6 +48,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     .entity(this)
                     .period(Duration.seconds(30))
                     .machine(machine.get())
+                    .poll(new SshPollConfig<Boolean>(CONFIGURATION_IS_APPLIED)
+                            .onSuccess(new Function<SshPollValue, Boolean>() {
+                                @Override
+                                public Boolean apply(SshPollValue input) {
+                                    return configurationIsApplied.get();
+                                }}))
                     .poll(new SshPollConfig<String>(SHOW)
                             .command(getDriver().makeTerraformCommand("show -no-color"))
                             .onSuccess(new Function<SshPollValue, String>() {
@@ -119,32 +130,50 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
     public void apply() {
-        String command = getDriver().makeTerraformCommand("apply -no-color");
-        SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
+        if (!configurationIsApplied.get() && !configurationChangeInProgress.getAndSet(true)) {
+            try {
+                String command = getDriver().makeTerraformCommand("apply -no-color");
+                SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
 
-        ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
-                .returning(ScriptReturnType.EXIT_CODE)
-                .requiringExitCodeZero()
-                .machine(machine)
-                .summary(command)
-                .newTask();
+                ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
+                        .returning(ScriptReturnType.EXIT_CODE)
+                        .requiringExitCodeZero()
+                        .machine(machine)
+                        .summary(command)
+                        .newTask();
 
-        DynamicTasks.queue(task).asTask();
+                DynamicTasks.queue(task).asTask();
+
+                if (task.getExitCode() == 0)
+                    configurationIsApplied.set(true);
+            } finally {
+                configurationChangeInProgress.set(false);
+            }
+        }
     }
 
     @Override
     @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
     public void destroy() {
-        String command = getDriver().makeTerraformCommand("destroy -force");
-        SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
+        if (configurationIsApplied.get() && !configurationChangeInProgress.getAndSet(true)) {
+            try {
+                String command = getDriver().makeTerraformCommand("destroy -force -no-color");
+                SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
 
-        ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
-                .returning(ScriptReturnType.EXIT_CODE)
-                .requiringExitCodeZero()
-                .machine(machine)
-                .summary(command)
-                .newTask();
+                ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
+                        .returning(ScriptReturnType.EXIT_CODE)
+                        .requiringExitCodeZero()
+                        .machine(machine)
+                        .summary(command)
+                        .newTask();
 
-        DynamicTasks.queue(task).asTask();
+                DynamicTasks.queue(task).asTask();
+
+                if (task.getExitCode() == 0)
+                    configurationIsApplied.set(false);
+            } finally {
+                configurationChangeInProgress.set(false);
+            }
+        }
     }
 }

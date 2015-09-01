@@ -8,4 +8,4 @@ test-output/
 ignored
 *.iml
 *.log.zip
-.DS_STORE
+.DS_Store
