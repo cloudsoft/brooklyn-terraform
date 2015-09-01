@@ -44,7 +44,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     .period(Duration.seconds(30))
                     .machine(machine.get())
                     .poll(new SshPollConfig<String>(SHOW)
-                            .command(getDriver().makeTerraformCommand("show"))
+                            .command(getDriver().makeTerraformCommand("show -no-color"))
                             .onSuccess(new Function<SshPollValue, String>() {
                                 @Override
                                 public String apply(SshPollValue input) {
@@ -57,7 +57,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                                     return input.getStderr();
                                 }}))
                     .poll(new SshPollConfig<Map<String, Object>>(STATE)
-                            .command(getDriver().makeTerraformCommand("refresh"))
+                            .command(getDriver().makeTerraformCommand("refresh -no-color"))
                             .onSuccess(new Function<SshPollValue, Map<String, Object>>() {
                                 @Override
                                 public Map<String, Object> apply(SshPollValue input) {
@@ -73,7 +73,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                                     return ImmutableMap.<String, Object> of("ERROR", "Failed to refresh state.");
                                 }}))
                     .poll(new SshPollConfig<String>(PLAN)
-                            .command(getDriver().makeTerraformCommand("plan"))
+                            .command(getDriver().makeTerraformCommand("plan -no-color"))
                             .onSuccess(new Function<SshPollValue, String>() {
                                 @Override
                                 public String apply(SshPollValue input) {
@@ -119,7 +119,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
     public void apply() {
-        String command = getDriver().makeTerraformCommand("apply");
+        String command = getDriver().makeTerraformCommand("apply -no-color");
         SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
 
         ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
