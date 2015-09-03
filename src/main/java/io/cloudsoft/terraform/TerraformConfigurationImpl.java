@@ -32,9 +32,9 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     private FunctionFeed functionFeed;
 
-    private final Map<String, Object> lastCommandOutputs = Collections.synchronizedMap(Maps.<String, Object> newHashMapWithExpectedSize(3));
+    private Map<String, Object> lastCommandOutputs = Collections.synchronizedMap(Maps.<String, Object> newHashMapWithExpectedSize(3));
 
-    private final AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
+    private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
 
     @Override
     public void init() {
@@ -45,7 +45,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             setConfigurationApplied(false);
     }
 
-
     private void checkConfiguration() {
         String configurationUrl = getConfig(CONFIGURATION_URL);
         String configurationContents = getConfig(CONFIGURATION_CONTENTS);
@@ -54,6 +53,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         if (Strings.isBlank(configurationUrl) == Strings.isBlank(configurationContents))
             throw new IllegalArgumentException("Exactly one of the two must have a value: '"
                     + CONFIGURATION_URL.getName() + "' or '" + CONFIGURATION_CONTENTS.getName() + "'.");
+    }
+
+    @Override
+    public void rebind() {
+        lastCommandOutputs = Collections.synchronizedMap(Maps.<String, Object> newHashMapWithExpectedSize(3));
+        configurationChangeInProgress = new AtomicBoolean(false);
+
+        super.rebind();
     }
 
     @Override
