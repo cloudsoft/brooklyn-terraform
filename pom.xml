@@ -57,7 +57,7 @@
 				  <descriptors>
 					  <descriptor>src/main/assembly/assembly.xml</descriptor>
 				  </descriptors>
-				  <finalName>brooklyn-spark</finalName>
+				  <finalName>brooklyn-terraform</finalName>
 			  </configuration>
 			  <executions>
 				  <execution>
@@ -89,7 +89,7 @@
 				  </supportedProjectTypes>
 				  <instructions>
 					  <!-- OSGi specific instruction -->
-					  <Import-Package>!io.airlift,!com.maxmind.geoip2,!com.google.api.client,*</Import-Package>
+					  <Import-Package>!io.airlift.command,!com.maxmind.geoip2,!com.google.api.client,*</Import-Package>
 				  </instructions>
 			  </configuration>
 		  </plugin>
