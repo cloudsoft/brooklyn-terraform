@@ -51,7 +51,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         super.connectSensors();
         connectServiceUpIsRunning();
 
-        functionFeed = FunctionFeed.builder()
+        addFeed(functionFeed = FunctionFeed.builder()
             .entity(this)
             .period(FEED_UPDATE_PERIOD)
             .poll(new FunctionPollConfig<Object, Boolean>(CONFIGURATION_IS_APPLIED)
@@ -61,11 +61,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                         return configurationIsApplied.get();
                     }
                 }))
-            .build();
+            .build());
 
         Maybe<SshMachineLocation> machine = Locations.findUniqueSshMachineLocation(getLocations());
         if (machine.isPresent()) {
-            sshFeed = SshFeed.builder()
+            addFeed(sshFeed = SshFeed.builder()
                 .entity(this)
                 .period(FEED_UPDATE_PERIOD)
                 .machine(machine.get())
@@ -129,7 +129,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                             else
                                 return input.getStderr();
                         }}))
-                .build();
+                .build());
         }
     }
 
