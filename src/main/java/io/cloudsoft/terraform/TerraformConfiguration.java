@@ -24,7 +24,7 @@ public interface TerraformConfiguration extends SoftwareProcess {
 
     @SetFromFlag("downloadUrl")
     BasicAttributeSensorAndConfigKey<String> DOWNLOAD_URL = new StringAttributeSensorAndConfigKey(
-            Attributes.DOWNLOAD_URL, "https://dl.bintray.com/mitchellh/terraform/terraform_${version}_darwin_amd64.zip");
+            Attributes.DOWNLOAD_URL, "https://dl.bintray.com/mitchellh/terraform/terraform_${version}_${driver.osTag}.zip");
 
     @SetFromFlag("tfConfigurationContents")
     ConfigKey<String> CONFIGURATION_CONTENTS = ConfigKeys.newStringConfigKey(

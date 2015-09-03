@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.brooklyn.api.entity.EntityLocal;
+import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.entity.java.JavaSoftwareProcessSshDriver;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
@@ -49,10 +50,27 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
         ((TerraformConfiguration) entity).destroy();
     }
 
+    public String getOsTag() {
+        OsDetails os = getLocation().getOsDetails();
+
+        // If no details, assume 64-bit Linux
+        if (os == null) return "linux_amd64";
+
+        // If not Mac, assume Linux
+        String osType = os.isMac() ? "darwin" : "linux";
+        String archType = os.is64bit() ? "amd64" : "386";
+
+        return osType + "_" + archType;
+    }
+
+    public String getInstallFilename() {
+        return format("terraform_%s_%s.zip", getVersion(), getOsTag());
+    }
+
     @Override
     public void preInstall() {
-        resolver = Entities.newDownloader(this, ImmutableMap.of("filename", format("terraform-%s.zip", getVersion())));
-        setExpandedInstallDir(Os.mergePaths(getInstallDir(), resolver.getUnpackedDirectoryName(format("terraform-%s.zip", getVersion()))));
+        resolver = Entities.newDownloader(this, ImmutableMap.of("filename", getInstallFilename()));
+        setExpandedInstallDir(Os.mergePaths(getInstallDir(), resolver.getUnpackedDirectoryName(format("terraform_%s_%s", getVersion(), getOsTag()))));
     }
 
     @Override
