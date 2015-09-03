@@ -60,4 +60,6 @@ public interface TerraformConfiguration extends SoftwareProcess {
 
     @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
     void destroy();
+
+    boolean isConfigurationApplied();
 }
