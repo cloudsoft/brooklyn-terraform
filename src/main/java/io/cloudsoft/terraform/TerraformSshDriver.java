@@ -77,9 +77,6 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
         boolean hasConfiguration = copyConfiguration();
         if (!hasConfiguration)
             throw new IllegalStateException("No Terraform configuration could be resolved.");
-
-        //TODO Display meaningful message indicating that the config file is invalid
-        newScript(CUSTOMIZING).updateTaskAndFailOnNonZeroResultCode().body.append(makeTerraformCommand("plan -no-color")).execute();
     }
 
     @Override
