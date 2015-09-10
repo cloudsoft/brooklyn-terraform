@@ -17,6 +17,8 @@ import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.entity.java.JavaSoftwareProcessSshDriver;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.ResourceUtils;
+import org.apache.brooklyn.util.core.task.DynamicTasks;
+import org.apache.brooklyn.util.core.task.ssh.SshTasks;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
@@ -99,6 +101,10 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     @Override
     public void launch() {
+        //TODO Display meaningful message indicating that the config file is invalid
+        //Don't check before launch as additional tf files may be uploaded/created at various stages
+        newScript(LAUNCHING).updateTaskAndFailOnNonZeroResultCode().body.append(makeTerraformCommand("plan -no-color")).execute();
+
         ((TerraformConfiguration) entity).apply();
     }
 
@@ -139,6 +145,7 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
     @SuppressWarnings("unchecked")
     @Override
     public Map<String, Object> getState() throws JsonParseException, JsonMappingException, IOException {
-        return ImmutableMap.copyOf(new ObjectMapper().readValue(new File(getStateFilePath()), LinkedHashMap.class));
+        String state = DynamicTasks.queue(SshTasks.newSshFetchTaskFactory(getLocation(), getStateFilePath())).asTask().getUnchecked();
+        return ImmutableMap.copyOf(new ObjectMapper().readValue(state, LinkedHashMap.class));
     }
 }
