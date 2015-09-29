@@ -41,6 +41,22 @@ services:
 
 There are several options available for building and running.
 
+### Downloading a standalone distro release
+
+Download a standalone distro release from the [releases page of this repo](https://github.com/mikezaccardo/brooklyn-terraform/releases).
+
+Extract the tarball:
+
+    tar xzf brooklyn-terraform-dist.tar.gz
+
+Navigate to the extracted folder:
+
+    cd brooklyn-terraform
+
+To run Apache Brooklyn with Terraform support bundled:
+
+    ./start.sh launch
+
 ### Building a standalone distro
 
 To build an assembly, simply run:
