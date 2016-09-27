@@ -17,6 +17,7 @@ services:
 - type: io.cloudsoft.terraform.TerraformConfiguration
   name: Terraform Configuration
   brooklyn.config:
+    downloadUrl: https://releases.hashicorp.com/terraform/0.6.3/terraform_0.6.3_darwin_amd64.zip
     tf.configuration.contents: |        
         provider "aws" {
             access_key = "YOUR_ACCESS_KEY"
