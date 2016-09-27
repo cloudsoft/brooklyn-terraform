@@ -20,11 +20,11 @@ import org.apache.brooklyn.util.core.flags.SetFromFlag;
 public interface TerraformConfiguration extends SoftwareProcess {
 
     @SetFromFlag("version")
-    ConfigKey<String> SUGGESTED_VERSION = ConfigKeys.newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "0.6.3");
+    ConfigKey<String> SUGGESTED_VERSION = ConfigKeys.newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "0.7.4");
 
     @SetFromFlag("downloadUrl")
     BasicAttributeSensorAndConfigKey<String> DOWNLOAD_URL = new StringAttributeSensorAndConfigKey(
-            Attributes.DOWNLOAD_URL, "https://dl.bintray.com/mitchellh/terraform/terraform_${version}_${driver.osTag}.zip");
+            Attributes.DOWNLOAD_URL, "https://releases.hashicorp.com/terraform/${version}/terraform_${version}_${driver.osTag}.zip");
 
     @SetFromFlag("tfConfigurationContents")
     ConfigKey<String> CONFIGURATION_CONTENTS = ConfigKeys.newStringConfigKey(
