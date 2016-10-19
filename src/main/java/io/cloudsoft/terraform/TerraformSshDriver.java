@@ -3,7 +3,6 @@ package io.cloudsoft.terraform;
 import static java.lang.String.format;
 import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAs;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.LinkedHashMap;
@@ -15,6 +14,7 @@ import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.entity.java.JavaSoftwareProcessSshDriver;
+import org.apache.brooklyn.entity.software.base.lifecycle.ScriptHelper;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
@@ -101,11 +101,14 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     @Override
     public void launch() {
-        //TODO Display meaningful message indicating that the config file is invalid
-        //Don't check before launch as additional tf files may be uploaded/created at various stages
-        newScript(LAUNCHING).updateTaskAndFailOnNonZeroResultCode().body.append(makeTerraformCommand("plan -no-color")).execute();
-
-        ((TerraformConfiguration) entity).apply();
+        ScriptHelper helper = newScript(LAUNCHING)
+                .body.append(makeTerraformCommand("apply -no-color"))
+                .noExtraOutput()
+                .gatherOutput();
+        int result = helper.execute();
+        if (result != 0) {
+            throw new IllegalStateException("Error executing Terraform plan: " + helper.getResultStderr());
+        }
     }
 
     private boolean copyConfiguration() {

@@ -33,10 +33,10 @@ public interface TerraformConfiguration extends SoftwareProcess {
             "");
 
     @SetFromFlag("tfConfigurationUrl")
-    ConfigKey<String> CONFIGURATION_URL = ConfigKeys.newStringConfigKey(
-            "tf.configuration.url",
-            "URL of the configuration file that will be applied by Terraform.",
-            "");
+    ConfigKey<String> CONFIGURATION_URL = ConfigKeys.builder(String.class)
+            .name("tf.configuration.url")
+            .description("URL of the configuration file that will be applied by Terraform.")
+            .build();
 
     AttributeSensor<Boolean> CONFIGURATION_IS_APPLIED = Sensors.newBooleanSensor("tf.configuration.isApplied",
             "Whether the supplied Terraform configuration has been successfully applied.");
@@ -46,6 +46,9 @@ public interface TerraformConfiguration extends SoftwareProcess {
 
     AttributeSensor<String> PLAN = Sensors.newStringSensor("tf.plan",
             "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.");
+
+    AttributeSensor<String> OUTPUT = Sensors.newStringSensor("tf.output",
+            "The contents of the Terraform output command which inspects Terraform state or plan.");
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     AttributeSensor<Map<String, Object>> STATE = new BasicAttributeSensor(Map.class, "tf.state",
