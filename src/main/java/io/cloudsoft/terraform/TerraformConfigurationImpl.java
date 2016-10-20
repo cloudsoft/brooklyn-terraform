@@ -1,8 +1,12 @@
 package io.cloudsoft.terraform;
 
+import static com.google.common.collect.Maps.transformEntries;
+
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.annotation.Nullable;
 
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
@@ -26,6 +30,7 @@ import org.apache.brooklyn.util.time.Duration;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Maps.EntryTransformer;
 import com.google.gson.Gson;
 import com.google.gson.internal.LinkedTreeMap;
 
@@ -192,10 +197,8 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Override
         public String apply(SshPollValue input) {
             String output = input.getStdout();
-
             if (output != null) {
                 LinkedTreeMap<String, Map<String, Object>> result = new Gson().fromJson(output, LinkedTreeMap.class);
-
                 for (String name : result.keySet()) {
                     if (result.get(name).get("type").equals("string")) {
                         String sensorName = String.format("%s.%s", "tf.output", name);
@@ -273,6 +276,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                         .requiringExitCodeZero()
                         .machine(machine)
                         .summary(command)
+                        .environmentVariables(
+                                transformEntries(getConfig(SHELL_ENVIRONMENT), new EntryTransformer<String, Object, String>() {
+                                            @Override
+                                            public String transformEntry(@Nullable String key, @Nullable Object value) {
+                                                return (String) value;
+                                            }
+                                        }
+                                ))
                         .newTask();
 
                 DynamicTasks.queue(task).asTask();
