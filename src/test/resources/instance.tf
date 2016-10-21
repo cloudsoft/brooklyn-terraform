@@ -26,6 +26,9 @@ resource "aws_instance" "web" {
   # we specified
   ami = "${lookup(var.aws_amis, var.aws_region)}"
   subnet_id = "subnet-46d07f0f"
+  tags {
+          Name = "tf"
+  }
 }
 
 output "address" {

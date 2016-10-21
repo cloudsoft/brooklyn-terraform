@@ -49,7 +49,15 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     @Override
     public void stop() {
-        ((TerraformConfiguration) entity).destroy();
+        ScriptHelper stopScript = newScript(STOPPING)
+                .body.append(makeTerraformCommand("destroy -force -no-color"))
+                .environmentVariablesReset(getShellEnvironment())
+                .noExtraOutput()
+                .gatherOutput();
+        int result = stopScript.execute();
+        if (result != 0) {
+            throw new IllegalStateException("Error executing Terraform destroy: " + stopScript.getResultStderr());
+        }
     }
 
     public String getOsTag() {
