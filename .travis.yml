@@ -1,0 +1,15 @@
+sudo: false
+script: mvn clean install
+cache:
+  directories:
+  - "$HOME/.m2"
+deploy:
+  provider: releases
+  api_key:
+    secure: tC3bJa1o5gB3QyFh/y5+cP+7AbhFtZRjfvK8lBZ3tk6xd4uQMxPdInAsLplSIKZYkkgzLQUl2gO9Jjcg3y+zqdwg3kZy5/vnyjM4RkgxIKW9PjYDBOrVUSJQ836NahTJ7rUxW2pSMAQVIF5QLnfQBnlJc3A137OufqbncEZQAEqY+vhT3hPLc+XNXoErIUfdoYpodCve1NQSrP+1vWBzf+WChtFhfCUSE9kJ7wQsNLRdmL0zBuoHuccaUD5RlhqztCYzLunZ5ymVl7VQgPHdrmNQI/k1s7Kpn6nK+N5WnGJZLC1vmo1LZe8F+hyWULvPJIbzBzNybYIlluAz16h8aXGMnALz2nVX80s4osG87G86gX+x1oZAaGK9KQJLs2pI4Mb20F0OYwIxMyW7SjF9wV7ZUrECGSqMAlzKw0gRHoIz3WFfRpEdBi13megZMQXLKNGGhp8BuXk8zpv7F0eif4a/QJ+sog3nuAEcYiYpo4dg44ETBiJpR0IB3O2yWuJv8m7G5DymSYdjLy56wdGXhq/0DJJ6U0pSfJI06ad6+66yUXePyz7FGfwtK4aKRcOIuCig4T7HqXcFs3scOCaAoB38kqODAuV7+0L3yQ2C3b1ePRmnzAXXWWpbrnEyn2zdyppqrTCNkU+u0DMKw9CYEjfB27osE1+aKoYuyuN70z0=
+  file: brooklyn-terraform-dist.tar.gz
+  on:
+    repo: cloudsoft/brooklyn-terraform
+  skip_cleanup: true
+    on:
+      tags: true
