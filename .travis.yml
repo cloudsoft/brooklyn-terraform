@@ -11,5 +11,5 @@ deploy:
   on:
     repo: cloudsoft/brooklyn-terraform
   skip_cleanup: true
-    on:
-      tags: true
+  on:
+    tags: true
