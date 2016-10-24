@@ -41,48 +41,13 @@ services:
 
 There are several options available for building and running.
 
-### Downloading a standalone distro release
-
-Download a standalone distro release from the [releases page of this repo](https://github.com/mikezaccardo/brooklyn-terraform/releases).
-
-Extract the tarball:
-
-    tar xzf brooklyn-terraform-dist.tar.gz
-
-Navigate to the extracted folder:
-
-    cd brooklyn-terraform
-
-To run Apache Brooklyn with Terraform support bundled:
-
-    ./start.sh launch
-
-### Building a standalone distro
-
-To build an assembly, simply run:
-
-    mvn clean install
-
-This creates a tarball with a full standalone application which can be installed in any *nix machine at:
-    target/brooklyn-terraform-dist.tar.gz
-
-It also installs an unpacked version which you can run locally:
-
-     cd target/brooklyn-terraform-dist/brooklyn-terraform
-
-To run Apache Brooklyn with Terraform support bundled:
-
-     ./start.sh launch
-
-For more information see the README (or `./start.sh help`) in that directory.
-
-### Adding to Brooklyn dropins
-
-An alternative is to build a single jar and to add that to an existing Brooklyn install.
-
 First install Brooklyn. There are instructions at https://brooklyn.incubator.apache.org/v/latest/start/index.html
 
-Then simply run:
+Then copy the latest jar available at `https://oss.sonatype.org/content/repositories/snapshots/io/cloudsoft/terraform/brooklyn-terraform/0.1-SNAPSHOT/` into `$BROOKLYN_HOME/lib/dropins/`
+
+### Building the project
+
+An alternative you can build the project simply running:
 
     mvn clean install
 
