@@ -20,10 +20,6 @@
         Sample optional description goes here.
     </description>
 
-    <properties>
-        <project.entry>io.cloudsoft.terraform.TerraformMain</project.entry>
-    </properties>
-
     <distributionManagement>
         <snapshotRepository>
             <id>sonatype-nexus-snapshots</id>
