@@ -15,9 +15,9 @@
     <version>0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>Sample Brooklyn Project io.cloudsoft.terraform:brooklyn-terraform v0.1-SNAPSHOT</name>
+    <name>Brooklyn Terraform</name>
     <description>
-        Sample optional description goes here.
+        Provides entities for using Hashicorp Terraform with Apache Brooklyn
     </description>
 
     <distributionManagement>
