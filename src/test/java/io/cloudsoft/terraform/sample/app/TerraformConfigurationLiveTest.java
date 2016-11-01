@@ -1,27 +1,35 @@
 package io.cloudsoft.terraform.sample.app;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEqualsEventually;
+import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEventuallyNonNull;
+import static org.testng.Assert.assertNotNull;
 
-import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
+import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.location.Location;
+import org.apache.brooklyn.api.sensor.AttributeSensor;
+import org.apache.brooklyn.api.sensor.Sensor;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
-import org.apache.brooklyn.core.entity.EntityAsserts;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.internal.BrooklynProperties;
 import org.apache.brooklyn.core.mgmt.internal.LocalManagementContext;
 import org.apache.brooklyn.core.test.BrooklynAppLiveTestSupport;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
+import org.apache.brooklyn.test.Asserts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import com.beust.jcommander.internal.Maps;
+import com.google.common.base.Predicate;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -41,16 +49,10 @@ public class TerraformConfigurationLiveTest extends BrooklynAppLiveTestSupport {
 
     public static final String PROVIDER = "aws-ec2";
     public static final String REGION_NAME = "us-east-1";
-    public static final String TINY_HARDWARE_ID = "t1.micro";
-    public static final String SMALL_HARDWARE_ID = "m1.small";
-    public static final String LOCATION_SPEC = PROVIDER + (REGION_NAME == null ? "" : ":" + REGION_NAME);
 
     protected BrooklynProperties brooklynProperties;
-
-    protected Location loc;
-    protected List<Location> locs;
-
     private TerraformConfiguration terraformConfiguration;
+    private Map<String, Object> env;
 
     @BeforeMethod(alwaysRun=true)
     @Override
@@ -67,51 +69,62 @@ public class TerraformConfigurationLiveTest extends BrooklynAppLiveTestSupport {
         brooklynProperties.remove("brooklyn.ssh.config.scriptHeader");
 
         mgmt = new LocalManagementContext(brooklynProperties);
-
         super.setUp();
-
-        loc = mgmt.getLocationRegistry().getLocationManaged("localhost", Maps.newHashMap());
-        locs = ImmutableList.of(loc);
+        env = ImmutableMap.of(
+                "AWS_ACCESS_KEY_ID", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.identity"),
+                "AWS_SECRET_ACCESS_KEY", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.credential"),
+                "AWS_REGION", REGION_NAME);
     }
 
-    @AfterMethod(alwaysRun=true)
-    @Override
-    public void tearDown() throws Exception {
-        try {
-            if (terraformConfiguration != null) {
-                terraformConfiguration.destroy();
+    @Test(groups="Live")
+    public void testCreateSecurityGroup() throws Exception {
+        terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
+                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://plans/create-security-group.tf")
+                .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
+        app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
+        assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
+
+        // Previously this failed because the environment was not set on the SSH sensor feeds.
+        Asserts.continually(new SensorSupplier<>(terraformConfiguration, TerraformConfiguration.STATE), new Predicate<Map<String, Object>>() {
+            @Override
+            public boolean apply(@Nullable Map<String, Object> input) {
+                return input == null || !input.containsKey("ERROR");
             }
-            if (app != null) {
-                app.stop();
-            }
-        } catch (Exception e) {
-            LOG.error("error deleting/stopping ELB app; continuing with shutdown...", e);
-        } finally {
-            super.tearDown();
-        }
+        });
     }
 
     @Test(groups="Live")
     public void testCreateInstance() throws Exception {
-        Map<String, Object> env = ImmutableMap.of(
-                "AWS_ACCESS_KEY_ID", brooklynProperties.get("brooklyn.location.jclouds.aws-ec2.identity"),
-                "AWS_SECRET_ACCESS_KEY", brooklynProperties.get("brooklyn.location.jclouds.aws-ec2.credential")
-        );
-
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
-                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://instance.tf")
-                .configure(SoftwareProcess.SHELL_ENVIRONMENT, env)
-        );
+                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
+                .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
+        app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
 
-        app.start(locs);
-
-        checkNotNull(terraformConfiguration.getAttribute(TerraformConfiguration.HOSTNAME));
-        EntityAsserts.assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_UP, true);
-        EntityAsserts.assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
-        EntityAsserts.assertAttributeEventuallyNonNull(terraformConfiguration, TerraformConfiguration.OUTPUT);
+        assertNotNull(terraformConfiguration.getAttribute(TerraformConfiguration.HOSTNAME));
+        assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_UP, true);
+        assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
+        assertAttributeEventuallyNonNull(terraformConfiguration, TerraformConfiguration.OUTPUT);
 
         Entities.dumpInfo(app);
+    }
 
+    private Object getRequiredProperty(String property) {
+        return checkNotNull(brooklynProperties.get(property), "test requires mgmt context property: " + property);
+    }
+
+    private static class SensorSupplier<T> implements Supplier<T> {
+        private final Entity entity;
+        private final AttributeSensor<T> sensor;
+
+        private SensorSupplier(Entity entity, AttributeSensor<T> sensor) {
+            this.entity = entity;
+            this.sensor = sensor;
+        }
+
+        @Override
+        public T get() {
+            return entity.sensors().get(sensor);
+        }
     }
 
 }

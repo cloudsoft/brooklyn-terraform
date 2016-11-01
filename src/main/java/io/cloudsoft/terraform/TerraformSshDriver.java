@@ -24,10 +24,7 @@ import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
 import org.apache.brooklyn.util.text.Strings;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 
 public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements TerraformDriver {
@@ -43,8 +40,7 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     @Override
     protected String getLogFileLocation() {
-        // TODO Auto-generated method stub
-        return null;
+        return getStateFilePath();
     }
 
     @Override
@@ -99,18 +95,16 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     @Override
     public void customize() {
-      //Create the directory
+        //Create the directory
         newScript(CUSTOMIZING).execute();
-
-        boolean hasConfiguration = copyConfiguration();
-        if (!hasConfiguration)
-            throw new IllegalStateException("No Terraform configuration could be resolved.");
+        copyConfiguration();
     }
 
     @Override
     public void launch() {
         ScriptHelper helper = newScript(LAUNCHING)
-                .body.append(makeTerraformCommand("apply -no-color"))
+                .body.append(makeTerraformCommand("apply -no-color -input=false"))
+                .failOnNonZeroResultCode(false)
                 .noExtraOutput()
                 .gatherOutput();
         int result = helper.execute();
@@ -119,25 +113,22 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
         }
     }
 
-    private boolean copyConfiguration() {
-        Optional<? extends InputStream> configuration = getConfiguration();
-        if (!configuration.isPresent())
-            return false;
-
-        getMachine().copyTo(configuration.get(), getConfigurationFilePath());
-        return true;
+    private void copyConfiguration() {
+        InputStream configuration = getConfiguration();
+        getMachine().copyTo(configuration, getConfigurationFilePath());
     }
 
-    private Optional<? extends InputStream> getConfiguration() {
+    private InputStream getConfiguration() {
         String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
-        if (!Strings.isBlank(configurationUrl))
-            return Optional.of(new ResourceUtils(entity).getResourceFromUrl(configurationUrl));
-
+        if (Strings.isNonBlank(configurationUrl)) {
+            return new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
+        }
         String configurationContents = entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS);
-        if (!Strings.isBlank(configurationContents))
-            return Optional.of(KnownSizeInputStream.of(configurationContents));
-
-        return Optional.absent();
+        if (Strings.isNonBlank(configurationContents)) {
+            return KnownSizeInputStream.of(configurationContents);
+        }
+        throw new IllegalStateException("Could not resolve Terraform configuration from " +
+                TerraformConfiguration.CONFIGURATION_URL.getName() + " or " + TerraformConfiguration.CONFIGURATION_CONTENTS.getName());
     }
 
     private String getConfigurationFilePath() {
@@ -155,7 +146,7 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     @SuppressWarnings("unchecked")
     @Override
-    public Map<String, Object> getState() throws JsonParseException, JsonMappingException, IOException {
+    public Map<String, Object> getState() throws IOException {
         String state = DynamicTasks.queue(SshTasks.newSshFetchTaskFactory(getLocation(), getStateFilePath())).asTask().getUnchecked();
         return ImmutableMap.copyOf(new ObjectMapper().readValue(state, LinkedHashMap.class));
     }

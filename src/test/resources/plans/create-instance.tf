@@ -5,10 +5,11 @@ variable "key_name" {
 
 variable "aws_region" {
   description = "AWS region to launch servers."
-  default     = "us-east-1"
+  default = "us-east-1"
 }
 
 variable "aws_amis" {
+  type = "map"
   default = {
     "us-east-1" = "ami-c481fad3"
   }
@@ -27,7 +28,7 @@ resource "aws_instance" "web" {
   ami = "${lookup(var.aws_amis, var.aws_region)}"
   subnet_id = "subnet-46d07f0f"
   tags {
-          Name = "tf"
+    Name = "tf"
   }
 }
 
