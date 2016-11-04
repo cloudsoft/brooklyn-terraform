@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Function;
+import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Maps.EntryTransformer;
@@ -179,10 +180,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
      * <pre>
      * {
      *   "address": {
-     *   "sensitive": false,
-     *   "type": "string",
-     *   "value": "172.31.2.35"
-     *   }
+     *     "sensitive": false,
+     *     "type": "string",
+     *     "value": "172.31.2.35"
+     *   },
+     *   ...
      * }
      * </pre>
      */
@@ -193,12 +195,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             if (output != null) {
                 Map<String, Map<String, Object>> result = new Gson().fromJson(output, LinkedTreeMap.class);
                 for (String name : result.keySet()) {
-                    if (result.get(name).get("type").equals("string")) {
-                        String sensorName = String.format("%s.%s", "tf.output", name);
-                        AttributeSensor sensor = Sensors.newStringSensor(sensorName);
-                        if (!sensors().getAll().containsKey(sensor)) {
-                            sensors().set(sensor, result.get(name).get("value"));
-                        }
+                    final String sensorName = String.format("%s.%s", "tf.output", name);
+                    final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);
+                    final Object currentValue = sensors().get(sensor);
+                    final Object newValue = result.get(name).get("value");
+                    if (!Objects.equal(currentValue, newValue)) {
+                        sensors().set(sensor, newValue);
                     }
                 }
             }
