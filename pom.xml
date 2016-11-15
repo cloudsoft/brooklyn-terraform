@@ -12,8 +12,8 @@
 
     <groupId>io.cloudsoft.terraform</groupId>
     <artifactId>brooklyn-terraform</artifactId>
-    <version>0.1-SNAPSHOT</version>
-    <packaging>jar</packaging>
+    <version>0.2.0-SNAPSHOT</version>
+    <packaging>bundle</packaging>
 
     <name>Brooklyn Terraform</name>
     <description>
@@ -103,7 +103,22 @@
             <artifactId>brooklyn-logback-xml</artifactId>
             <version>${brooklyn.version}</version>
         </dependency>
-
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${fasterxml.jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${fasterxml.jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>${fasterxml.jackson.version}</version>
+        </dependency>
+                
         <!-- test dependencies -->
         <dependency>
             <groupId>org.testng</groupId>
@@ -131,25 +146,20 @@
             <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
-                <version>2.3.7</version>
+                <version>3.2.0</version>
                 <extensions>true</extensions>
-                <executions>
-                    <execution>
-                        <id>bundle-manifest</id>
-                        <phase>process-classes</phase>
-                        <goals>
-                            <goal>manifest</goal>
-                        </goals>
-                    </execution>
-                </executions>
                 <configuration>
                     <supportedProjectTypes>
-                        <supportedProjectType>jar</supportedProjectType>
+                        <supportedProjectType>bundle</supportedProjectType>
                     </supportedProjectTypes>
                     <instructions>
-                        <!-- OSGi specific instruction -->
-                        <Import-Package>!io.airlift.command,!com.maxmind.geoip2,!com.google.api.client,*
-                        </Import-Package>
+                        <Import-Package>!Acme.Serve,!org.junit,!android.os,!android.util,!android.net.http,!com.google.appengine.api.urlfetch,!rx,!rx.subscriptions,*</Import-Package>
+                        <Brooklyn-Feature-Name>${project.name}</Brooklyn-Feature-Name>
+                        <Implementation-SHA-1>${buildNumber}</Implementation-SHA-1>
+                        <Implementation-Branch>${scmBranch}</Implementation-Branch>
+                        <!-- Embed-Transitive>true</Embed-Transitive -->
+                        <Embed-Dependency>*;scope=compile|runtime;groupId=!org.apache.brooklyn</Embed-Dependency>
+                        <Export-Package></Export-Package>
                     </instructions>
                 </configuration>
             </plugin>
