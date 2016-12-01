@@ -11,11 +11,11 @@
     </parent>
 
     <groupId>io.cloudsoft.terraform</groupId>
-    <artifactId>brooklyn-terraform</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
-    <packaging>bundle</packaging>
+    <artifactId>brooklyn-terraform-parent</artifactId>
+    <version>0.2.0-SNAPSHOT</version> <!-- BROOKLYN_TERRAFORM_VERSION -->
+    <packaging>pom</packaging>
 
-    <name>Brooklyn Terraform</name>
+    <name>Brooklyn Terraform Parent</name>
     <description>
         Provides entities for using Hashicorp Terraform with Apache Brooklyn
     </description>
@@ -88,82 +88,68 @@
         </repository>
     </repositories>    
 
-    <dependencies>
-        <dependency>
-            <!-- this pulls in all brooklyn entities and clouds;
-                 you can cherry pick selected ones instead (for a smaller build) -->
-            <groupId>org.apache.brooklyn</groupId>
-            <artifactId>brooklyn-all</artifactId>
-            <version>${brooklyn.version}</version>
-        </dependency>
 
-        <dependency>
-            <!-- this gives us flexible and easy-to-use logging; just edit logback-custom.xml! -->
-            <groupId>org.apache.brooklyn</groupId>
-            <artifactId>brooklyn-logback-xml</artifactId>
-            <version>${brooklyn.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-core</artifactId>
-            <version>${fasterxml.jackson.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>${fasterxml.jackson.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-annotations</artifactId>
-            <version>${fasterxml.jackson.version}</version>
-        </dependency>
-                
-        <!-- test dependencies -->
-        <dependency>
-            <groupId>org.testng</groupId>
-            <artifactId>testng</artifactId>
-            <version>6.8.8</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.brooklyn</groupId>
-            <artifactId>brooklyn-test-support</artifactId>
-            <version>${brooklyn.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.brooklyn</groupId>
-            <artifactId>brooklyn-core</artifactId>
-            <version>${brooklyn.version}</version>
-            <classifier>tests</classifier>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+    <dependencyManagement>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.felix</groupId>
-                <artifactId>maven-bundle-plugin</artifactId>
-                <version>3.2.0</version>
-                <extensions>true</extensions>
-                <configuration>
-                    <supportedProjectTypes>
-                        <supportedProjectType>bundle</supportedProjectType>
-                    </supportedProjectTypes>
-                    <instructions>
-                        <Import-Package>!Acme.Serve,!org.junit,!android.os,!android.util,!android.net.http,!com.google.appengine.api.urlfetch,!rx,!rx.subscriptions,*</Import-Package>
-                        <Brooklyn-Feature-Name>${project.name}</Brooklyn-Feature-Name>
-                        <Implementation-SHA-1>${buildNumber}</Implementation-SHA-1>
-                        <Implementation-Branch>${scmBranch}</Implementation-Branch>
-                        <!-- Embed-Transitive>true</Embed-Transitive -->
-                        <Embed-Dependency>*;scope=compile|runtime;groupId=!org.apache.brooklyn</Embed-Dependency>
-                        <Export-Package></Export-Package>
-                    </instructions>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 
+        <dependencies>
+            <dependency>
+                <!-- this pulls in all brooklyn entities and clouds;
+                     you can cherry pick selected ones instead (for a smaller build) -->
+                <groupId>org.apache.brooklyn</groupId>
+                <artifactId>brooklyn-all</artifactId>
+                <version>${brooklyn.version}</version>
+            </dependency>
+
+            <dependency>
+                <!-- this gives us flexible and easy-to-use logging; just edit logback-custom.xml! -->
+                <groupId>org.apache.brooklyn</groupId>
+                <artifactId>brooklyn-logback-xml</artifactId>
+                <version>${brooklyn.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${fasterxml.jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${fasterxml.jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${fasterxml.jackson.version}</version>
+            </dependency>
+
+            <!-- test dependencies -->
+            <dependency>
+                <groupId>org.testng</groupId>
+                <artifactId>testng</artifactId>
+                <version>6.8.8</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.brooklyn</groupId>
+                <artifactId>brooklyn-test-support</artifactId>
+                <version>${brooklyn.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.brooklyn</groupId>
+                <artifactId>brooklyn-core</artifactId>
+                <version>${brooklyn.version}</version>
+                <classifier>tests</classifier>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+
+    </dependencyManagement>
+
+
+    <modules>
+        <module>brooklyn-terraform</module>
+        <module>brooklyn-terraform-feature</module>
+    </modules>
 </project>

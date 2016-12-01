@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<features xmlns="http://karaf.apache.org/xmlns/features/v1.4.0" name="${project.groupId}-${project.version}">
+    <feature name="brooklyn-terraform" version="${project.version}">
+        <bundle>mvn:io.cloudsoft.terraform/brooklyn-terraform/${project.version}</bundle>
+
+        <bundle dependency='true'>mvn:com.fasterxml.jackson.core/jackson-core/${fasterxml.jackson.version}</bundle>
+        <bundle dependency='true'>mvn:com.fasterxml.jackson.core/jackson-databind/${fasterxml.jackson.version}</bundle>
+        <bundle dependency='true'>mvn:com.fasterxml.jackson.core/jackson-annotations/${fasterxml.jackson.version}</bundle>
+
+    </feature>
+</features>
