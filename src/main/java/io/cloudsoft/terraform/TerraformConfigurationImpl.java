@@ -37,6 +37,7 @@ import com.google.gson.internal.LinkedTreeMap;
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(TerraformConfigurationImpl.class);
+    private static final String TF_OUTPUT_SENSOR_PREFIX = "tf.output";
     private static final Duration FEED_UPDATE_PERIOD = Duration.seconds(30);
 
     private SshFeed sshFeed;
@@ -195,7 +196,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             if (output != null) {
                 Map<String, Map<String, Object>> result = new Gson().fromJson(output, LinkedTreeMap.class);
                 for (String name : result.keySet()) {
-                    final String sensorName = String.format("%s.%s", "tf.output", name);
+                    final String sensorName = String.format("%s.%s", TF_OUTPUT_SENSOR_PREFIX, name);
                     final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);
                     final Object currentValue = sensors().get(sensor);
                     final Object newValue = result.get(name).get("value");
