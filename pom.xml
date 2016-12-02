@@ -12,7 +12,8 @@
 
     <groupId>io.cloudsoft.terraform</groupId>
     <artifactId>brooklyn-terraform</artifactId>
-    <version>0.1-SNAPSHOT</version>
+    <!-- Update catalog.bom when changing the project's version. -->
+    <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Brooklyn Terraform</name>

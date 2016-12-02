@@ -1,4 +1,4 @@
-package io.cloudsoft.terraform.sample.app;
+package io.cloudsoft.terraform;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEqualsEventually;
@@ -13,7 +13,6 @@ import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
-import org.apache.brooklyn.api.sensor.Sensor;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
@@ -24,7 +23,6 @@ import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.test.Asserts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -32,8 +30,6 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-
-import io.cloudsoft.terraform.TerraformConfiguration;
 
 public class TerraformConfigurationLiveTest extends BrooklynAppLiveTestSupport {
 
