@@ -8,7 +8,7 @@ brooklyn.catalog:
   publish:
     license_code: Apache-2.0
     icon_url: https://raw.githubusercontent.com/hashicorp/terraform/master/website/source/assets/images/logo-static.png
-    overview: https://github.com/cloudsoft/brooklyn-terraform/blob/master/README.md
+    overview: https://raw.githubusercontent.com/cloudsoft/brooklyn-terraform/master/README.md
 
   libraries:
   - "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=0.1-SNAPSHOT&e=jar"
