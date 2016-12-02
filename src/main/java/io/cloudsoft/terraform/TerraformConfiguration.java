@@ -2,6 +2,7 @@ package io.cloudsoft.terraform;
 
 import java.util.Map;
 
+import org.apache.brooklyn.api.catalog.Catalog;
 import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.config.ConfigKey;
@@ -16,9 +17,14 @@ import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
 
+@Catalog(
+        name = "TerraformConfiguration",
+        description = "Brooklyn Terraform entity for lifecycle management of a Terraform configuration",
+        iconUrl = "classpath://io/cloudsoft/terraform/logo.png")
 @ImplementedBy(TerraformConfigurationImpl.class)
 public interface TerraformConfiguration extends SoftwareProcess {
 
+    // Update reference.json when changing this value.
     @SetFromFlag("version")
     ConfigKey<String> SUGGESTED_VERSION = ConfigKeys.newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "0.7.4");
 

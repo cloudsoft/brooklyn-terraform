@@ -1,0 +1,617 @@
+{
+  "entities": [
+    {
+      "type": "io.cloudsoft.terraform.TerraformConfiguration",
+      "defaultVersion": "0.7.4",
+      "name": "TerraformConfiguration",
+      "description": "Brooklyn Terraform entity for lifecycle management of a Terraform configuration",
+      "iconUrl": "classpath://io/cloudsoft/terraform/logo.png",
+      "config": [
+        {
+          "name": "archive.nameFormat",
+          "type": "java.lang.String",
+          "description": "The format for the directory created when the installation archive is extracted, if required. The version string will be passed in as the first argument, replacing the %s format specifier",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "children.startable.mode",
+          "type": "java.lang.Enum",
+          "description": "Controls behaviour when starting Startable children as part of this entity's lifecycle.",
+          "defaultValue": "NONE",
+          "reconfigurable": false,
+          "possibleValues": [
+            {
+              "value": "NONE",
+              "description": "NONE"
+            },
+            {
+              "value": "FOREGROUND",
+              "description": "FOREGROUND"
+            },
+            {
+              "value": "FOREGROUND_LATE",
+              "description": "FOREGROUND_LATE"
+            },
+            {
+              "value": "BACKGROUND",
+              "description": "BACKGROUND"
+            },
+            {
+              "value": "BACKGROUND_LATE",
+              "description": "BACKGROUND_LATE"
+            }
+          ],
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "customize.latch",
+          "type": "java.lang.Boolean",
+          "description": "Latch for blocking customize until ready",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "dontRequireTtyForSudo",
+          "type": "java.lang.Boolean",
+          "description": "Whether to explicitly set /etc/sudoers, so don't need tty (will leave unchanged if 'false'); some machines require a tty for sudo; brooklyn by default does not use a tty (so that it can get separate error+stdout streams); you can enable a tty as an option to every ssh command, or you can do it once and modify the machine so that a tty is not subsequently required.",
+          "defaultValue": false,
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "download.addon.urls",
+          "type": "java.util.Map",
+          "description": "URL patterns for downloading named add-ons (will substitute things like ${version} automatically)",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "download.url",
+          "type": "java.lang.String",
+          "description": "URL pattern for downloading the installer (will substitute things like ${version} automatically)",
+          "defaultValue": "https://releases.hashicorp.com/terraform/${version}/terraform_${version}_${driver.osTag}.zip",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "effector.add.openInboundPorts",
+          "type": "java.lang.Boolean",
+          "description": "Flag which adds effector for opening ports through Cloud security groups",
+          "defaultValue": false,
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "entity.running",
+          "type": "java.lang.Boolean",
+          "description": "Skip the startup process entirely, if service already running",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "entity.started",
+          "type": "java.lang.Boolean",
+          "description": "Skip the startup process entirely, for running services",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "expandedinstall.dir",
+          "type": "java.lang.String",
+          "description": "Directory for installed artifacts (e.g. expanded dir after unpacking .tgz)",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "files.install",
+          "type": "java.util.Map",
+          "description": "Mapping of files, to be copied before install, to destination name relative to installDir",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "files.preinstall",
+          "type": "java.util.Map",
+          "description": "Mapping of files, to be copied before install, to destination name relative to installDir",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "files.runtime",
+          "type": "java.util.Map",
+          "description": "Mapping of files, to be copied before customisation, to destination name relative to runDir",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "inboundPorts.autoInfer",
+          "type": "java.lang.Boolean",
+          "description": "If set to false turns off the opening of ports based on naming convention, and also those that are of type PortRange in Java entities",
+          "defaultValue": true,
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "inboundPorts.configRegex",
+          "type": "java.lang.String",
+          "description": "Regex governing the opening of ports based on config names",
+          "defaultValue": ".*\\.port",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "install.dir",
+          "type": "java.lang.String",
+          "description": "Directory for this software to be installed in",
+          "defaultValue": "${config['onbox.base.dir']!config['brooklyn.datadir']!'/<ERROR>-ONBOX_BASE_DIR-not-set'}/installs/${(config['install.unique_label']??)?string(config['install.unique_label']!'X',(entity.entityType.simpleName)+((config['install.version']??)?string('_'+(config['install.version']!'X'),'')))}",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "install.latch",
+          "type": "java.lang.Boolean",
+          "description": "Latch for blocking install until ready",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "install.skip",
+          "type": "java.lang.Boolean",
+          "description": "Skip the driver install commands entirely, for pre-installed software",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "install.unique_label",
+          "type": "java.lang.String",
+          "description": "Provides a label which uniquely identifies an installation, used in the computation of the install dir; this should include something readable, and must include a hash of all data which differentiates an installation (e.g. version, plugins, etc), but should be the same where install dirs can be shared to allow for re-use",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "install.version",
+          "type": "java.lang.String",
+          "description": "Suggested version",
+          "defaultValue": "0.7.4",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "launch.latch",
+          "type": "java.lang.Boolean",
+          "description": "Latch for blocking launch until ready",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "metrics.usage.retrieve",
+          "type": "java.lang.Boolean",
+          "description": "Whether to retrieve the usage (e.g. performance) metrics",
+          "defaultValue": true,
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "openIptables",
+          "type": "java.lang.Boolean",
+          "description": "Whether to open the INBOUND_PORTS via iptables rules; if true then ssh in to run iptables commands, as part of machine provisioning",
+          "defaultValue": false,
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "post.customize.command",
+          "type": "java.lang.String",
+          "description": "Command to be run after the customize method being called on the driver",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "post.install.command",
+          "type": "java.lang.String",
+          "description": "Command to be run after the install method being called on the driver",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "post.launch.command",
+          "type": "java.lang.String",
+          "description": "Command to be run after the launch method being called on the driver",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "pre.customize.command",
+          "type": "java.lang.String",
+          "description": "Command to be run prior to the customize method being called on the driver",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "pre.install.command",
+          "type": "java.lang.String",
+          "description": "Command to be run prior to the install method being called on the driver",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "pre.launch.command",
+          "type": "java.lang.String",
+          "description": "Command to be run prior to the launch method being called on the driver",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "provisioning.properties",
+          "type": "java.util.Map",
+          "description": "Custom properties to be passed in when provisioning a new machine",
+          "defaultValue": {},
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "requiredOpenLoginPorts",
+          "type": "java.util.Collection",
+          "description": "The port(s) to be opened, to allow login",
+          "defaultValue": [
+            22
+          ],
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "resources.install.latch",
+          "type": "java.lang.Boolean",
+          "description": "Latch for blocking install resources until ready",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "resources.runtime.latch",
+          "type": "java.lang.Boolean",
+          "description": "Latch for blocking runtime resources until ready",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "run.dir",
+          "type": "java.lang.String",
+          "description": "Directory for this software to be run from",
+          "defaultValue": "${config['onbox.base.dir']!config['brooklyn.datadir']!'/<ERROR>-ONBOX_BASE_DIR-not-set'}/apps/${entity.applicationId}/entities/${entity.entityType.simpleName}_${entity.id}",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "setup.latch",
+          "type": "java.lang.Boolean",
+          "description": "Latch for blocking setup until ready",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "shell.env",
+          "type": "java.util.Map",
+          "description": "Map of environment variables to pass to the runtime shell. Non-string values are serialized to json before passed to the shell.",
+          "defaultValue": {},
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "softwareProcess.lifecycleTasks",
+          "type": "org.apache.brooklyn.entity.software.base.SoftwareProcessDriverLifecycleEffectorTasks",
+          "description": "An object that handles lifecycle of an entity's associated machine.",
+          "defaultValue": "org.apache.brooklyn.entity.software.base.SoftwareProcessDriverLifecycleEffectorTasks",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "softwareProcess.maxSensorRebindDelay",
+          "type": "org.apache.brooklyn.util.time.Duration",
+          "description": "The maximum delay to apply when reconnecting sensors when rebinding to this entity. Brooklyn will wait a random amount of time, up to the value of this config key, to avoid a thundering herd problem when the entity shares its machine with several others. Set to null or to 0 to disable any delay.",
+          "defaultValue": "10s",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "softwareProcess.serviceProcessIsRunningPollPeriod",
+          "type": "org.apache.brooklyn.util.time.Duration",
+          "description": "The period for polling for whether the process is running; applies only if the entity wires up the connectServiceUpIsRunning.",
+          "defaultValue": "5s",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "start.latch",
+          "type": "java.lang.Boolean",
+          "description": "Latch for blocking start until ready",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "start.timeout",
+          "type": "org.apache.brooklyn.util.time.Duration",
+          "description": "Time to wait for process and for SERVICE_UP before failing (in seconds, default 2m)",
+          "defaultValue": "2m",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "stop.latch",
+          "type": "java.lang.Boolean",
+          "description": "Latch for blocking stop until a condition is met; will block for at most 1 minute and then time out",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "stopIptables",
+          "type": "java.lang.Boolean",
+          "description": "Whether to stop iptables entirely; if true then ssh in to stop the iptables service, as part of machine provisioning",
+          "defaultValue": false,
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "template.substitutions",
+          "type": "java.util.Map",
+          "description": "Map of values to be substituted for the keys in any templated files used by the entity",
+          "defaultValue": {},
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "templates.install",
+          "type": "java.util.Map",
+          "description": "Mapping of templates, to be filled in and copied before install, to destination name relative to installDir",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "templates.preinstall",
+          "type": "java.util.Map",
+          "description": "Mapping of templates, to be filled in and copied before pre-install, to destination name relative to installDir",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "templates.runtime",
+          "type": "java.util.Map",
+          "description": "Mapping of templates, to be filled in and copied before customisation, to destination name relative to runDir",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "tf.configuration.contents",
+          "type": "java.lang.String",
+          "description": "Contents of the configuration file that will be applied by Terraform.",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        },
+        {
+          "name": "tf.configuration.url",
+          "type": "java.lang.String",
+          "description": "URL of the configuration file that will be applied by Terraform.",
+          "reconfigurable": false,
+          "pinned": false,
+          "constraints": []
+        }
+      ],
+      "sensors": [
+        {
+          "name": "download.addon.urls",
+          "type": "java.util.Map",
+          "description": "URL patterns for downloading named add-ons (will substitute things like ${version} automatically)",
+          "links": {}
+        },
+        {
+          "name": "download.url",
+          "type": "java.lang.String",
+          "description": "URL pattern for downloading the installer (will substitute things like ${version} automatically)",
+          "links": {}
+        },
+        {
+          "name": "expandedinstall.dir",
+          "type": "java.lang.String",
+          "description": "Directory for installed artifacts (e.g. expanded dir after unpacking .tgz)",
+          "links": {}
+        },
+        {
+          "name": "host.address",
+          "type": "java.lang.String",
+          "description": "Host IP address",
+          "links": {}
+        },
+        {
+          "name": "host.name",
+          "type": "java.lang.String",
+          "description": "Host name",
+          "links": {}
+        },
+        {
+          "name": "host.subnet.address",
+          "type": "java.lang.String",
+          "description": "Host address as known internally in the subnet where it is running (if different to host.name)",
+          "links": {}
+        },
+        {
+          "name": "host.subnet.hostname",
+          "type": "java.lang.String",
+          "description": "Host name as known internally in the subnet where it is running (if different to host.name)",
+          "links": {}
+        },
+        {
+          "name": "install.dir",
+          "type": "java.lang.String",
+          "description": "Directory for this software to be installed in",
+          "links": {}
+        },
+        {
+          "name": "run.dir",
+          "type": "java.lang.String",
+          "description": "Directory for this software to be run from",
+          "links": {}
+        },
+        {
+          "name": "service.isUp",
+          "type": "java.lang.Boolean",
+          "description": "Whether the service is active and availability (confirmed and monitored)",
+          "links": {}
+        },
+        {
+          "name": "service.process.isRunning",
+          "type": "java.lang.Boolean",
+          "description": "Whether the process for the service is confirmed as running",
+          "links": {}
+        },
+        {
+          "name": "service.state",
+          "type": "org.apache.brooklyn.core.entity.lifecycle.Lifecycle",
+          "description": "Actual lifecycle state of the service",
+          "links": {}
+        },
+        {
+          "name": "service.state.expected",
+          "type": "org.apache.brooklyn.core.entity.lifecycle.Lifecycle$Transition",
+          "description": "Last controlled change to service state, indicating what the expected state should be",
+          "links": {}
+        },
+        {
+          "name": "softwareprocess.pid.file",
+          "type": "java.lang.String",
+          "description": "PID file",
+          "links": {}
+        },
+        {
+          "name": "softwareservice.provisioningLocation",
+          "type": "org.apache.brooklyn.api.location.MachineProvisioningLocation",
+          "description": "Location used to provision a machine where this is running",
+          "links": {}
+        },
+        {
+          "name": "tf.configuration.isApplied",
+          "type": "java.lang.Boolean",
+          "description": "Whether the supplied Terraform configuration has been successfully applied.",
+          "links": {}
+        },
+        {
+          "name": "tf.output",
+          "type": "java.lang.String",
+          "description": "The contents of the Terraform output command which inspects Terraform state or plan.",
+          "links": {}
+        },
+        {
+          "name": "tf.plan",
+          "type": "java.lang.String",
+          "description": "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.",
+          "links": {}
+        },
+        {
+          "name": "tf.show",
+          "type": "java.lang.String",
+          "description": "The contents of the Terraform show command which provides a human-readable view of the state of the configuration.",
+          "links": {}
+        },
+        {
+          "name": "tf.state",
+          "type": "java.util.Map",
+          "description": "A map constructed from the state file on disk which contains the state of all managed infrastructure.",
+          "links": {}
+        }
+      ],
+      "effectors": [
+        {
+          "name": "apply",
+          "returnType": "void",
+          "parameters": [],
+          "description": "Performs the Terraform apply command which will create all of the infrastructure specified by the configuration."
+        },
+        {
+          "name": "destroy",
+          "returnType": "void",
+          "parameters": [],
+          "description": "Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration."
+        },
+        {
+          "name": "populateServiceNotUpDiagnostics",
+          "returnType": "void",
+          "parameters": [],
+          "description": "Populates the attribute service.notUp.diagnostics, with any available health indicators"
+        },
+        {
+          "name": "restart",
+          "returnType": "void",
+          "parameters": [],
+          "description": "Restart the process/service represented by an entity"
+        },
+        {
+          "name": "start",
+          "returnType": "void",
+          "parameters": [
+            {
+              "name": "locations",
+              "type": "java.lang.Object",
+              "description": "The location or locations to start in, as a string, a location object, a list of strings, or a list of location objects",
+              "defaultValue": null,
+              "shouldSanitize": false
+            }
+          ],
+          "description": "Start the process/service represented by an entity"
+        },
+        {
+          "name": "stop",
+          "returnType": "void",
+          "parameters": [],
+          "description": "Stop the process/service represented by an entity"
+        }
+      ]
+    }
+  ]
+}
