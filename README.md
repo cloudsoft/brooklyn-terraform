@@ -1,3 +1,8 @@
+---
+title_in_menu: Terraform
+layout: Brooklyn Terraform Integration
+---
+
 Brooklyn Terraform Integration
 =======
 
