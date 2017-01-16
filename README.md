@@ -1,10 +1,8 @@
 ---
 title_in_menu: Terraform
-layout: Brooklyn Terraform Integration
+title: Brooklyn Terraform Integration
+layout: website-normal
 ---
-
-Brooklyn Terraform Integration
-=======
 
 [Terraform](https://terraform.io/) Terraform is a tool for building, changing, and versioning infrastructure safely and efficiently.
 
