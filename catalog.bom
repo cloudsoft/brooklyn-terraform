@@ -1,5 +1,7 @@
 brooklyn.catalog:
 
+  id: terraform
+
   version: 0.1.0-SNAPSHOT
 
   description: |
