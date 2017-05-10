@@ -9,7 +9,7 @@ brooklyn.catalog:
 
   publish:
     license_code: Apache-2.0
-    icon_url: https://raw.githubusercontent.com/hashicorp/terraform/master/website/source/assets/images/logo-static.png
+    icon_url: https://twitter.com/hashicorp/profile_image?size=original
     overview: README.md
 
   libraries:
