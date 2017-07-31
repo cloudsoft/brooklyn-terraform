@@ -33,14 +33,6 @@ import com.google.common.collect.ImmutableMap;
 
 public class TerraformConfigurationLiveTest extends BrooklynAppLiveTestSupport {
 
-    // TODO Add more tests
-    // - other protocols, such as HTTPS, and TCP using `nc`
-    // - removing nodes cleanly, to ensure they are removed from the pool
-    // - health checker, to ensure
-
-    // Note we need to pass an explicit list of AZs - if it tries to use all of them, then get an error
-    // that us-east-1a and us-east-1d are not compatible.
-
     private static final Logger LOG = LoggerFactory.getLogger(TerraformConfigurationLiveTest.class);
 
     public static final String PROVIDER = "aws-ec2";
@@ -102,10 +94,14 @@ public class TerraformConfigurationLiveTest extends BrooklynAppLiveTestSupport {
         assertAttributeEventuallyNonNull(terraformConfiguration, TerraformConfiguration.OUTPUT);
 
         Entities.dumpInfo(app);
+
+        // Terraform can take more than thirty seconds to destroy the instance which
+        // trips tearDown's timeout. Stop the application here instead.
+        app.stop();
     }
 
     private Object getRequiredProperty(String property) {
-        return checkNotNull(brooklynProperties.get(property), "test requires mgmt context property: " + property);
+        return checkNotNull(brooklynProperties.getConfig(property), "test requires mgmt context property: " + property);
     }
 
     private static class SensorSupplier<T> implements Supplier<T> {

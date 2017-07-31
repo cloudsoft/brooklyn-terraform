@@ -12,8 +12,8 @@ import org.apache.brooklyn.core.effector.ssh.SshEffectorTasks;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
+import org.apache.brooklyn.feed.CommandPollConfig;
 import org.apache.brooklyn.feed.ssh.SshFeed;
-import org.apache.brooklyn.feed.ssh.SshPollConfig;
 import org.apache.brooklyn.feed.ssh.SshPollValue;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.flags.TypeCoercions;
@@ -76,22 +76,22 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     .entity(this)
                     .period(FEED_UPDATE_PERIOD)
                     .machine(machine.get())
-                    .poll(new SshPollConfig<>(SHOW)
+                    .poll(new CommandPollConfig<>(SHOW)
                             .env(env)
                             .command(getDriver().makeTerraformCommand("show -no-color"))
                             .onSuccess(new ShowSuccessFunction())
                             .onFailure(new ShowFailureFunction()))
-                    .poll(new SshPollConfig<>(STATE)
+                    .poll(new CommandPollConfig<>(STATE)
                             .env(env)
                             .command(getDriver().makeTerraformCommand("refresh -input=false -no-color"))
                             .onSuccess(new StateSuccessFunction())
                             .onFailure(new StateFailureFunction()))
-                    .poll(new SshPollConfig<>(PLAN)
+                    .poll(new CommandPollConfig<>(PLAN)
                             .env(env)
                             .command(getDriver().makeTerraformCommand("plan -no-color"))
                             .onSuccess(new PlanSuccessFunction())
                             .onFailure(new PlanFailureFunction()))
-                    .poll(new SshPollConfig<>(OUTPUT)
+                    .poll(new CommandPollConfig<>(OUTPUT)
                             .env(env)
                             .command(getDriver().makeTerraformCommand("output -no-color --json"))
                             .onSuccess(new OutputSuccessFunction())
