@@ -2,7 +2,7 @@ brooklyn.catalog:
 
   id: terraform
 
-  version: 0.10.0-SNAPSHOT
+  version: 0.11.0-SNAPSHOT
 
   description: |
     Brooklyn Terraform entity for lifecycle management of a Terraform configuration
@@ -13,4 +13,4 @@ brooklyn.catalog:
     overview: README.md
 
   libraries:
-  - "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=0.10.0-SNAPSHOT&e=jar"
+  - "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=0.11.0-SNAPSHOT&e=jar"
