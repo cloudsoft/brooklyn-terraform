@@ -26,7 +26,6 @@ resource "aws_instance" "web" {
   # Lookup the correct AMI based on the region
   # we specified
   ami = "${lookup(var.aws_amis, var.aws_region)}"
-  subnet_id = "subnet-46d07f0f"
   tags {
     Name = "tf"
   }
