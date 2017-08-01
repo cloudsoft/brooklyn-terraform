@@ -25,7 +25,7 @@ add `catalog.bom` to an existing server.
 Alternatively, for quick tests, copy the latest jar to the Brooklyn distribution's `dropins` directory
 and then launch (or restart) Brooklyn.
 
-    wget https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=0.11.0-SNAPSHOT&e=jar
+    wget -O brooklyn-terraform-0.11.0-SNAPSHOT.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=0.11.0-SNAPSHOT&e=jar"
     mv brooklyn-terraform-0.11.0-SNAPSHOT.jar $BROOKLYN_HOME/lib/dropins/
     nohup $BROOKLYN_HOME/bin/brooklyn launch &
 
