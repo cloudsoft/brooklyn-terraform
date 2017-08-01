@@ -1,16 +1,20 @@
 brooklyn.catalog:
 
   id: terraform
-
   version: 0.11.0-SNAPSHOT
 
   description: |
     Brooklyn Terraform entity for lifecycle management of a Terraform configuration
 
+  icon_url: https://raw.githubusercontent.com/cloudsoft/brooklyn-terraform/master/src/main/resources/io/cloudsoft/terraform/logo.png
+
   publish:
     license_code: Apache-2.0
-    icon_url: https://twitter.com/hashicorp/profile_image?size=original
     overview: README.md
 
   libraries:
   - "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=0.11.0-SNAPSHOT&e=jar"
+
+  itemType: entity
+  item:
+    type: io.cloudsoft.terraform.TerraformConfiguration
