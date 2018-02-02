@@ -86,6 +86,7 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
         List<String> commands = new LinkedList<String>();
         commands.add(BashCommands.INSTALL_ZIP);
+        commands.add(BashCommands.INSTALL_UNZIP);
         commands.add(BashCommands.INSTALL_CURL);
         commands.addAll(commandsToDownloadUrlsAs(urls, saveAs));
         commands.add(format("unzip %s", saveAs));
