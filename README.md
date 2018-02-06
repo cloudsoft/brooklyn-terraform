@@ -151,8 +151,27 @@ And configure the `terraform` provider in `brooklyn.properties`:
     brooklyn.external.terraform.aws.identity=...
     brooklyn.external.terraform.aws.credential=...
 
+## Build Docker image
 
-----
+```bash
+export MAJOR=0.12.0
+export RC_NUMBER=rc3
+export VERSION=${MAJOR}-${RC_NUMBER}
+
+export BROOKLYN_ARTIFACT_URL=https://dist.apache.org/repos/dist/dev/brooklyn/apache-brooklyn-${VERSION}/apache-brooklyn-${VERSION}-1.noarch.rpm
+docker build -t brooklyn-terraform:latest --build-arg AMP_RPM_URL=${BROOKLYN_ARTIFACT_URL} \
+--build-arg ADDITIONAL_BOMS=https://raw.githubusercontent.com/andreaturli/brooklyn-terraform/master/catalog.bom \
+--build-arg DROPINS_JARS="https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=0.12.0-SNAPSHOT&e=jar" \ 
+.
+```
+
+### Run Docker Image
+
+```bash
+docker run --rm -it -P brooklyn-terraform
+```
+
+-----
 
 Copyright 2014-2016 by Cloudsoft Corporation Limited
 
