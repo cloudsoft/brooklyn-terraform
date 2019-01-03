@@ -103,8 +103,13 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
 
     @Override
     public void launch() {
+        List<String> commands = new LinkedList<String>();
+        commands.add(makeTerraformCommand("init -input=false"));
+        commands.add(makeTerraformCommand("plan -out=tfplan -input=false"));
+        commands.add(makeTerraformCommand("apply -no-color -input=false tfplan"));
+
         ScriptHelper helper = newScript(LAUNCHING)
-                .body.append(makeTerraformCommand("apply -no-color -input=false"))
+                .body.append(commands)
                 .failOnNonZeroResultCode(false)
                 .noExtraOutput()
                 .gatherOutput();
