@@ -31,38 +31,9 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-public class TerraformConfigurationLiveTest extends BrooklynAppLiveTestSupport {
+public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTestFixture {
 
     private static final Logger LOG = LoggerFactory.getLogger(TerraformConfigurationLiveTest.class);
-
-    public static final String PROVIDER = "aws-ec2";
-    public static final String REGION_NAME = "us-east-1";
-
-    protected BrooklynProperties brooklynProperties;
-    private TerraformConfiguration terraformConfiguration;
-    private Map<String, Object> env;
-
-    @BeforeMethod(alwaysRun=true)
-    @Override
-    public void setUp() throws Exception {
-        // Don't let any defaults from brooklyn.properties (except credentials) interfere with test
-        brooklynProperties = BrooklynProperties.Factory.newDefault();
-        brooklynProperties.remove("brooklyn.jclouds."+PROVIDER+".image-description-regex");
-        brooklynProperties.remove("brooklyn.jclouds."+PROVIDER+".image-name-regex");
-        brooklynProperties.remove("brooklyn.jclouds."+PROVIDER+".image-id");
-        brooklynProperties.remove("brooklyn.jclouds."+PROVIDER+".inboundPorts");
-        brooklynProperties.remove("brooklyn.jclouds."+PROVIDER+".hardware-id");
-
-        // Also removes scriptHeader (e.g. if doing `. ~/.bashrc` and `. ~/.profile`, then that can cause "stdin: is not a tty")
-        brooklynProperties.remove("brooklyn.ssh.config.scriptHeader");
-
-        mgmt = new LocalManagementContext(brooklynProperties);
-        super.setUp();
-        env = ImmutableMap.of(
-                "AWS_ACCESS_KEY_ID", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.identity"),
-                "AWS_SECRET_ACCESS_KEY", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.credential"),
-                "AWS_REGION", REGION_NAME);
-    }
 
     @Test(groups="Live")
     public void testCreateSecurityGroup() throws Exception {
@@ -98,25 +69,6 @@ public class TerraformConfigurationLiveTest extends BrooklynAppLiveTestSupport {
         // Terraform can take more than thirty seconds to destroy the instance which
         // trips tearDown's timeout. Stop the application here instead.
         app.stop();
-    }
-
-    private Object getRequiredProperty(String property) {
-        return checkNotNull(brooklynProperties.getConfig(property), "test requires mgmt context property: " + property);
-    }
-
-    private static class SensorSupplier<T> implements Supplier<T> {
-        private final Entity entity;
-        private final AttributeSensor<T> sensor;
-
-        private SensorSupplier(Entity entity, AttributeSensor<T> sensor) {
-            this.entity = entity;
-            this.sensor = sensor;
-        }
-
-        @Override
-        public T get() {
-            return entity.sensors().get(sensor);
-        }
     }
 
 }

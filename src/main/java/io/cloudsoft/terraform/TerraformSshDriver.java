@@ -12,8 +12,10 @@ import java.util.Map;
 
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
+import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.entity.java.JavaSoftwareProcessSshDriver;
+import org.apache.brooklyn.entity.software.base.AbstractSoftwareProcessSshDriver;
 import org.apache.brooklyn.entity.software.base.lifecycle.ScriptHelper;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.ResourceUtils;
@@ -27,10 +29,11 @@ import org.apache.brooklyn.util.text.Strings;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 
-public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements TerraformDriver {
+public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
 
     public TerraformSshDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
+        entity.sensors().set(Attributes.LOG_FILE_LOCATION, this.getLogFileLocation());
     }
 
     @Override
@@ -38,7 +41,6 @@ public class TerraformSshDriver extends JavaSoftwareProcessSshDriver implements 
         return true;
     }
 
-    @Override
     protected String getLogFileLocation() {
         return getStateFilePath();
     }
