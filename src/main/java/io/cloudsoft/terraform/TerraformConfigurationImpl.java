@@ -76,11 +76,18 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     .entity(this)
                     .period(FEED_UPDATE_PERIOD)
                     .machine(machine.get())
+
+                    // TODO we should collect outputs then show immediately after a run or any change;
+                    // TODO then _also_ _afterwards_ periodically do the items below one by one, otherwise they lock each other out
+                    // eg:  tf.plan: Error: Error locking state: Error acquiring the state lock: resource temporarily unavailable
+
+                    // TODO would be nice if this were json -- but use outputs for that
                     .poll(new CommandPollConfig<>(SHOW)
                             .env(env)
                             .command(getDriver().makeTerraformCommand("show -no-color"))
                             .onSuccess(new ShowSuccessFunction())
                             .onFailure(new ShowFailureFunction()))
+
                     .poll(new CommandPollConfig<>(STATE)
                             .env(env)
                             .command(getDriver().makeTerraformCommand("refresh -input=false -no-color"))
@@ -91,9 +98,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                             .command(getDriver().makeTerraformCommand("plan -no-color"))
                             .onSuccess(new PlanSuccessFunction())
                             .onFailure(new PlanFailureFunction()))
+
                     .poll(new CommandPollConfig<>(OUTPUT)
                             .env(env)
-                            .command(getDriver().makeTerraformCommand("output -no-color --json"))
+                            .command(getDriver().makeTerraformCommand("output -no-color --json -lock=false"))
                             .onSuccess(new OutputSuccessFunction())
                             .onFailure(new OutputFailureFunction()))
                     .build());

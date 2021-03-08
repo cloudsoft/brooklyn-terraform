@@ -1,7 +1,7 @@
 brooklyn.catalog:
 
   id: terraform
-  version: 1.0.0-SNAPSHOT
+  version: 1.1.0-SNAPSHOT   # BROOKLYN_VERSION
 
   description: |
     Brooklyn Terraform entity for lifecycle management of a Terraform configuration

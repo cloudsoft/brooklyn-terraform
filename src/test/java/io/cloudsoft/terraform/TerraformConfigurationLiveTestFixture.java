@@ -37,7 +37,6 @@ public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppL
     public static final String REGION_NAME = "us-east-1";
 
     protected BrooklynProperties brooklynProperties;
-    protected TerraformConfiguration terraformConfiguration;
     protected Map<String, Object> env;
 
     @BeforeMethod(alwaysRun=true)
@@ -59,6 +58,8 @@ public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppL
         env = ImmutableMap.of(
                 "AWS_ACCESS_KEY_ID", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.identity"),
                 "AWS_SECRET_ACCESS_KEY", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.credential"),
+                // TODO do we need both?
+                "AWS_DEFAULT_REGION", REGION_NAME,
                 "AWS_REGION", REGION_NAME);
     }
 

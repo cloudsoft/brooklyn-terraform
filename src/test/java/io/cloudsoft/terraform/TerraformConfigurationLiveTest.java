@@ -35,6 +35,8 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
 
     private static final Logger LOG = LoggerFactory.getLogger(TerraformConfigurationLiveTest.class);
 
+    private TerraformConfiguration terraformConfiguration;
+
     @Test(groups="Live")
     public void testCreateSecurityGroup() throws Exception {
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
