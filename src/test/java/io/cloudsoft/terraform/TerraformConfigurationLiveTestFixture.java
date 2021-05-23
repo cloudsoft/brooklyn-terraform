@@ -4,6 +4,8 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.location.Location;
@@ -16,6 +18,7 @@ import org.apache.brooklyn.core.mgmt.internal.LocalManagementContext;
 import org.apache.brooklyn.core.test.BrooklynAppLiveTestSupport;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.test.Asserts;
+import org.apache.brooklyn.util.text.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.BeforeMethod;
@@ -56,15 +59,15 @@ public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppL
         mgmt = new LocalManagementContext(brooklynProperties);
         super.setUp();
         env = ImmutableMap.of(
-                "AWS_ACCESS_KEY_ID", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.identity"),
-                "AWS_SECRET_ACCESS_KEY", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.credential"),
+                "AWS_ACCESS_KEY_ID", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.identity", "brooklyn.jclouds.aws-ec2.identity"),
+                "AWS_SECRET_ACCESS_KEY", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.credential", "brooklyn.jclouds.aws-ec2.credential"),
                 // TODO do we need both?
                 "AWS_DEFAULT_REGION", REGION_NAME,
                 "AWS_REGION", REGION_NAME);
     }
 
-    protected Object getRequiredProperty(String property) {
-        return checkNotNull(brooklynProperties.getConfig(property), "test requires mgmt context property: " + property);
+    protected Object getRequiredProperty(String ...properties) {
+        return checkNotNull(Strings.firstNonNull(Arrays.asList(properties).stream().map(brooklynProperties::getConfig).collect(Collectors.toList())), "test requires mgmt context property, brooklyn.properties must have at least one of: " + Arrays.asList(properties));
     }
 
     protected static class SensorSupplier<T> implements Supplier<T> {
