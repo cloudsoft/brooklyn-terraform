@@ -1,7 +1,7 @@
 package io.cloudsoft.terraform;
 
 import static java.lang.String.format;
-import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAs;
+import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,7 +14,6 @@ import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
-import org.apache.brooklyn.entity.java.JavaSoftwareProcessSshDriver;
 import org.apache.brooklyn.entity.software.base.AbstractSoftwareProcessSshDriver;
 import org.apache.brooklyn.entity.software.base.lifecycle.ScriptHelper;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
@@ -90,7 +89,8 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         commands.add(BashCommands.INSTALL_ZIP);
         commands.add(BashCommands.INSTALL_UNZIP);
         commands.add(BashCommands.INSTALL_CURL);
-        commands.addAll(commandsToDownloadUrlsAs(urls, saveAs));
+        // Hashicorp server requires at least TLSv1.2
+        commands.addAll(commandsToDownloadUrlsAsWithMinimumTlsVersion(urls, saveAs, "1.2"));
         commands.add(format("unzip %s", saveAs));
 
         newScript(INSTALLING).body.append(commands).execute();
