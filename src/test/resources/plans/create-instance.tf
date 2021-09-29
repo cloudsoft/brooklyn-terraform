@@ -9,7 +9,7 @@ variable "aws_region" {
 }
 
 variable "aws_amis" {
-  type = "map"
+  type = map(string)
   default = {
     "us-east-1" = "ami-c481fad3"
   }
@@ -26,9 +26,6 @@ resource "aws_instance" "web" {
   # Lookup the correct AMI based on the region
   # we specified
   ami = "${lookup(var.aws_amis, var.aws_region)}"
-  tags {
-    Name = "tf"
-  }
 }
 
 output "address" {
