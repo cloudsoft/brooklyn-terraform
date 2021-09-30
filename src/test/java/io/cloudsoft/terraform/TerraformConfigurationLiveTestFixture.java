@@ -5,6 +5,7 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
@@ -26,6 +27,7 @@ import org.testng.annotations.Test;
 
 import javax.annotation.Nullable;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEqualsEventually;
@@ -67,7 +69,7 @@ public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppL
     }
 
     protected Object getRequiredProperty(String ...properties) {
-        return checkNotNull(Strings.firstNonNull(Arrays.asList(properties).stream().map(brooklynProperties::getConfig).collect(Collectors.toList())), "test requires mgmt context property, brooklyn.properties must have at least one of: " + Arrays.asList(properties));
+        return checkNotNull(Strings.firstNonNull(Arrays.asList(properties).stream().map(brooklynProperties::getConfig).collect(Collectors.toList()).toArray(new Object[0])), "test requires mgmt context property, brooklyn.properties must have at least one of: " + Arrays.asList(properties));
     }
 
     protected static class SensorSupplier<T> implements Supplier<T> {
