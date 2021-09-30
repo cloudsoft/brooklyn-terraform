@@ -26,11 +26,11 @@ jobs:
       # Use mvn clean and package as the standard maven build phase
       - run:
           name: Build
-          command: mvn -B -DskipTests clean package
+          command: mvn -s .circleci/circleci-m2-settings.xml -B -DskipTests clean package
       # Then run your unit tests!
       - run:
           name: Unit Test
-          command: mvn test
+          command: mvn -s .circleci/circleci-m2-settings.xml test
       # Run integration and live tests - require access to AWS
       - run:
           name: Live Test
