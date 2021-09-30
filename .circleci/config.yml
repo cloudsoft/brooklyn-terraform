@@ -11,6 +11,57 @@ executors:
         username: $DOCKER_REGISTRY_USERNAME
         password: $DOCKER_REGISTRY_PASSWORD
 
+orbs:
+  slack: circleci/slack@4.4.4
+
+slack-config:
+  job-failed-notification: &job-failed-notification
+    event: fail
+    channel: 'amp-6-1'
+    mentions: "@Mateusz Zan, @Iuliana Cosmina, @duncan.grant "
+    custom: |
+      {
+        "blocks": [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": ":rotating_light: _Uh-oh_, `brooklyn-terraform` is broken. Calling reinforcements! :technologist:"
+            },
+            "accessory": {
+              "type": "button",
+              "text": {
+                "type": "plain_text",
+                "text": "Investigate",
+                "emoji": true
+              },
+              "url": "${CIRCLE_BUILD_URL}",
+              "action_id": "investigate-build-failure"
+            }
+          },
+          {
+            "type": "section",
+            "fields": [
+              {
+                "type": "mrkdwn",
+                "text": "*Job*\n ${CIRCLE_JOB}"
+              },
+              {
+                "type": "mrkdwn",
+                "text": "*Branch*\n ${CIRCLE_BRANCH}"
+              },
+              {
+                "type": "mrkdwn",
+                "text": "*Author*\n${CIRCLE_USERNAME}"
+              },
+              {
+                "type": "mrkdwn",
+                "text": "*Commit SHA*\n ${CIRCLE_SHA1}"
+              }
+            ]
+          }
+        ]
+      }
 
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
@@ -35,6 +86,8 @@ jobs:
       - run:
           name: Live Test
           command: echo "Nothing to run yet!"
+      - slack/notify:
+          <<: *job-failed-notification
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
@@ -43,3 +96,5 @@ workflows:
     # Inside the workflow, you define the jobs you want to run.
     jobs:
       - build-and-test
+
+    # To do - add deploy workflow
