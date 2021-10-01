@@ -1,36 +1,22 @@
 package io.cloudsoft.terraform;
 
-import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import java.util.Arrays;
-import java.util.stream.Collectors;
 import org.apache.brooklyn.api.entity.Entity;
-import org.apache.brooklyn.api.entity.EntitySpec;
-import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
-import org.apache.brooklyn.core.entity.Attributes;
-import org.apache.brooklyn.core.entity.Entities;
-import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.internal.BrooklynProperties;
 import org.apache.brooklyn.core.mgmt.internal.LocalManagementContext;
 import org.apache.brooklyn.core.test.BrooklynAppLiveTestSupport;
-import org.apache.brooklyn.entity.software.base.SoftwareProcess;
-import org.apache.brooklyn.test.Asserts;
 import org.apache.brooklyn.util.text.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
 
-import javax.annotation.Nullable;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEqualsEventually;
-import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEventuallyNonNull;
-import static org.testng.Assert.assertNotNull;
 
 public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppLiveTestSupport {
 
@@ -67,7 +53,7 @@ public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppL
     }
 
     protected Object getRequiredProperty(String ...properties) {
-        return checkNotNull(Strings.firstNonNull(Arrays.asList(properties).stream().map(brooklynProperties::getConfig).collect(Collectors.toList())), "test requires mgmt context property, brooklyn.properties must have at least one of: " + Arrays.asList(properties));
+        return checkNotNull(Strings.firstNonNull(Arrays.asList(properties).stream().map(brooklynProperties::getConfig).collect(Collectors.toList()).toArray(new Object[0])), "test requires mgmt context property, brooklyn.properties must have at least one of: " + Arrays.asList(properties));
     }
 
     protected static class SensorSupplier<T> implements Supplier<T> {
