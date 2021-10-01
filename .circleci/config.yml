@@ -103,8 +103,13 @@ workflows:
     # Inside the workflow, you define the jobs you want to run.
     jobs:
     - build-and-test
+    - hold:
+        type: approval
+        requires:
+        - build-and-test
     - terraform-deploy:
-        requires: [ build-and-test ]
         filters:
           branches:
             only: [ master ]
+        requires:
+        - hold
