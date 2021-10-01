@@ -24,8 +24,8 @@ Use the [Brooklyn CLI](https://brooklyn.apache.org/download/index.html#command-l
 Alternatively, for quick tests, copy the latest jar to the Brooklyn distribution's `dropins` directory
 and then launch (or restart) Brooklyn.
 
-    wget -O brooklyn-terraform-0.12.0-SNAPSHOT.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=0.12.0-SNAPSHOT&e=jar"
-    mv brooklyn-terraform-0.12.0-SNAPSHOT.jar $BROOKLYN_HOME/lib/dropins/
+    wget -O brooklyn-terraform-1.1.0-SNAPSHOT.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=1.1.0-SNAPSHOT&e=jar"
+    mv brooklyn-terraform-1.1.0-SNAPSHOT.jar $BROOKLYN_HOME/lib/dropins/
     nohup $BROOKLYN_HOME/bin/brooklyn launch &
 
 

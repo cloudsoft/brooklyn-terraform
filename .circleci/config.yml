@@ -105,6 +105,9 @@ workflows:
     - build-and-test
     - hold:
         type: approval
+        filters:
+          branches:
+            only: [ master ]
         requires:
         - build-and-test
     - terraform-deploy:
