@@ -71,21 +71,17 @@
         <!-- Cloudsoft repo, for early custom releases of jclouds vcloud-director etc -->
         <repository>
             <id>cloudsoft-releases</id>
-            <url>http://ccweb.cloudsoftcorp.com/maven/libs-release-local/</url>
+            <url>https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/</url>
         </repository>
         <repository>
             <id>cloudsoft-snapshots</id>
-            <url>http://ccweb.cloudsoftcorp.com/maven/libs-snapshot-local/</url>
+            <url>https://artifactory.cloudsoftcorp.com/artifactory/libs-snapshot-local/</url>
             <releases>
                 <enabled>false</enabled>
             </releases>
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
-        </repository>
-        <repository>
-            <id>cloudsoft-developers</id>
-            <url>http://developers.cloudsoftcorp.com/download/maven2/</url>
         </repository>
     </repositories>    
 
@@ -109,8 +105,7 @@
         <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
-            <version>6.8.8</version>
-            <scope>test</scope>
+            <version>${testng.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.brooklyn</groupId>
@@ -128,7 +123,13 @@
     </dependencies>
 
     <build>
+        <defaultGoal>clean package</defaultGoal>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire.version}</version>
+            </plugin>
             <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
