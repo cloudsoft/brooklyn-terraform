@@ -11,9 +11,4 @@ public class TerraformSimpleTest {
         assertTrue(true);
     }
 
-    @Test
-    public void testFail() {
-        assertFalse(true, "This intentionally fails to prove the CircleCI notification works!");
-    }
-
 }
