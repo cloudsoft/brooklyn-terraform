@@ -18,7 +18,7 @@ slack-config:
   job-failed-notification: &job-failed-notification
     event: fail
     channel: 'amp-6-1'
-    mentions: "@Mateusz Zan, @Iuliana Cosmina, @duncan.grant "
+    mentions: "<@Mateusz Zan>, <@Iuliana Cosmina>, @duncan.grant "
     custom: |
       {
         "blocks": [
