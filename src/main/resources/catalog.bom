@@ -1,0 +1,15 @@
+brooklyn.catalog:
+  bundle: io.cloudsoft.terraform.brooklyn-terraform
+  id: terraform
+  version: 1.1.0-SNAPSHOT   # BROOKLYN_VERSION
+  iconUrl: classpath://io/cloudsoft/terraform/logo.png
+
+  publish:
+    license_code: Apache-2.0
+    overview: README.md
+
+  items:
+  - id: terraform
+    name: Terraform Configuration
+    item:
+        type: io.cloudsoft.terraform.TerraformConfiguration

@@ -1,5 +1,3 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine.
-# See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
 
 # An executor type defines the underlying technology or environment in which to run a job.
@@ -104,6 +102,7 @@ jobs:
     executor: tf-executor
     steps:
     - deploy
+
 
 workflows:
   terraform-build: # This is the name of the workflow, feel free to change it to better match your workflow.
