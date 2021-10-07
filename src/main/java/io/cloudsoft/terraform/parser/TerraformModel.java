@@ -25,29 +25,25 @@ public class TerraformModel {
 
     public TerraformModel(String configurationJson, String outputJson) {
         try {
-            configurationData = objectMapper.readTree(configurationJson);
-            outputData = objectMapper.readTree(outputJson);
+            updateModel(objectMapper.readTree(configurationJson), objectMapper.readTree(outputJson));
         } catch (Exception e) {
             e.printStackTrace();
         }
-        makeModel();
     }
 
     public TerraformModel(JsonNode configurationNode, JsonNode outputNode) {
-        configurationData = configurationNode;
-        outputData = outputNode;
-        makeModel();
+        updateModel(configurationNode,outputNode);
     }
 
     public TerraformModel() {
     }
 
-    private void makeModel(){
+    private void makeModelFromConfiguration() {
         try {
             //build up inputs from configuration - parse HCL
             if (configurationData != null) {
-
-                // initially, take resources from configuration (willl be overriden by state/show data)
+                resources.clear();
+                // initially, take resources from configuration (will be overridden by state/show data)
                 JsonNode resourcesNode = configurationData.at("/resource");
                 Iterator<Map.Entry<String, JsonNode>> resourceFields = resourcesNode.fields();
                 while (resourceFields.hasNext()) {
@@ -75,7 +71,7 @@ public class TerraformModel {
 
                 }
 
-
+                inputVariables.clear();
                 // input vars
                 JsonNode inputVariablesNode = configurationData.at("/variable");
                 Iterator<Map.Entry<String, JsonNode>> inputVariablesFields = inputVariablesNode.fields();
@@ -114,19 +110,18 @@ public class TerraformModel {
                         }
                     }
                     inputVariables.put(variable.getName(), variable);
-
-
                 }
             }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
-
+    private void makeModelFromOutput (){
+        try{
             if (outputData != null) {
                 //build up resources from output data
-                if (resources.size() > 0) {
-                    // if we already have some resources parsed from the configuration bit,
-                    // we just clear them as output/show is a better representation of actual real world
-                    resources.clear();
-                }
+                resources.clear();
                 JsonNode resourcesNode = outputData.at("/values/root_module/resources");
                 if (resourcesNode.isArray()) {
                     for (JsonNode resourceNode: resourcesNode){
@@ -142,6 +137,7 @@ public class TerraformModel {
                 }
 
                 //build up outputs from output data
+                outputs.clear();
                 JsonNode outputsNode = outputData.at("/values/outputs");
                 Iterator<Map.Entry<String, JsonNode>> outputIterator = outputsNode.fields();
                 while (outputIterator.hasNext()) {
@@ -180,19 +176,15 @@ public class TerraformModel {
     }
 
     public void updateModel(JsonNode configurationNode, JsonNode outputNode) {
-        // update the data nodes
+        // update the data nodes and the model
         if (configurationNode != null) {
             configurationData = configurationNode;
+            makeModelFromConfiguration();
         }
         if (outputNode != null){
             outputData = outputNode;
+            makeModelFromOutput();
         }
-
-        // clear existing model
-        clearModel();
-
-        // make model
-        makeModel();
     }
 
     public void clearModel() {
