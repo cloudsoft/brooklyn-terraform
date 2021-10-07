@@ -5,16 +5,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 public class Resource {
 
-    private String address;
-    private String mode;
-    private String type;
-    private String name;
-    private String provider_name;
-    private int schema_version;
+    private String address = "";
+    private String mode = "";
+    private String type = "";
+    private String name = "";
+    private String provider_name = "";
+    private int schema_version = 0;
     private Map<String,Object> values = new HashMap<String,Object>();
     private Map<String,Object> sensitiveValues = new HashMap<String,Object>();
     ObjectMapper objectMapper = new ObjectMapper();
@@ -87,6 +88,18 @@ public class Resource {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public void setValues(Map<String, Object> valuesMap){
+        values = valuesMap;
+    }
+
+    public void setValues(JsonNode valuesNode) {
+        Iterator<Map.Entry<String, JsonNode>> resourceAttributesNodeIterator = valuesNode.fields();
+        while (resourceAttributesNodeIterator.hasNext()) {
+            Map.Entry<String, JsonNode> next = resourceAttributesNodeIterator.next();
+            values.put(next.getKey(), next.getValue());
+        }
     }
 
 

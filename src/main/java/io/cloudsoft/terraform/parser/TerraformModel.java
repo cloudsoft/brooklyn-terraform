@@ -82,10 +82,9 @@ public class TerraformModel {
                         while (resourceAttributesNodeIterator.hasNext()) {
                             Map.Entry<String, JsonNode> resourceAttributeNodeData = resourceAttributesNodeIterator.next();
                             Resource resource = new Resource();
-                            resource.parseInput(resourceAttributeNodeData.getValue());
                             resource.setName(resourceName);
                             resource.setType(resourceType);
-
+                            resource.setValues(resourceAttributeNodeData.getValue());
                             resourceName = resource.getName();
 
                             if (Strings.isNotNullAndNotEmpty(resourceName)){
