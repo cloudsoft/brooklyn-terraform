@@ -5,13 +5,13 @@ variable "key_name" {
 
 variable "aws_region" {
   description = "AWS region to launch servers."
-  default = "us-east-1"
+  default = "eu-west-1"
 }
 
 variable "aws_amis" {
   type = map(string)
   default = {
-    "us-east-1" = "ami-c481fad3"
+    "eu-west-1" = "ami-02df9ea15c1778c9c"
   }
 }
 
@@ -22,6 +22,10 @@ provider "aws" {
 
 resource "aws_instance" "web" {
   instance_type = "t2.micro"
+
+  tags = {
+    Name = "TestInstance-KillMePlease"
+  }
 
   # Lookup the correct AMI based on the region
   # we specified
