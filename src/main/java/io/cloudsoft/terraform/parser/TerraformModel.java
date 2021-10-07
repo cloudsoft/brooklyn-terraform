@@ -1,11 +1,8 @@
 package io.cloudsoft.terraform.parser;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.testng.util.Strings;
-
-import java.io.InputStream;
+import org.apache.commons.lang3.StringUtils;
 import java.util.*;
 
 public class TerraformModel {
@@ -70,7 +67,7 @@ public class TerraformModel {
                             resource.setType(resourceType);
                             resource.setValues(resourceAttributeNodeData.getValue());
 
-                            if (Strings.isNotNullAndNotEmpty(resourceName)){
+                            if (StringUtils.isNotEmpty(resourceName)){
                                 resources.put(resourceName,resource);
                             }
                         }
@@ -138,7 +135,7 @@ public class TerraformModel {
 
                         String resourceName = resource.getName();
 
-                        if (Strings.isNotNullAndNotEmpty(resourceName)){
+                        if (StringUtils.isNotEmpty(resourceName)){
                             resources.put(resourceName,resource);
                         }
                     }
