@@ -62,14 +62,13 @@ public class TerraformModel {
                         Map.Entry<String, JsonNode> resourceData = resourcesOfTypeIterator.next();
                         String resourceName = resourceData.getKey();
                         JsonNode resourceAttributesNode = resourceData.getValue();
-                        Iterator<Map.Entry<String, JsonNode>> resourceAttributesNodeIterator = resourcesOfType.fields();
+                        Iterator<Map.Entry<String, JsonNode>> resourceAttributesNodeIterator = resourceAttributesNode.fields();
                         while (resourceAttributesNodeIterator.hasNext()) {
                             Map.Entry<String, JsonNode> resourceAttributeNodeData = resourceAttributesNodeIterator.next();
                             Resource resource = new Resource();
                             resource.setName(resourceName);
                             resource.setType(resourceType);
                             resource.setValues(resourceAttributeNodeData.getValue());
-                            resourceName = resource.getName();
 
                             if (Strings.isNotNullAndNotEmpty(resourceName)){
                                 resources.put(resourceName,resource);
@@ -144,13 +143,39 @@ public class TerraformModel {
                         }
                     }
                 }
+
+                //build up outputs from output data
+                JsonNode outputsNode = outputData.at("/values/outputs");
+                Iterator<Map.Entry<String, JsonNode>> outputIterator = outputsNode.fields();
+                while (outputIterator.hasNext()) {
+                    Map.Entry<String, JsonNode> outputVariable = outputIterator.next();
+                    Output output = new Output();
+                    output.setName(outputVariable.getKey());
+                    Iterator<Map.Entry<String, JsonNode>> outputAttributeIterator = outputVariable.getValue().fields();
+                    while (outputAttributeIterator.hasNext()) {
+                        Map.Entry<String, JsonNode> outputAttribute = outputAttributeIterator.next();
+                        String attributeName = outputAttribute.getKey();
+                        if (attributeName.equals("value")) {
+                            output.setValue(outputAttribute.getValue().asText());
+                            continue;
+                        }
+                        if (attributeName.equals("description")) {
+                            output.setDescription(outputAttribute.getValue().asText());
+                            continue;
+                        }
+                        if (attributeName.equals("sensitive")) {
+                            output.setSensitive(outputAttribute.getValue().asBoolean());
+                            continue;
+                        }
+                        if (attributeName.equals("depends_on")) {
+                            // TODO populate depends on
+                            Set<String> dependsOn = new HashSet<String>();
+                            output.setDependsOn(dependsOn);
+                            continue;
+                        }
+                    }
+                }
             }
-
-
-            //build up outputs from output data
-
-
-
         } catch (Exception e) {
             e.printStackTrace();
         }

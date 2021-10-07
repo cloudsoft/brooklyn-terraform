@@ -7,13 +7,15 @@ import java.util.Set;
 
 public class Output {
 
-    String name;
-    String value;
-    String description;
-    Boolean sensitive;
-    Set<String> dependsOn;
+    private String name = "";
+    private String value = "";
+    private String description = "";
+    private Boolean sensitive = false;
+    private Set<String> dependsOn;
 
+    public Output() {
 
+    }
 
     public Output(String outputJson) {
         try{
@@ -36,7 +38,30 @@ public class Output {
 
     }
 
-    // getters / setters
+    // setters
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setValue(String value) {
+        this.value = value;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public void setSensitive(Boolean sensitive) {
+        this.sensitive = sensitive;
+    }
+
+    public void setDependsOn(Set<String> dependsOn) {
+        this.dependsOn = dependsOn;
+    }
+
+
+    // getters
     public String getName(){
         return name;
     }
@@ -54,6 +79,6 @@ public class Output {
     }
 
     public Set<String> getDependsOn(){
-        return getDependsOn();
+        return dependsOn;
     }
 }
