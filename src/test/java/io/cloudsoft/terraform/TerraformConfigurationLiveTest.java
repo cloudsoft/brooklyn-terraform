@@ -33,9 +33,11 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
 
         // Previously this failed because the environment was not set on the SSH sensor feeds.
-        Asserts.continually(new SensorSupplier<>(terraformConfiguration, TerraformConfiguration.STATE), input -> input == null || !input.containsKey("ERROR"));
+        Asserts.continually(new SensorSupplier<>(terraformConfiguration, TerraformConfiguration.STATE),
+                input -> input == null || !input.containsKey("ERROR"));
 
         Entities.dumpInfo(app);
+        LOG.debug("Stopping application ...");
         app.stop();
     }
 
@@ -55,6 +57,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
 
         // Terraform can take more than thirty seconds to destroy the instance which
         // trips tearDown's timeout. Stop the application here instead.
+        LOG.debug("Stopping application ...");
         app.stop();
     }
 
