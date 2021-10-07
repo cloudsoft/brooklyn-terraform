@@ -2,10 +2,12 @@ package io.cloudsoft.terraform;
 
 import static com.google.common.collect.Maps.transformEntries;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.cloudsoft.terraform.parser.TerraformModel;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.effector.ssh.SshEffectorTasks;
@@ -25,6 +27,7 @@ import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.bertramlabs.plugins.hcl4j.HCLParser;
 
 import com.google.common.base.Function;
 import com.google.common.base.Objects;
@@ -33,6 +36,9 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Maps.EntryTransformer;
 import com.google.gson.Gson;
 import com.google.gson.internal.LinkedTreeMap;
+
+import com.fasterxml.jackson.databind.*;
+
 
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
 
@@ -44,17 +50,53 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private Map<String, Object> lastCommandOutputs = Collections.synchronizedMap(Maps.<String, Object>newHashMapWithExpectedSize(3));
     private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
 
+    private TerraformModel model = new TerraformModel();
+    private ObjectMapper objectMapper = new ObjectMapper();
+
     @Override
     public void init() {
         super.init();
         // Exactly one of the two must have a value
-        if (Strings.isNonBlank(getConfig(CONFIGURATION_URL)) && Strings.isNonBlank(getConfig(CONFIGURATION_CONTENTS))) {
+        if ((Strings.isNonBlank(getConfig(CONFIGURATION_URL)) && Strings.isNonBlank(getConfig(CONFIGURATION_CONTENTS))) ||
+                ((Strings.isBlank(getConfig(CONFIGURATION_URL)) && Strings.isBlank(getConfig(CONFIGURATION_CONTENTS))))) {
             throw new IllegalArgumentException("Exactly one of " +
                     CONFIGURATION_URL.getName() + " and " + CONFIGURATION_CONTENTS.getName() + " must be provided");
         }
         if (getAttribute(CONFIGURATION_IS_APPLIED) == null) {
             setConfigurationApplied(false);
         }
+
+        // parse config data and pass to the model
+        try {
+            Map terraformConfiguration;
+            if (Strings.isNonBlank(getConfig(CONFIGURATION_URL))) {
+                /*
+                //URL configURL = new URL(getConfig(CONFIGURATION_URL));
+                URL configURL = getClass().getClassLoader().getResource(getConfig(CONFIGURATION_URL));
+                configURL.openConnection();
+
+                String configContent = IOUtils.toString(configURL);
+                terraformConfiguration = new HCLParser().parse(configContent);
+
+                plans/create-instance.tf"
+
+                ResourceUtils(entity).getResourceFromUrl(configurationUrl)
+                 */
+
+                // TODO - file from URL using classpath
+                File aaa = new File("/Users/zanmateusz/dev/repos/brooklyn-terraform/src/test/resources/plans/create-instance.tf");
+                terraformConfiguration = new HCLParser().parse(aaa);
+            }
+            else {
+                // if not URL then we must have CONFIGURATION_CONTENTS specified as per check above
+                terraformConfiguration = new HCLParser().parse(new File(getConfig(CONFIGURATION_URL)));
+            }
+            JsonNode configurationNode = objectMapper.valueToTree(terraformConfiguration);
+            model.updateModel(configurationNode, null);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
     }
 
     @Override
@@ -84,7 +126,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     // TODO would be nice if this were json -- but use outputs for that
                     .poll(new CommandPollConfig<>(SHOW)
                             .env(env)
-                            .command(getDriver().makeTerraformCommand("show -no-color"))
+                            .command(getDriver().makeTerraformCommand("show -json -no-color"))
                             .onSuccess(new ShowSuccessFunction())
                             .onFailure(new ShowFailureFunction()))
 
@@ -124,6 +166,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 output = "No configuration is applied.";
             }
             lastCommandOutputs.put(SHOW.getName(), output);
+            try {
+                JsonNode outputNode = objectMapper.readTree(output);
+                model.updateModel(null, outputNode);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
             return output;
         }
     }
