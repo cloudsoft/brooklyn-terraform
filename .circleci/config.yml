@@ -16,7 +16,7 @@ slack-config:
   job-failed-notification: &job-failed-notification
     event: fail
     channel: 'amp-6-1'
-    mentions: "@Mateusz Zan, @Iuliana Cosmina, @duncan.grant "
+    mentions: "<@Mateusz Zan>, <@Iuliana Cosmina>, @duncan.grant "
     custom: |
       {
         "blocks": [
@@ -61,30 +61,28 @@ slack-config:
         ]
       }
 
-jobs:
-  # Below is the definition of your job to build and test your app, you can rename and customize it as you want.
-  build-and-test:
-    executor: tf-executor
-    steps:
-      # Checkout the code as the first step.
-      - checkout
-      # Use mvn clean and package as the standard maven build phase
-      - run:
-          name: Build
-          command: mvn -s .circleci/circleci-m2-settings.xml -B -DskipTests clean package
-      # Then run your unit tests!
-      - run:
-          name: Unit Test
-          command: mvn -s .circleci/circleci-m2-settings.xml test
-      # Run integration and live tests - require access to AWS
-      - run:
-          name: Live Test
-          command: echo "Nothing to run yet!"
-      - slack/notify:
-          <<: *job-failed-notification
 
-  terraform-deploy:
-    executor: tf-executor
+commands: # re-usable as steps in any job in this config
+  build:
+    steps:
+    # Checkout the code as the first step.
+    - checkout
+    # Use mvn clean and package as the standard maven build phase
+    - run:
+        name: Build
+        command: mvn -s .circleci/circleci-m2-settings.xml -B -DskipTests clean package
+    # Then run your unit tests!
+    - run:
+        name: Unit Test
+        command: mvn -s .circleci/circleci-m2-settings.xml test
+    # Run integration and live tests - require access to AWS
+    - run:
+        name: Live Test
+        command: echo "Nothing to run yet!"
+    - slack/notify:
+        <<: *job-failed-notification
+
+  deploy:
     steps:
     - checkout
     - run:
@@ -92,6 +90,19 @@ jobs:
         command: mvn -s .circleci/circleci-m2-settings.xml clean deploy
     - slack/notify:
         <<: *job-failed-notification
+
+jobs:
+  # Below is the definition of your job to build and test your app, you can rename and customize it as you want.
+  build-and-test:
+    executor: tf-executor
+    steps:
+    - build
+
+  build-and-deploy:
+    executor: tf-executor
+    steps:
+    - deploy
+
 
 workflows:
   terraform-build: # This is the name of the workflow, feel free to change it to better match your workflow.
@@ -101,19 +112,17 @@ workflows:
         context:
         - cloudsoft-artifactory
         - cloudsoft-sonatype
-    - hold: # this runs only when changes happen on master, this blocks deployment to sonatype until approved manually
-        type: approval
+
+  terraform-publish: # this builds everytime something changes on the master branch and user has manually approved deployment, this could be a different workflow if needed
+    triggers:
+    - schedule:
+        cron: "0 0 28 * *" # Fire at 00:00 on day-of-month 28.
         filters:
           branches:
-            only: [ master ]
-        requires:
-        - build-and-test
-    - terraform-deploy: # this builds everytime something changes on the master branch and user has manually approved deployment, this could be a different workflow if needed
+            only: [ master ] # trigger only on master
+    jobs:
+    - build-and-deploy:
         context:
         - cloudsoft-artifactory
         - cloudsoft-sonatype
-        filters:
-          branches:
-            only: [ master ]
-        requires:
-        - hold
+

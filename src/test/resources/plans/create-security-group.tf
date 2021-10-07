@@ -14,6 +14,10 @@ resource "aws_security_group" "allow_all" {
     protocol = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = {
+    Name = "TestSG-KillMePlease"
+  }
 }
 
 output "name" {

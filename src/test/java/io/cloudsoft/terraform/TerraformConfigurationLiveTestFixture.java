@@ -23,7 +23,7 @@ public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppL
     private static final Logger LOG = LoggerFactory.getLogger(TerraformConfigurationLiveTestFixture.class);
 
     public static final String PROVIDER = "aws-ec2";
-    public static final String REGION_NAME = "us-east-1";
+    public static final String REGION_NAME = "eu-west-1";
 
     protected BrooklynProperties brooklynProperties;
     protected Map<String, Object> env;

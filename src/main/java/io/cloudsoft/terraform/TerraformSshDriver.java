@@ -47,7 +47,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     @Override
     public void stop() {
         ScriptHelper stopScript = newScript(STOPPING)
-                .body.append(makeTerraformCommand("destroy -force -no-color"))
+                // -force tag has been removed
+                // terraform destroy -auto-approve & terraform apply -destroy -auto-approve  are equivalent
+                .body.append(makeTerraformCommand("apply -destroy -auto-approve -no-color"))
                 .environmentVariablesReset(getShellEnvironment())
                 .noExtraOutput()
                 .gatherOutput();

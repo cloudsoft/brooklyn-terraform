@@ -14,12 +14,16 @@
     <artifactId>brooklyn-terraform</artifactId>
     <!-- Update catalog.bom when changing the project's version. -->
     <version>1.1.0-SNAPSHOT</version>  <!-- BROOKLYN_VERSION -->
-    <packaging>jar</packaging>
+    <packaging>bundle</packaging>
 
     <name>Brooklyn Terraform</name>
     <description>
         Provides entities for using Hashicorp Terraform with Apache Brooklyn
     </description>
+
+    <properties>
+        <maven-bundle-plugin.version>3.2.0</maven-bundle-plugin.version>
+    </properties>
 
     <distributionManagement>
         <snapshotRepository>
@@ -128,7 +132,7 @@
         <dependency>
             <groupId>com.bertramlabs.plugins</groupId>
             <artifactId>hcl4j</artifactId>
-            <version>0.3.5</version>
+            <version>0.4.0</version>
         </dependency>
     </dependencies>
 
@@ -143,7 +147,7 @@
             <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
-                <version>2.3.7</version>
+                <version>${maven-bundle-plugin.version}</version>
                 <extensions>true</extensions>
                 <executions>
                     <execution>
@@ -157,6 +161,7 @@
                 <configuration>
                     <supportedProjectTypes>
                         <supportedProjectType>jar</supportedProjectType>
+                        <supportedProjectType>bundle</supportedProjectType>
                     </supportedProjectTypes>
                     <instructions>
                         <!-- OSGi specific instruction -->
