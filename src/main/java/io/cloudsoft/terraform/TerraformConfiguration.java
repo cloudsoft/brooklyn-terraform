@@ -37,7 +37,7 @@ public interface TerraformConfiguration extends SoftwareProcess {
             "tf.configuration.contents",
             "Contents of the configuration file that will be applied by Terraform.");
 
-    @SetFromFlag("tfDeployment")
+    @SetFromFlag("tfConfigurationUrl")
     ConfigKey<String> CONFIGURATION_URL = ConfigKeys.builder(String.class)
             .name("tf.configuration.url")
             .description("URL of the configuration file that will be applied by Terraform.")
