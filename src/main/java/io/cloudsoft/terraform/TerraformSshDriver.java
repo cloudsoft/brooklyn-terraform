@@ -3,12 +3,10 @@ package io.cloudsoft.terraform;
 import static java.lang.String.format;
 import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.nio.file.Files;
+import java.util.*;
+import java.util.zip.ZipFile;
 
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
@@ -18,6 +16,7 @@ import org.apache.brooklyn.entity.software.base.AbstractSoftwareProcessSshDriver
 import org.apache.brooklyn.entity.software.base.lifecycle.ScriptHelper;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.ResourceUtils;
+import org.apache.brooklyn.util.core.file.ArchiveUtils;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
 import org.apache.brooklyn.util.os.Os;
@@ -108,6 +107,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     @Override
     public void launch() {
         List<String> commands = new LinkedList<String>();
+        // try show here
+        // if show returns data  { unpack data, create entities }
+        // else do all below
         commands.add(makeTerraformCommand("init -input=false"));
         commands.add(makeTerraformCommand("plan -out=tfplan -input=false"));
         commands.add(makeTerraformCommand("apply -no-color -input=false tfplan"));
@@ -124,25 +126,35 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     }
 
     private void copyConfiguration() {
-        InputStream configuration = getConfiguration();
-        getMachine().copyTo(configuration, getConfigurationFilePath());
-    }
-
-    private InputStream getConfiguration() {
-        String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
-        if (Strings.isNonBlank(configurationUrl)) {
-            return new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
+        if (Strings.isNonBlank(entity.getConfig(TerraformConfiguration.CONFIGURATION_URL))) {
+            String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
+            InputStream zipStream =  new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
+            getMachine().copyTo(zipStream, getConfigurationFilePath());
+            try (PrintWriter printWriter = new PrintWriter( new FileWriter(getRunDir() + "/configuration.tf"))){
+                ArchiveUtils.extractZip(new ZipFile(getConfigurationFilePath()),getRunDir());
+                Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
+                    try {
+                        Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
+                    } catch (IOException e) {
+                        throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
+                    }
+                });
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else if (Strings.isNonBlank(entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS))) {
+            String configurationContents = entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS);
+            if (Strings.isNonBlank(configurationContents)) {
+                getMachine().copyTo(KnownSizeInputStream.of(configurationContents), getConfigurationFilePath());
+            }
+        } else {
+            throw new IllegalStateException("Could not resolve Terraform configuration from " +
+                    TerraformConfiguration.CONFIGURATION_URL.getName() + " or " + TerraformConfiguration.CONFIGURATION_CONTENTS.getName());
         }
-        String configurationContents = entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS);
-        if (Strings.isNonBlank(configurationContents)) {
-            return KnownSizeInputStream.of(configurationContents);
-        }
-        throw new IllegalStateException("Could not resolve Terraform configuration from " +
-                TerraformConfiguration.CONFIGURATION_URL.getName() + " or " + TerraformConfiguration.CONFIGURATION_CONTENTS.getName());
     }
 
     private String getConfigurationFilePath() {
-        return getRunDir() + "/configuration.tf";
+        return getRunDir() + "/tf-config-pack.zip";
     }
 
     private String getStateFilePath() {

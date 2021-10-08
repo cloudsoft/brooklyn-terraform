@@ -6,22 +6,18 @@ import java.io.File;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.zip.ZipFile;
 
 import io.cloudsoft.terraform.parser.TerraformModel;
-import io.cloudsoft.terraform.util.SafeGrabber;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.effector.ssh.SshEffectorTasks;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
-import org.apache.brooklyn.core.server.BrooklynServerPaths;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.CommandPollConfig;
 import org.apache.brooklyn.feed.ssh.SshFeed;
 import org.apache.brooklyn.feed.ssh.SshPollValue;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
-import org.apache.brooklyn.util.core.file.ArchiveUtils;
 import org.apache.brooklyn.util.core.flags.TypeCoercions;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.system.ProcessTaskStub.ScriptReturnType;
@@ -29,7 +25,6 @@ import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
-import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.bertramlabs.plugins.hcl4j.HCLParser;
@@ -61,7 +56,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void init() {
         super.init();
-      // Exactly one of the two must have a value
+        // Exactly one of the two must have a value
         if ((Strings.isNonBlank(getConfig(CONFIGURATION_URL)) && Strings.isNonBlank(getConfig(CONFIGURATION_CONTENTS))) ||
                 ((Strings.isBlank(getConfig(CONFIGURATION_URL)) && Strings.isBlank(getConfig(CONFIGURATION_CONTENTS))))) {
             throw new IllegalArgumentException("Exactly one of " +
@@ -75,16 +70,22 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         try {
             Map terraformConfiguration;
             if (Strings.isNonBlank(getConfig(CONFIGURATION_URL))) {
-                // use this for tests: "https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/tf-deployment.zip"
-                final File tempZipFile = SafeGrabber.downloadZip(getConfig(CONFIGURATION_URL));
-                final String tfConfiguration = SafeGrabber.grabTerrformConfiguration(tempZipFile);
+                /*
+                //URL configURL = new URL(getConfig(CONFIGURATION_URL));
+                URL configURL = getClass().getClassLoader().getResource(getConfig(CONFIGURATION_URL));
+                configURL.openConnection();
 
-                String data = null; // terraform show -> return data
-                if(data == null) {
-                    // terraform init, plan,  apply
-                    data = "result from running tf here";
-                }
-                terraformConfiguration = new HCLParser().parse(data);
+                String configContent = IOUtils.toString(configURL);
+                terraformConfiguration = new HCLParser().parse(configContent);
+
+                plans/create-instance.tf"
+
+                ResourceUtils(entity).getResourceFromUrl(configurationUrl)
+                 */
+
+                // TODO - file from URL using classpath
+                File aaa = new File("/Users/zanmateusz/dev/repos/brooklyn-terraform/src/test/resources/plans/create-instance.tf");
+                terraformConfiguration = new HCLParser().parse(aaa);
             }
             else {
                 // if not URL then we must have CONFIGURATION_CONTENTS specified as per check above
@@ -95,7 +96,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         } catch (Exception e) {
             e.printStackTrace();
         }
-
     }
 
     @Override
