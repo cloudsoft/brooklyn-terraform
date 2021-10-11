@@ -129,11 +129,11 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     }
 
     private InputStream getConfiguration() {
-        String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
+        final String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
         if (Strings.isNonBlank(configurationUrl)) {
             return new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
         }
-        String configurationContents = entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS);
+        final String configurationContents = entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS);
         if (Strings.isNonBlank(configurationContents)) {
             return KnownSizeInputStream.of(configurationContents);
         }

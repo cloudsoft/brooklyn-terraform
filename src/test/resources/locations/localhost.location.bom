@@ -1,0 +1,10 @@
+brooklyn.catalog:
+  id: localhost_location
+  version: 1.0.0-SNAPSHOT
+
+  items:
+
+  - id: localhost_location
+    itemType: location
+    item:
+      type: localhost

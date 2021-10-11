@@ -1,0 +1,10 @@
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      # requires aws cli + creds installed on the machine deploying this or add 'shell.env'
+      # Fetching archives over HTTP
+      tf.configuration.contents: |
+          module "vpc" {
+            source = "https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/tf-deployment.zip?archive=zip"
+          }
