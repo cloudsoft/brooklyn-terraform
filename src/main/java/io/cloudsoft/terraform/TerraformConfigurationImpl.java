@@ -65,37 +65,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         if (getAttribute(CONFIGURATION_IS_APPLIED) == null) {
             setConfigurationApplied(false);
         }
-
-        // parse config data and pass to the model
-        try {
-            Map terraformConfiguration;
-            if (Strings.isNonBlank(getConfig(CONFIGURATION_URL))) {
-                /*
-                //URL configURL = new URL(getConfig(CONFIGURATION_URL));
-                URL configURL = getClass().getClassLoader().getResource(getConfig(CONFIGURATION_URL));
-                configURL.openConnection();
-
-                String configContent = IOUtils.toString(configURL);
-                terraformConfiguration = new HCLParser().parse(configContent);
-
-                plans/create-instance.tf"
-
-                ResourceUtils(entity).getResourceFromUrl(configurationUrl)
-                 */
-
-                // TODO - file from URL using classpath
-                File aaa = new File("/Users/zanmateusz/dev/repos/brooklyn-terraform/src/test/resources/plans/create-instance.tf");
-                terraformConfiguration = new HCLParser().parse(aaa);
-            }
-            else {
-                // if not URL then we must have CONFIGURATION_CONTENTS specified as per check above
-                terraformConfiguration = new HCLParser().parse(new File(getConfig(CONFIGURATION_URL)));
-            }
-            JsonNode configurationNode = objectMapper.valueToTree(terraformConfiguration);
-            model.updateModel(configurationNode, null);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     @Override
@@ -155,6 +124,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         disconnectServiceUpIsRunning();
         if (sshFeed != null) sshFeed.stop();
         super.disconnectSensors();
+    }
+
+    public TerraformModel getModel() {
+        return model;
     }
 
     private final class ShowSuccessFunction implements Function<SshPollValue, String> {

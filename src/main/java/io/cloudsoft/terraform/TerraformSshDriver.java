@@ -8,6 +8,9 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.zip.ZipFile;
 
+import com.bertramlabs.plugins.hcl4j.HCLParser;
+import com.fasterxml.jackson.databind.JsonNode;
+import io.cloudsoft.terraform.parser.TerraformModel;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.core.entity.Attributes;
@@ -28,6 +31,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 
 public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
+
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     public TerraformSshDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
@@ -126,6 +131,8 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     }
 
     private void copyConfiguration() {
+        //TerraformModel model = TerraformConfiguration.getModel();
+        Map terraformConfiguration;
         if (Strings.isNonBlank(entity.getConfig(TerraformConfiguration.CONFIGURATION_URL))) {
             String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
             InputStream zipStream =  new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
@@ -142,10 +149,25 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             } catch (IOException e) {
                 e.printStackTrace();
             }
+            try {
+                File configurationFile =  new File(getRunDir() + "/configuration.tf");
+                terraformConfiguration = new HCLParser().parse(configurationFile);
+                JsonNode configurationNode = objectMapper.valueToTree(terraformConfiguration);
+                ((TerraformConfigurationImpl) entity).getModel().updateModel(configurationNode,null);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         } else if (Strings.isNonBlank(entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS))) {
             String configurationContents = entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS);
             if (Strings.isNonBlank(configurationContents)) {
                 getMachine().copyTo(KnownSizeInputStream.of(configurationContents), getConfigurationFilePath());
+            }
+            try {
+                terraformConfiguration = new HCLParser().parse(configurationContents);
+                JsonNode configurationNode = objectMapper.valueToTree(terraformConfiguration);
+                ((TerraformConfigurationImpl) entity).getModel().updateModel(configurationNode,null);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         } else {
             throw new IllegalStateException("Could not resolve Terraform configuration from " +
