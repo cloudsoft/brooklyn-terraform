@@ -172,6 +172,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         final String configurationZipFilePath = getRunDir() + "/tf-config-pack.zip";
         final String configFilePath = getConfigurationFilePath();
         getMachine().copyTo(zipStream, configurationZipFilePath);
+        // TODO add SShTask here
         try {
             ArchiveUtils.extractZip(new ZipFile(configurationZipFilePath), getRunDir());
             try (PrintWriter printWriter = new PrintWriter( new FileWriter(configFilePath))){
