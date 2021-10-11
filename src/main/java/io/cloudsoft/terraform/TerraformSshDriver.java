@@ -141,24 +141,26 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
             InputStream zipStream =  new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
             getMachine().copyTo(zipStream, getConfigurationFilePath());
-            try (PrintWriter printWriter = new PrintWriter( new FileWriter(getRunDir() + "/configuration.tf"))){
+            final String configFilePath = getRunDir() + "/configuration.tf";
+            try (PrintWriter printWriter = new PrintWriter( new FileWriter(configFilePath))){
                 try {
                     ArchiveUtils.extractZip(new ZipFile(getConfigurationFilePath()), getRunDir());
+                    Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
+                        try {
+                            Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
+                        } catch (IOException e) {
+                            throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
+                        }
+                    });
                 } catch (ZipException ze) {
                     LOG.debug("Cannot open archive assuming a single unzipped file.");
                 }
-                Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
-                    try {
-                        Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
-                    } catch (IOException e) {
-                        throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
-                    }
-                });
+
             } catch (IOException e) {
                 e.printStackTrace();
             }
             try {
-                File configurationFile =  new File(getRunDir() + "/configuration.tf");
+                File configurationFile =  new File(configFilePath);
                 terraformConfiguration = new HCLParser().parse(configurationFile);
                 JsonNode configurationNode = objectMapper.valueToTree(terraformConfiguration);
                 ((TerraformConfigurationImpl) entity).getModel().updateModel(configurationNode,null);
