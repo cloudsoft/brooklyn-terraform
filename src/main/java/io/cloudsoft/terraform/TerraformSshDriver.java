@@ -6,11 +6,12 @@ import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAs
 import java.io.*;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 
 import com.bertramlabs.plugins.hcl4j.HCLParser;
 import com.fasterxml.jackson.databind.JsonNode;
-import io.cloudsoft.terraform.parser.TerraformModel;
+import com.oracle.tools.packager.Log;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.core.entity.Attributes;
@@ -29,8 +30,12 @@ import org.apache.brooklyn.util.text.Strings;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TerraformSshDriver.class);
 
     private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -138,14 +143,19 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             InputStream zipStream =  new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
             getMachine().copyTo(zipStream, getConfigurationFilePath());
             try (PrintWriter printWriter = new PrintWriter( new FileWriter(getRunDir() + "/configuration.tf"))){
-                ArchiveUtils.extractZip(new ZipFile(getConfigurationFilePath()),getRunDir());
-                Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
-                    try {
-                        Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
-                    } catch (IOException e) {
-                        throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
-                    }
-                });
+                try {
+                    ArchiveUtils.extractZip(new ZipFile(getConfigurationFilePath()), getRunDir());
+                    Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
+                        try {
+                            Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
+                        } catch (IOException e) {
+                            throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
+                        }
+                    });
+                } catch (ZipException ze) {
+                    LOG.debug("Cannot open archive assuming a single unzipped file.");
+                    Files.readAllLines(new File(getRunDir() + "/configuration.tf").toPath()).forEach(line -> printWriter.write(line + "\n"));
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
