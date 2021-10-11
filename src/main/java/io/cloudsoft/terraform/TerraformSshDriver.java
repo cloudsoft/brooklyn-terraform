@@ -11,7 +11,6 @@ import java.util.zip.ZipFile;
 
 import com.bertramlabs.plugins.hcl4j.HCLParser;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.oracle.tools.packager.Log;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.core.entity.Attributes;
@@ -145,17 +144,16 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             try (PrintWriter printWriter = new PrintWriter( new FileWriter(getRunDir() + "/configuration.tf"))){
                 try {
                     ArchiveUtils.extractZip(new ZipFile(getConfigurationFilePath()), getRunDir());
-                    Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
-                        try {
-                            Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
-                        } catch (IOException e) {
-                            throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
-                        }
-                    });
                 } catch (ZipException ze) {
                     LOG.debug("Cannot open archive assuming a single unzipped file.");
-                    Files.readAllLines(new File(getRunDir() + "/configuration.tf").toPath()).forEach(line -> printWriter.write(line + "\n"));
                 }
+                Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
+                    try {
+                        Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
+                    } catch (IOException e) {
+                        throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
+                    }
+                });
             } catch (IOException e) {
                 e.printStackTrace();
             }
