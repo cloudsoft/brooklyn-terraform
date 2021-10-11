@@ -5,6 +5,7 @@ import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAs
 
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
@@ -140,25 +141,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         if (Strings.isNonBlank(entity.getConfig(TerraformConfiguration.CONFIGURATION_URL))) {
             String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
             InputStream zipStream =  new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
-            getMachine().copyTo(zipStream, getConfigurationFilePath());
-            final String configFilePath = getRunDir() + "/configuration.tf";
-            try (PrintWriter printWriter = new PrintWriter( new FileWriter(configFilePath))){
-                try {
-                    ArchiveUtils.extractZip(new ZipFile(getConfigurationFilePath()), getRunDir());
-                    Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
-                        try {
-                            Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
-                        } catch (IOException e) {
-                            throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
-                        }
-                    });
-                } catch (ZipException ze) {
-                    LOG.debug("Cannot open archive assuming a single unzipped file.");
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            final String configFilePath = getConfigFilePath(zipStream);
             try {
                 File configurationFile =  new File(configFilePath);
                 terraformConfiguration = new HCLParser().parse(configurationFile);
@@ -185,8 +168,35 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         }
     }
 
+    private String getConfigFilePath(InputStream zipStream) {
+        final String configurationZipFilePath = getRunDir() + "/tf-config-pack.zip";
+        final String configFilePath = getConfigurationFilePath();
+        getMachine().copyTo(zipStream, configurationZipFilePath);
+        try {
+            ArchiveUtils.extractZip(new ZipFile(configurationZipFilePath), getRunDir());
+            try (PrintWriter printWriter = new PrintWriter( new FileWriter(configFilePath))){
+                ArchiveUtils.extractZip(new ZipFile(configurationZipFilePath), getRunDir());
+                Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
+                    try {
+                        Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
+                    } catch (IOException e) {
+                        throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
+                    }
+                });
+            }
+        } catch (IOException e) {
+            LOG.debug("Cannot open archive assuming a single unzipped file.");
+            try {
+                Files.move(Paths.get(configurationZipFilePath), Paths.get(configFilePath));
+            } catch (IOException ex) {
+                throw new IllegalStateException("Cannot read configuration file: " + configurationZipFilePath + "!", e);
+            }
+        }
+        return configFilePath;
+    }
+
     private String getConfigurationFilePath() {
-        return getRunDir() + "/tf-config-pack.zip";
+        return getRunDir() + "/configuration.tf";
     }
 
     private String getStateFilePath() {
