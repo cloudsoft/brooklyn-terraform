@@ -2,7 +2,6 @@ package io.cloudsoft.terraform;
 
 import static com.google.common.collect.Maps.transformEntries;
 
-import java.io.File;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -94,24 +93,24 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     // TODO would be nice if this were json -- but use outputs for that
                     .poll(new CommandPollConfig<>(SHOW)
                             .env(env)
-                            .command(getDriver().makeTerraformCommand("show -json -no-color"))
+                            .command(getDriver().show())
                             .onSuccess(new ShowSuccessFunction())
                             .onFailure(new ShowFailureFunction()))
 
                     .poll(new CommandPollConfig<>(STATE)
                             .env(env)
-                            .command(getDriver().makeTerraformCommand("refresh -input=false -no-color"))
+                            .command(getDriver().refresh())
                             .onSuccess(new StateSuccessFunction())
                             .onFailure(new StateFailureFunction()))
                     .poll(new CommandPollConfig<>(PLAN)
                             .env(env)
-                            .command(getDriver().makeTerraformCommand("plan -no-color"))
+                            .command(getDriver().plan())
                             .onSuccess(new PlanSuccessFunction())
                             .onFailure(new PlanFailureFunction()))
 
                     .poll(new CommandPollConfig<>(OUTPUT)
                             .env(env)
-                            .command(getDriver().makeTerraformCommand("output -no-color --json -lock=false"))
+                            .command(getDriver().output())
                             .onSuccess(new OutputSuccessFunction())
                             .onFailure(new OutputFailureFunction()))
                     .build());
@@ -165,6 +164,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Override
         public Map<String, Object> apply(SshPollValue input) {
             try {
+
                 Map<String, Object> state = getDriver().getState();
                 lastCommandOutputs.put(STATE.getName(), state);
                 return state;
@@ -267,12 +267,13 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     @Effector(description = "Apply the Terraform configuration")
     public void apply() {
+        LOG.info("Calling 'terraform apply tfplan'");
         final boolean configurationApplied = isConfigurationApplied();
         final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
         // TODO: Is this really the right behaviour? Doesn't Terraform behave sensibly if the configuration is already correct?
         if (!configurationApplied && mayProceed) {
             try {
-                String command = getDriver().makeTerraformCommand("apply -no-color");
+                String command = getDriver().makeTerraformCommand("apply -no-color -input=false tfplan");
                 SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
                 ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
                         .returning(ScriptReturnType.EXIT_CODE)
@@ -298,11 +299,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     @Effector(description = "Destroy the Terraform configuration")
     public void destroy() {
+        LOG.info("Calling 'terraform destroy -auto-approve'");
         final boolean configurationApplied = isConfigurationApplied();
         final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
         if (configurationApplied && mayProceed) {
             try {
-                String command = getDriver().makeTerraformCommand("destroy -force -no-color");
+                String command = getDriver().makeTerraformCommand("apply -destroy -auto-approve -no-color");
                 SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
 
                 ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)

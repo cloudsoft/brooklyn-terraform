@@ -1,26 +1,28 @@
 package io.cloudsoft.terraform;
 
+import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_URL;
 import static java.lang.String.format;
 import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
 
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.*;
-import java.util.zip.ZipException;
-import java.util.zip.ZipFile;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
-import com.bertramlabs.plugins.hcl4j.HCLParser;
-import com.fasterxml.jackson.databind.JsonNode;
+
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
+import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.entity.software.base.AbstractSoftwareProcessSshDriver;
 import org.apache.brooklyn.entity.software.base.lifecycle.ScriptHelper;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
+import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.ResourceUtils;
-import org.apache.brooklyn.util.core.file.ArchiveUtils;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
 import org.apache.brooklyn.util.os.Os;
@@ -34,14 +36,66 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
-
     private static final Logger LOG = LoggerFactory.getLogger(TerraformSshDriver.class);
 
     private ObjectMapper objectMapper = new ObjectMapper();
 
+    Map<String, String> envVars = MutableMap.of(); // TODO set these
+
     public TerraformSshDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
         entity.sensors().set(Attributes.LOG_FILE_LOCATION, this.getLogFileLocation());
+    }
+
+    @Override
+    public String init() {
+        return makeTerraformCommand("init -input=false");
+    }
+
+    @Override
+    public String plan() {
+        return makeTerraformCommand("plan -out=tfplan -no-color");
+    }
+
+    @Override
+    public String apply() {
+        return makeTerraformCommand("apply -no-color -input=false tfplan");
+    }
+
+    @Override
+    public String show() {
+        return makeTerraformCommand("show -no-color");
+    }
+
+    @Override
+    public String refresh() {
+        return makeTerraformCommand("refresh -input=false -no-color");
+    }
+
+    @Override
+    public String output() {
+        return makeTerraformCommand("output -no-color --json -lock=false");
+    }
+
+    @Override
+    public int destroy() {
+        LOG.debug(" <T> 'destroy -auto-approve -no-color' ");
+        ScriptHelper stopScript = newScript(STOPPING)
+                .body.append(makeTerraformCommand("destroy -auto-approve -no-color"))
+                .environmentVariablesReset(getShellEnvironment())
+                .noExtraOutput()
+                .gatherOutput();
+        int result = stopScript.execute();
+        if (result != 0) {
+            throw new IllegalStateException("Error executing Terraform destroy: " + stopScript.getResultStderr());
+        }
+        return result;
+    }
+
+    @Override
+    public void stop() {
+        LOG.debug(" STOP effector calling 'terraform destroy' ");
+        destroy();
     }
 
     @Override
@@ -53,20 +107,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return getStateFilePath();
     }
 
-    @Override
-    public void stop() {
-        ScriptHelper stopScript = newScript(STOPPING)
-                // -force tag has been removed
-                // terraform destroy -auto-approve & terraform apply -destroy -auto-approve  are equivalent
-                .body.append(makeTerraformCommand("apply -destroy -auto-approve -no-color"))
-                .environmentVariablesReset(getShellEnvironment())
-                .noExtraOutput()
-                .gatherOutput();
-        int result = stopScript.execute();
-        if (result != 0) {
-            throw new IllegalStateException("Error executing Terraform destroy: " + stopScript.getResultStderr());
-        }
-    }
 
     public String getOsTag() {
         OsDetails os = getLocation().getOsDetails();
@@ -89,6 +129,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     public void preInstall() {
         resolver = Entities.newDownloader(this, ImmutableMap.of("filename", getInstallFilename()));
         setExpandedInstallDir(Os.mergePaths(getInstallDir(), resolver.getUnpackedDirectoryName(format("terraform_%s_%s", getVersion(), getOsTag()))));
+        entity.sensors().set(Attributes.DOWNLOAD_URL, TERRAFORM_DOWNLOAD_URL
+                .replace("${version}", getVersion())
+                .replace("${driver.osTag}", getOsTag()));
     }
 
     @Override
@@ -96,7 +139,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         List<String> urls = resolver.getTargets();
         String saveAs = resolver.getFilename();
 
-        List<String> commands = new LinkedList<String>();
+        List<String> commands = new LinkedList<>();
         commands.add(BashCommands.INSTALL_ZIP);
         commands.add(BashCommands.INSTALL_UNZIP);
         commands.add(BashCommands.INSTALL_CURL);
@@ -109,91 +152,81 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void customize() {
-        //Create the directory
         newScript(CUSTOMIZING).execute();
-        copyConfiguration();
+        InputStream configuration = getConfiguration();
+        // copy terraform configuration file(s)
+        getMachine().copyTo(configuration, getConfigurationFilePath());
+
+        Task<String> initTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), init())
+                .environmentVariables(envVars)
+                .requiringExitCodeZero()
+                .summary("Initializing terraform infrastructure")
+                .requiringZeroAndReturningStdout().newTask()
+                .asTask());
+        DynamicTasks.waitForLast();
+
+        if (initTask.asTask().isError()) {
+            throw new IllegalStateException("Error executing `terraform init`! ");
+        }
     }
 
     @Override
     public void launch() {
-        List<String> commands = new LinkedList<String>();
-        // try show here
-        // if show returns data  { unpack data, create entities }
-        // else do all below
-        commands.add(makeTerraformCommand("init -input=false"));
-        commands.add(makeTerraformCommand("plan -out=tfplan -input=false"));
-        commands.add(makeTerraformCommand("apply -no-color -input=false tfplan"));
+        Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), plan())
+                .environmentVariables(envVars)
+                .requiringExitCodeZero()
+                .summary("Initializing terraform plan")
+                .requiringZeroAndReturningStdout().newTask()
+                .asTask());
 
-        ScriptHelper helper = newScript(LAUNCHING)
-                .body.append(commands)
-                .failOnNonZeroResultCode(false)
-                .noExtraOutput()
-                .gatherOutput();
-        int result = helper.execute();
-        if (result != 0) {
-            throw new IllegalStateException("Error executing Terraform plan: " + helper.getResultStderr());
+        DynamicTasks.waitForLast();
+
+        if (planTask.asTask().isError()) {
+            throw new IllegalStateException("Error executing `terraform plan`! ");
+
         }
-    }
-
-    private void copyConfiguration() {
-        //TerraformModel model = TerraformConfiguration.getModel();
-        Map terraformConfiguration;
-        if (Strings.isNonBlank(entity.getConfig(TerraformConfiguration.CONFIGURATION_URL))) {
-            String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
-            InputStream zipStream =  new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
-            final String configFilePath = getConfigFilePath(zipStream);
-            try {
-                File configurationFile =  new File(configFilePath);
-                terraformConfiguration = new HCLParser().parse(configurationFile);
-                JsonNode configurationNode = objectMapper.valueToTree(terraformConfiguration);
-                ((TerraformConfigurationImpl) entity).getModel().updateModel(configurationNode,null);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        } else if (Strings.isNonBlank(entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS))) {
-            String configurationContents = entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS);
-            if (Strings.isNonBlank(configurationContents)) {
-                getMachine().copyTo(KnownSizeInputStream.of(configurationContents), getConfigurationFilePath());
-            }
-            try {
-                terraformConfiguration = new HCLParser().parse(configurationContents);
-                JsonNode configurationNode = objectMapper.valueToTree(terraformConfiguration);
-                ((TerraformConfigurationImpl) entity).getModel().updateModel(configurationNode,null);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        } else {
-            throw new IllegalStateException("Could not resolve Terraform configuration from " +
-                    TerraformConfiguration.CONFIGURATION_URL.getName() + " or " + TerraformConfiguration.CONFIGURATION_CONTENTS.getName());
-        }
-    }
-
-    private String getConfigFilePath(InputStream zipStream) {
-        final String configurationZipFilePath = getRunDir() + "/tf-config-pack.zip";
-        final String configFilePath = getConfigurationFilePath();
-        getMachine().copyTo(zipStream, configurationZipFilePath);
-        // TODO add SShTask here
         try {
-            ArchiveUtils.extractZip(new ZipFile(configurationZipFilePath), getRunDir());
-            try (PrintWriter printWriter = new PrintWriter( new FileWriter(configFilePath))){
-                ArchiveUtils.extractZip(new ZipFile(configurationZipFilePath), getRunDir());
-                Arrays.stream(Objects.requireNonNull(new File(getRunDir()).listFiles(pathname -> pathname.getName().endsWith(".tf")))).forEach(cfgFile -> {
-                    try {
-                        Files.readAllLines(cfgFile.toPath()).forEach(line -> printWriter.write(line + "\n"));
-                    } catch (IOException e) {
-                        throw new IllegalStateException("Cannot read configuration file: " + cfgFile + "!", e);
-                    }
-                });
+            String result = planTask.get();
+            LOG.debug("<T> `terraform plan` result: {}", result);
+            if (result.contains("No Changes.")) {
+                // deployment exists
+                // trigger refresh !?
+                LOG.debug("Terraform plan exists!!");
+            } else {
+                Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), apply())
+                        .environmentVariables(envVars)
+                        .requiringExitCodeZero()
+                        .summary("Applying terraform plan")
+                        .requiringZeroAndReturningStdout().newTask()
+                        .asTask());
+
+                DynamicTasks.waitForLast();
+                if (applyTask.asTask().isError()) {
+                    throw new IllegalStateException("Error executing Terraform plan!!");
+                }
+                entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, true);
             }
-        } catch (IOException e) {
-            LOG.debug("Cannot open archive assuming a single unzipped file.");
-            try {
-                Files.move(Paths.get(configurationZipFilePath), Paths.get(configFilePath));
-            } catch (IOException ex) {
-                throw new IllegalStateException("Cannot read configuration file: " + configurationZipFilePath + "!", e);
-            }
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
         }
-        return configFilePath;
+    }
+
+    /**
+     * Converts text into configuration.tf file and wrap it in a {@code KnownSizeInputStream}.
+     * Or convert URL into  {@code InputStream}.
+     * @return
+     */
+    private InputStream getConfiguration() {
+        final String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
+        if (Strings.isNonBlank(configurationUrl)) {
+            return new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
+        }
+        final String configurationContents = entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS);
+        if (Strings.isNonBlank(configurationContents)) {
+            return KnownSizeInputStream.of(configurationContents);
+        }
+        throw new IllegalStateException("Could not resolve Terraform configuration from " +
+                TerraformConfiguration.CONFIGURATION_URL.getName() + " or " + TerraformConfiguration.CONFIGURATION_CONTENTS.getName());
     }
 
     private String getConfigurationFilePath() {
