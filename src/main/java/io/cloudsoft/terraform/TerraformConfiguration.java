@@ -9,11 +9,8 @@ import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.effector.MethodEffector;
-import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.sensor.AttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
-import org.apache.brooklyn.core.sensor.BasicAttributeSensorAndConfigKey;
-import org.apache.brooklyn.core.sensor.BasicAttributeSensorAndConfigKey.StringAttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
@@ -60,9 +57,9 @@ public interface TerraformConfiguration extends SoftwareProcess {
     AttributeSensor<Map<String, Object>> STATE = new BasicAttributeSensor(Map.class, "tf.state",
             "A map constructed from the state file on disk which contains the state of all managed infrastructure.");
 
-    MethodEffector<Void> APPLY = new MethodEffector<Void>(TerraformConfiguration.class, "apply");
+    MethodEffector<Void> APPLY = new MethodEffector<>(TerraformConfiguration.class, "apply");
 
-    MethodEffector<Void> DESTROY = new MethodEffector<Void>(TerraformConfiguration.class, "destroy");
+    MethodEffector<Void> DESTROY = new MethodEffector<>(TerraformConfiguration.class, "destroy");
 
     @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
     void apply();

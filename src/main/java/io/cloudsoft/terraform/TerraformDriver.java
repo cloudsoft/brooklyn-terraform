@@ -3,7 +3,6 @@ package io.cloudsoft.terraform;
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessDriver;
 
 import com.fasterxml.jackson.core.JsonParseException;
@@ -49,11 +48,6 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return format("cd %s && %s/terraform %s", getRunDir(), getInstallDir(), argument);
     }
 
-    // these are just here to allow the terraform commands building methods to be default too :)
-    String getRunDir();
-    String getInstallDir();
-
-
     default String getConfigurationFilePath() {
         return getRunDir() + "/configuration.tf";
     }
@@ -61,4 +55,9 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     default String getStateFilePath() {
         return getRunDir() + "/terraform.tfstate";
     }
+
+    // these are just here to allow the terraform commands building methods to be default too :)
+    String getRunDir();
+    String getInstallDir();
+
 }
