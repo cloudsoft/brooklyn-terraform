@@ -10,6 +10,7 @@ import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.effector.MethodEffector;
 import org.apache.brooklyn.core.entity.Attributes;
+import org.apache.brooklyn.core.sensor.AttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensorAndConfigKey.StringAttributeSensorAndConfigKey;
@@ -23,14 +24,14 @@ import org.apache.brooklyn.util.core.flags.SetFromFlag;
         iconUrl = "classpath://io/cloudsoft/terraform/logo.png")
 @ImplementedBy(TerraformConfigurationImpl.class)
 public interface TerraformConfiguration extends SoftwareProcess {
+    public static final String TERRAFORM_DOWNLOAD_URL = "https://releases.hashicorp.com/terraform/${version}/terraform_${version}_${driver.osTag}.zip";
 
     // Update reference.json when changing this value.
     @SetFromFlag("version")
     ConfigKey<String> SUGGESTED_VERSION = ConfigKeys.newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.8");
 
     @SetFromFlag("downloadUrl")
-    BasicAttributeSensorAndConfigKey<String> DOWNLOAD_URL = new StringAttributeSensorAndConfigKey(
-            Attributes.DOWNLOAD_URL, "https://releases.hashicorp.com/terraform/${version}/terraform_${version}_${driver.osTag}.zip");
+    AttributeSensorAndConfigKey<String,String> DOWNLOAD_URL = ConfigKeys.newSensorAndConfigKeyWithDefault(SoftwareProcess.DOWNLOAD_URL, TERRAFORM_DOWNLOAD_URL);
 
     @SetFromFlag("tfConfigurationContents")
     ConfigKey<String> CONFIGURATION_CONTENTS = ConfigKeys.newStringConfigKey(

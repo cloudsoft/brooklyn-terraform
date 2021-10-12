@@ -1,0 +1,19 @@
+brooklyn.catalog:
+  id: aws_ubuntu20_location
+  version: 1.0.0-SNAPSHOT  # BROOKLYN_TOSCA13_VERSION
+  items:
+
+# note: requires in .brooklyn/brooklyn.properties:
+#
+# brooklyn.jclouds.aws-ec2.identity=AKIA....
+# brooklyn.jclouds.aws-ec2.credential=xX....
+#
+
+  - id: aws_ubuntu20_location
+    itemType: location
+    item:
+      type: aws-ec2
+      brooklyn.config:
+        # ubuntu in eu-west, for speed
+        imageId: eu-west-1/ami-02df9ea15c1778c9c
+        region: eu-west-1

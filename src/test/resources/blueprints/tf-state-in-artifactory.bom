@@ -1,0 +1,28 @@
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      tf.configuration.contents: |
+        terraform {
+            backend "artifactory" {
+              username = "<REPLACE>"
+              password = "<REPLACE>"
+              url      = "https://artifactory.cloudsoftcorp.com/artifactory"
+              repo     = "libs-release-local"
+              subpath  = "io/cloudsoft/packs/terraform"
+            }
+        }
+
+        provider "aws" {
+            region = "eu-west-1"
+              access_key = "<REPLACE>"
+              secret_key = "<REPLACE>"
+        }
+
+        resource "aws_instance" "example1" {
+            ami = "ami-02df9ea15c1778c9c"
+            instance_type = "t1.micro"
+            tags = {
+              Name = "terraform-test-state-in-artifactory"
+            }
+        }
