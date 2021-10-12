@@ -9,7 +9,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import io.cloudsoft.terraform.parser.TerraformModel;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
-import org.apache.brooklyn.core.effector.ssh.SshEffectorTasks;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
@@ -18,15 +17,11 @@ import org.apache.brooklyn.feed.ssh.SshFeed;
 import org.apache.brooklyn.feed.ssh.SshPollValue;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.flags.TypeCoercions;
-import org.apache.brooklyn.util.core.task.DynamicTasks;
-import org.apache.brooklyn.util.core.task.system.ProcessTaskStub.ScriptReturnType;
-import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.bertramlabs.plugins.hcl4j.HCLParser;
 
 import com.google.common.base.Function;
 import com.google.common.base.Objects;
@@ -56,19 +51,19 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     public void init() {
         super.init();
         // Exactly one of the two must have a value
-        if ((Strings.isNonBlank(getConfig(CONFIGURATION_URL)) && Strings.isNonBlank(getConfig(CONFIGURATION_CONTENTS))) ||
-                ((Strings.isBlank(getConfig(CONFIGURATION_URL)) && Strings.isBlank(getConfig(CONFIGURATION_CONTENTS))))) {
+        if (Strings.isNonBlank(getConfig(CONFIGURATION_URL)) ^ Strings.isNonBlank(getConfig(CONFIGURATION_CONTENTS))) {
+            if (getAttribute(CONFIGURATION_IS_APPLIED) == null) {
+                sensors().set(CONFIGURATION_IS_APPLIED, false);
+            }
+        } else {
             throw new IllegalArgumentException("Exactly one of " +
-                    CONFIGURATION_URL.getName() + " and " + CONFIGURATION_CONTENTS.getName() + " must be provided");
-        }
-        if (getAttribute(CONFIGURATION_IS_APPLIED) == null) {
-            setConfigurationApplied(false);
+                    CONFIGURATION_URL.getName() + " or " + CONFIGURATION_CONTENTS.getName() + " must be provided");
         }
     }
 
     @Override
     public void rebind() {
-        lastCommandOutputs = Collections.synchronizedMap(Maps.<String, Object>newHashMapWithExpectedSize(3));
+        lastCommandOutputs = Collections.synchronizedMap(Maps.newHashMapWithExpectedSize(3));
         configurationChangeInProgress = new AtomicBoolean(false);
         super.rebind();
     }
@@ -85,37 +80,34 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     .entity(this)
                     .period(FEED_UPDATE_PERIOD)
                     .machine(machine.get())
-
+                    // TODO consider doing this using sequential tasks
+                    //  TODO also condition reload of state based on the output of plan
                     // TODO we should collect outputs then show immediately after a run or any change;
                     // TODO then _also_ _afterwards_ periodically do the items below one by one, otherwise they lock each other out
                     // eg:  tf.plan: Error: Error locking state: Error acquiring the state lock: resource temporarily unavailable
-
                     // TODO would be nice if this were json -- but use outputs for that
                     .poll(new CommandPollConfig<>(SHOW)
                             .env(env)
-                            .command(getDriver().show())
+                            .command(getDriver().showCommand())
                             .onSuccess(new ShowSuccessFunction())
                             .onFailure(new ShowFailureFunction()))
-
                     .poll(new CommandPollConfig<>(STATE)
                             .env(env)
-                            .command(getDriver().refresh())
+                            .command(getDriver().refreshCommand())
                             .onSuccess(new StateSuccessFunction())
                             .onFailure(new StateFailureFunction()))
                     .poll(new CommandPollConfig<>(PLAN)
                             .env(env)
-                            .command(getDriver().plan())
+                            .command(getDriver().planCommand())
                             .onSuccess(new PlanSuccessFunction())
                             .onFailure(new PlanFailureFunction()))
-
                     .poll(new CommandPollConfig<>(OUTPUT)
                             .env(env)
-                            .command(getDriver().output())
+                            .command(getDriver().outputCommand())
                             .onSuccess(new OutputSuccessFunction())
                             .onFailure(new OutputFailureFunction()))
                     .build());
         }
-
     }
 
     @Override
@@ -164,12 +156,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Override
         public Map<String, Object> apply(SshPollValue input) {
             try {
-
                 Map<String, Object> state = getDriver().getState();
                 lastCommandOutputs.put(STATE.getName(), state);
                 return state;
             } catch (Exception e) {
-                return ImmutableMap.<String, Object>of("ERROR", "Failed to parse state file.");
+                return ImmutableMap.of("ERROR", "Failed to parse state file.");
             }
         }
     }
@@ -267,70 +258,37 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     @Effector(description = "Apply the Terraform configuration")
     public void apply() {
-        LOG.info("Calling 'terraform apply tfplan'");
         final boolean configurationApplied = isConfigurationApplied();
         final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
-        // TODO: Is this really the right behaviour? Doesn't Terraform behave sensibly if the configuration is already correct?
         if (!configurationApplied && mayProceed) {
             try {
-                String command = getDriver().makeTerraformCommand("apply -no-color -input=false tfplan");
-                SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
-                ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
-                        .returning(ScriptReturnType.EXIT_CODE)
-                        .requiringExitCodeZero()
-                        .machine(machine)
-                        .summary(command)
-                        .newTask();
-                DynamicTasks.queue(task).asTask();
-                task.block();
-                if (task.getExitCode() == 0) {
-                    setConfigurationApplied(true);
-                }
+                getDriver().runApplyTask();
             } finally {
                 configurationChangeInProgress.set(false);
             }
         } else if (!configurationApplied) {
-            throw new RuntimeException("Cannot destroy configuration: the configuration has already been applied");
+            throw new IllegalStateException("Cannot apply terraform plan: the configuration has already been applied.");
         } else {
-            throw new RuntimeException("Cannot destroy configuration: another operation is in progress");
+            throw new IllegalStateException("Cannot apply configuration: another operation is in progress.");
         }
     }
 
     @Override
     @Effector(description = "Destroy the Terraform configuration")
     public void destroy() {
-        LOG.info("Calling 'terraform destroy -auto-approve'");
         final boolean configurationApplied = isConfigurationApplied();
         final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
         if (configurationApplied && mayProceed) {
             try {
-                String command = getDriver().makeTerraformCommand("apply -destroy -auto-approve -no-color");
-                SshMachineLocation machine = Locations.findUniqueSshMachineLocation(getLocations()).get();
-
-                ProcessTaskWrapper<Object> task = SshEffectorTasks.ssh(command)
-                        .environmentVariables(shellEnv())
-                        .returning(ScriptReturnType.EXIT_CODE)
-                        .requiringExitCodeZero()
-                        .machine(machine)
-                        .summary(command)
-                        .newTask();
-                DynamicTasks.queue(task).asTask();
-                task.block();
-                if (task.getExitCode() == 0) {
-                    setConfigurationApplied(false);
-                }
+                getDriver().runDestroyTask();
             } finally {
                 configurationChangeInProgress.set(false);
             }
         } else if (!configurationApplied) {
-            throw new RuntimeException("Cannot destroy configuration: the configuration has not been applied");
+            throw new IllegalStateException("Cannot destroy configuration: the configuration has not been applied.");
         } else {
-            throw new RuntimeException("Cannot destroy configuration: another operation is in progress");
+            throw new IllegalStateException("Cannot destroy configuration: another operation is in progress.");
         }
-    }
-
-    private synchronized void setConfigurationApplied(boolean isConfigurationApplied) {
-        sensors().set(CONFIGURATION_IS_APPLIED, isConfigurationApplied);
     }
 
     @Override
