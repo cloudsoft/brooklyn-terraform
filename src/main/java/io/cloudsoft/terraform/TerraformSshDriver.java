@@ -134,7 +134,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void install() {
-        LOG.debug(" -> Downloading and installing Terraform.");
         List<String> urls = resolver.getTargets();
         String saveAs = resolver.getFilename();
 
@@ -151,13 +150,11 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void customize() {
-        LOG.debug(" Copy terraform configuration file. ");
         newScript(CUSTOMIZING).execute();
         InputStream configuration = getConfiguration();
         // copy terraform configuration file(s)
         getMachine().copyTo(configuration, getConfigurationFilePath());
 
-        LOG.debug(" <T> 'terraform init -input=false' ");
         Task<String> initTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), init())
                 .environmentVariables(envVars)
                 .requiringExitCodeZero()
@@ -202,7 +199,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                         .asTask());
 
                 DynamicTasks.waitForLast();
-
                 if (applyTask.asTask().isError()) {
                     throw new IllegalStateException("Error executing Terraform plan!!");
                 }

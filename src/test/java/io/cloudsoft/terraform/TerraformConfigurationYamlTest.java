@@ -9,6 +9,7 @@ import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Dumper;
 import org.apache.brooklyn.core.entity.EntityAsserts;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
+import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.stock.BasicApplication;
 import org.junit.Assert;
 import org.testng.annotations.Test;
@@ -34,7 +35,7 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
-        // TODO tests about sensors being populated with expected values here
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
 
         // gracefully shutdown and test children are stopped
         ((BasicApplication)app).stop();
@@ -49,6 +50,7 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
         // TODO tests about sensors being populated with expected values here
 
         // gracefully shutdown and test children are stopped
@@ -63,6 +65,7 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
         // TODO tests about sensors being populated with expected values here
 
         // gracefully shutdown and test children are stopped
@@ -77,6 +80,7 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
         // TODO tests about sensors being populated with expected values here
 
         // gracefully shutdown and test children are stopped
@@ -91,6 +95,7 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
         // TODO tests about sensors being populated with expected values here
 
         // gracefully shutdown and test children are stopped
