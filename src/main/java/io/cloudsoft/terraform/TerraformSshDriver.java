@@ -17,14 +17,12 @@ import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
-import org.apache.brooklyn.core.entity.EntityInternal;
 import org.apache.brooklyn.entity.software.base.AbstractSoftwareProcessSshDriver;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
-import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
@@ -82,10 +80,8 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     public String getOsTag() {
         OsDetails os = getLocation().getOsDetails();
-
         // If no details, assume 64-bit Linux
         if (os == null) return "linux_amd64";
-
         // If not Mac, assume Linux
         String osType = os.isMac() ? "darwin" : "linux";
         String archType = os.is64bit() ? "amd64" : "386";
@@ -93,13 +89,10 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return osType + "_" + archType;
     }
 
-    public String getInstallFilename() {
-        return format("terraform_%s_%s.zip", getVersion(), getOsTag());
-    }
-
     @Override
     public void preInstall() {
-        resolver = Entities.newDownloader(this, ImmutableMap.of("filename", getInstallFilename()));
+        final String installFileName = format("terraform_%s_%s.zip", getVersion(), getOsTag());
+        resolver = Entities.newDownloader(this, ImmutableMap.of("filename", installFileName));
         setExpandedInstallDir(Os.mergePaths(getInstallDir(), resolver.getUnpackedDirectoryName(format("terraform_%s_%s", getVersion(), getOsTag()))));
         entity.sensors().set(Attributes.DOWNLOAD_URL, TERRAFORM_DOWNLOAD_URL
                 .replace("${version}", getVersion())
@@ -159,16 +152,20 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     public void launch() {
         boolean deploymentExists = runPlanTask();
         if(deploymentExists) {
-            // deployment exists
-            // trigger refresh !?
-            LOG.debug("Terraform plan exists!!");
+            LOG.debug("Terraform plan exists!!"); // apparently this is not possible
         } else {
             runApplyTask();
         }
-        // TODO this is where we load the model and create the children maybe !? or add postLaunch
+
+    }
+
+    @Override
+    public void postLaunch() {
+        // TODO this is where we load the model and create the children maybe !?
         //EntitySpec<TerraformEntity> tfResSpec = EntitySpec.create(TerraformEntity.class).configure(properties);
         //entity.addChild(tfResSpec);
         //entity.addChild(EntitySpec<T>)
+        LOG.debug("Calling postLaunch!! "); // TODO remove me later
     }
 
     /**
