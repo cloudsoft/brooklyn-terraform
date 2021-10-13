@@ -52,6 +52,10 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return getRunDir() + "/configuration.tf";
     }
 
+    default String getTfVarsFilePath() {
+        return getRunDir() + "/terraform.tfvars";
+    }
+
     default String getStateFilePath() {
         return getRunDir() + "/terraform.tfstate";
     }

@@ -17,11 +17,14 @@ import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
+import org.apache.brooklyn.core.entity.EntityInternal;
 import org.apache.brooklyn.entity.software.base.AbstractSoftwareProcessSshDriver;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
+import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
+import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
@@ -125,12 +128,26 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         InputStream configuration = getConfiguration();
         // copy terraform configuration file(s)
         getMachine().copyTo(configuration, getConfigurationFilePath());
+        copyTfVars();
 
-        Task<String> initTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), initCommand())
-                .environmentVariables(getShellEnvironment())
-                .summary("Initializing terraform infrastructure")
-                .requiringZeroAndReturningStdout().newTask()
-                .asTask());
+        final String cfgPath= getConfigurationFilePath();
+
+        Task<Object> initTask = DynamicTasks.queue(Tasks.builder()
+                        .displayName("Initializing terraform workspace")
+                .add(SshTasks.newSshExecTaskFactory(getMachine(),
+                                "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
+                                        + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getRunDir() + " &&"
+                                         + "unzip " + cfgPath + ".zip ; fi")
+                        .environmentVariables(getShellEnvironment())
+                        .summary("Preparing configuration (unzip of necessary)...")
+                        .requiringExitCodeZero().newTask()
+                        .asTask())
+                .add(SshTasks.newSshExecTaskFactory(getMachine(), initCommand())
+                        .environmentVariables(getShellEnvironment())
+                        .summary("Initializing terraform infrastructure")
+                        .requiringZeroAndReturningStdout().newTask()
+                        .asTask())
+                .build());
         DynamicTasks.waitForLast();
 
         if (initTask.asTask().isError()) {
@@ -148,6 +165,10 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         } else {
             runApplyTask();
         }
+        // TODO this is where we load the model and create the children maybe !? or add postLaunch
+        //EntitySpec<TerraformEntity> tfResSpec = EntitySpec.create(TerraformEntity.class).configure(properties);
+        //entity.addChild(tfResSpec);
+        //entity.addChild(EntitySpec<T>)
     }
 
     /**
@@ -205,6 +226,17 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         }
         throw new IllegalStateException("Could not resolve Terraform configuration from " +
                 TerraformConfiguration.CONFIGURATION_URL.getName() + " or " + TerraformConfiguration.CONFIGURATION_CONTENTS.getName());
+    }
+
+    /**
+     * If a `terraform.tfvars` file is present in the bundle is copied in the terraform workspace
+     */
+    private void  copyTfVars(){
+        final String varsURL = entity.getConfig(TerraformConfiguration.TFVARS_FILE_URL);
+        if (Strings.isNonBlank(varsURL)) {
+            InputStream tfStream =  new ResourceUtils(entity).getResourceFromUrl(varsURL);
+            getMachine().copyTo(tfStream, getTfVarsFilePath());
+        }
     }
 
     @SuppressWarnings("unchecked")

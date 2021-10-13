@@ -41,6 +41,12 @@ public interface TerraformConfiguration extends SoftwareProcess {
             .description("URL of the configuration file that will be applied by Terraform.")
             .build();
 
+    @SetFromFlag("tfVars")
+    ConfigKey<String> TFVARS_FILE_URL = ConfigKeys.builder(String.class)
+            .name("tf.tfvars.url") // should be part of deployed the bundle
+            .description("URL of the file containing values for the Terraform variables.")
+            .build();
+
     AttributeSensor<Boolean> CONFIGURATION_IS_APPLIED = Sensors.newBooleanSensor("tf.configuration.isApplied",
             "Whether the supplied Terraform configuration has been successfully applied.");
 
