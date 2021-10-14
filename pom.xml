@@ -23,7 +23,6 @@
 
     <properties>
         <maven-bundle-plugin.version>3.2.0</maven-bundle-plugin.version>
-        <hcl4j.version>0.4.0</hcl4j.version>
     </properties>
 
 
@@ -57,17 +56,6 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
             <version>${commons-lang3.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.bertramlabs.plugins</groupId>
-            <artifactId>hcl4j</artifactId>
-            <version>${hcl4j.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>commons-logging</groupId>
-                    <artifactId>commons-logging</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <!-- test dependencies -->
@@ -200,26 +188,6 @@
                 <version>${surefire.version}</version>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>2.3</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <artifactSet>
-                                <includes>
-                                    <include>com.bertramlabs.plugins:hcl4j</include>
-                                </includes>
-                            </artifactSet>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
                 <version>${maven-bundle-plugin.version}</version>
@@ -241,7 +209,6 @@
                     <instructions>
                         <!-- OSGi specific instruction -->
                         <Import-Package>!io.airlift.command,!com.maxmind.geoip2,!com.google.api.client,*</Import-Package>
-                        <Export-Package>io.cloudsoft.terraform,com.bertramlabs.plugins.hcl4j.*</Export-Package>
                     </instructions>
                 </configuration>
             </plugin>

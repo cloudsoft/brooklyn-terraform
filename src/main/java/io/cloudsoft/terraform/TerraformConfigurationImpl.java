@@ -6,9 +6,12 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.parser.TerraformModel;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
+import org.apache.brooklyn.core.entity.Attributes;
+import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
@@ -288,6 +291,32 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             throw new IllegalStateException("Cannot destroy configuration: the configuration has not been applied.");
         } else {
             throw new IllegalStateException("Cannot destroy configuration: another operation is in progress.");
+        }
+    }
+
+    @Override
+    public void destroyTarget(ManagedResource child) {
+        final boolean configurationApplied = isConfigurationApplied();
+        final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
+        if (configurationApplied && mayProceed) {
+            try {
+                child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING);
+                final String destroyTargetCommand = getDriver().destroyCommand().concat(" -target=")
+                    .concat(child.getConfig(ManagedResource.TYPE)).concat(".").concat(child.getConfig(ManagedResource.NAME));
+                int result = getDriver().runDestroyTargetTask(destroyTargetCommand);
+                if (result == 0 ) {
+                    child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
+                    getParent().removeChild(child);
+                } else {
+                    child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
+                }
+            } finally {
+                configurationChangeInProgress.set(false);
+            }
+        } else if (!configurationApplied) {
+            throw new IllegalStateException("Cannot destroy target: the configuration has not been applied.");
+        } else {
+            throw new IllegalStateException("Cannot destroy target: another operation is in progress.");
         }
     }
 

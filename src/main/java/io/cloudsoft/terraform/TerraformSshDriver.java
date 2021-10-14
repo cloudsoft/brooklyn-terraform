@@ -12,7 +12,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import io.cloudsoft.terraform.entity.ManagedResource;
+import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;
+import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.core.entity.Attributes;
@@ -56,6 +59,21 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             throw new IllegalStateException("Error executing `terraform destroy`! ");
         }
         entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, false);
+        return 0;
+    }
+
+    @Override
+    public int runDestroyTargetTask(String target) {
+        Task<String> destroyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(),target)
+                .environmentVariables(getShellEnvironment())
+                .summary("Destroying terraform resource.")
+                .requiringZeroAndReturningStdout().newTask()
+                .asTask());
+        DynamicTasks.waitForLast();
+
+        if (destroyTask.asTask().isError()) {
+            throw new IllegalStateException("Error executing `terraform destroy` on resource! ");
+        }
         return 0;
     }
 
@@ -161,11 +179,14 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void postLaunch() {
-        // TODO this is where we load the model and create the children maybe !?
-        //EntitySpec<TerraformEntity> tfResSpec = EntitySpec.create(TerraformEntity.class).configure(properties);
-        //entity.addChild(tfResSpec);
-        //entity.addChild(EntitySpec<T>)
-        LOG.debug("Calling postLaunch!! "); // TODO remove me later
+        String state = DynamicTasks.queue(SshTasks.newSshFetchTaskFactory(getLocation(), getStateFilePath())).asTask().getUnchecked();
+        StateParser.parse(state).forEach(resource -> this.entity.addChild(
+                EntitySpec.create(ManagedResource.class)
+                        .configure(ManagedResource.STATE_CONTENTS, resource)
+                        .configure(ManagedResource.TYPE, resource.get("resource.type").toString())
+                        .configure(ManagedResource.PROVIDER, resource.get("resource.provider").toString())
+                        .configure(ManagedResource.NAME, resource.get("resource.name").toString())
+        ));
     }
 
     /**

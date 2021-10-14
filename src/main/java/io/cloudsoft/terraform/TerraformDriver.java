@@ -19,6 +19,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     boolean runPlanTask();
     void runApplyTask();
     int runDestroyTask();
+    int runDestroyTargetTask(String target);
 
     // added these methods to underline the terraform possible commands
     default String initCommand() {

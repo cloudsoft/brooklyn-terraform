@@ -2,6 +2,7 @@ package io.cloudsoft.terraform;
 
 import java.util.Map;
 
+import io.cloudsoft.terraform.entity.ManagedResource;
 import org.apache.brooklyn.api.catalog.Catalog;
 import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
@@ -73,5 +74,9 @@ public interface TerraformConfiguration extends SoftwareProcess {
     @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
     void destroy();
 
+    void destroyTarget(ManagedResource child);
+
     boolean isConfigurationApplied();
+
+    public TerraformDriver getDriver();
 }
