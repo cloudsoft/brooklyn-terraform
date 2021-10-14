@@ -1,15 +1,18 @@
 package io.cloudsoft.terraform.entity;
 
 import org.apache.brooklyn.api.entity.ImplementedBy;
+import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.config.BasicConfigKey;
 
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.trait.Startable;
+import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.stock.BasicEntity;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
 
+import java.util.List;
 import java.util.Map;
 
 @ImplementedBy(ManagedResourceImpl.class)
@@ -31,6 +34,10 @@ public interface ManagedResource extends BasicEntity, Startable {
     ConfigKey<String> NAME =  ConfigKeys.newStringConfigKey("tf.resource.name", "Terraform resource name.", null);
 
 
+    AttributeSensor<String> RESOURCE_STATUS = Sensors.newStringSensor("resource.status", "The status of this resource");
+
     @Effector(description="Performs the Terraform destroy command which will destroy this resource.")
     void destroy();
+
+    void refreshSensors(Map<String,Object> resource);
 }

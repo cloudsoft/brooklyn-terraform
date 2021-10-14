@@ -3,6 +3,7 @@ package io.cloudsoft.terraform;
 import static com.google.common.collect.Maps.transformEntries;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -69,6 +70,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         lastCommandOutputs = Collections.synchronizedMap(Maps.newHashMapWithExpectedSize(3));
         configurationChangeInProgress = new AtomicBoolean(false);
         super.rebind();
+    }
+
+    @Override
+    protected void preStop() {
+        super.preStop();
+        getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING));
     }
 
     @Override
@@ -160,6 +167,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         public Map<String, Object> apply(SshPollValue input) {
             try {
                 Map<String, Object> state = getDriver().getState();
+                for (Map<String,Object> resource : ((List<Map<String,Object>>) state.get("resources"))) {
+                    if("managed".equals(resource.get("mode"))) {
+                        final String resourceName = resource.get("name").toString();
+                        getChildren().stream().filter(c -> resourceName.equals(c.getConfig(ManagedResource.NAME))).findFirst().ifPresent(
+                                c -> ((ManagedResource)c).refreshSensors(resource)
+                        );
+                    }
+                }
                 lastCommandOutputs.put(STATE.getName(), state);
                 return state;
             } catch (Exception e) {
