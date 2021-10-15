@@ -3,11 +3,10 @@ package io.cloudsoft.terraform;
 import static com.google.common.collect.Maps.transformEntries;
 
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.parser.TerraformModel;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
@@ -33,7 +32,6 @@ import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Maps.EntryTransformer;
-import com.google.gson.Gson;
 import com.google.gson.internal.LinkedTreeMap;
 
 import com.fasterxml.jackson.databind.*;
@@ -200,15 +198,19 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         public String apply(SshPollValue input) {
             String output = input.getStdout();
             if (output != null) {
-                Map<String, Map<String, Object>> result = new Gson().fromJson(output, LinkedTreeMap.class);
-                for (String name : result.keySet()) {
-                    final String sensorName = String.format("%s.%s", TF_OUTPUT_SENSOR_PREFIX, name);
-                    final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);
-                    final Object currentValue = sensors().get(sensor);
-                    final Object newValue = result.get(name).get("value");
-                    if (!Objects.equal(currentValue, newValue)) {
-                        sensors().set(sensor, newValue);
+                try {
+                    Map<String, Map<String, Object>> result = new ObjectMapper().readValue(output, LinkedTreeMap.class);
+                    for (String name : result.keySet()) {
+                        final String sensorName = String.format("%s.%s", TF_OUTPUT_SENSOR_PREFIX, name);
+                        final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);
+                        final Object currentValue = sensors().get(sensor);
+                        final Object newValue = result.get(name).get("value");
+                        if (!Objects.equal(currentValue, newValue)) {
+                            sensors().set(sensor, newValue);
+                        }
                     }
+                } catch (JsonProcessingException e) {
+                    throw new IllegalStateException("Output does not have the expected format!");
                 }
             }
             if (Strings.isBlank(output)) {
