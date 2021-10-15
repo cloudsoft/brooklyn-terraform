@@ -12,13 +12,13 @@ import static java.lang.String.format;
 
 public interface TerraformDriver extends SoftwareProcessDriver {
 
-    Map<String, Object> getState() throws JsonParseException, JsonMappingException, IOException;
-
     int destroy();
 
     boolean runPlanTask();
     void runApplyTask();
+    String runShowTask();
     int runDestroyTask();
+    int runDestroyTargetTask(String target);
 
     // added these methods to underline the terraform possible commands
     default String initCommand() {
@@ -50,6 +50,10 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     default String getConfigurationFilePath() {
         return getRunDir() + "/configuration.tf";
+    }
+
+    default String getTfVarsFilePath() {
+        return getRunDir() + "/terraform.tfvars";
     }
 
     default String getStateFilePath() {

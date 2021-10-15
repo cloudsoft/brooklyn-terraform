@@ -2,6 +2,7 @@ package io.cloudsoft.terraform;
 
 import java.util.Map;
 
+import io.cloudsoft.terraform.entity.ManagedResource;
 import org.apache.brooklyn.api.catalog.Catalog;
 import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
@@ -41,11 +42,14 @@ public interface TerraformConfiguration extends SoftwareProcess {
             .description("URL of the configuration file that will be applied by Terraform.")
             .build();
 
+    @SetFromFlag("tfVars")
+    ConfigKey<String> TFVARS_FILE_URL = ConfigKeys.builder(String.class)
+            .name("tf.tfvars.url") // should be part of deployed the bundle
+            .description("URL of the file containing values for the Terraform variables.")
+            .build();
+
     AttributeSensor<Boolean> CONFIGURATION_IS_APPLIED = Sensors.newBooleanSensor("tf.configuration.isApplied",
             "Whether the supplied Terraform configuration has been successfully applied.");
-
-    AttributeSensor<String> SHOW = Sensors.newStringSensor("tf.show",
-            "The contents of the Terraform show command which provides a human-readable view of the state of the configuration.");
 
     AttributeSensor<String> PLAN = Sensors.newStringSensor("tf.plan",
             "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.");
@@ -67,5 +71,9 @@ public interface TerraformConfiguration extends SoftwareProcess {
     @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
     void destroy();
 
+    void destroyTarget(ManagedResource child);
+
     boolean isConfigurationApplied();
+
+    public TerraformDriver getDriver();
 }

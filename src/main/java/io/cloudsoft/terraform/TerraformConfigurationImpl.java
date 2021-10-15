@@ -3,12 +3,17 @@ package io.cloudsoft.terraform;
 import static com.google.common.collect.Maps.transformEntries;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.parser.TerraformModel;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
+import org.apache.brooklyn.core.entity.Attributes;
+import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
@@ -69,6 +74,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     }
 
     @Override
+    protected void preStop() {
+        super.preStop();
+        getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING));
+    }
+
+    @Override
     protected void connectSensors() {
         super.connectSensors();
         connectServiceUpIsRunning();
@@ -86,14 +97,9 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     // TODO then _also_ _afterwards_ periodically do the items below one by one, otherwise they lock each other out
                     // eg:  tf.plan: Error: Error locking state: Error acquiring the state lock: resource temporarily unavailable
                     // TODO would be nice if this were json -- but use outputs for that
-                    .poll(new CommandPollConfig<>(SHOW)
-                            .env(env)
-                            .command(getDriver().showCommand())
-                            .onSuccess(new ShowSuccessFunction())
-                            .onFailure(new ShowFailureFunction()))
                     .poll(new CommandPollConfig<>(STATE)
                             .env(env)
-                            .command(getDriver().refreshCommand())
+                            .command(getDriver().showCommand())
                             .onSuccess(new StateSuccessFunction())
                             .onFailure(new StateFailureFunction()))
                     .poll(new CommandPollConfig<>(PLAN)
@@ -121,42 +127,21 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         return model;
     }
 
-    private final class ShowSuccessFunction implements Function<SshPollValue, String> {
-        @Override
-        public String apply(SshPollValue input) {
-            String output = input.getStdout();
-            if (Strings.isBlank(output)) {
-                output = "No configuration is applied.";
-            }
-            lastCommandOutputs.put(SHOW.getName(), output);
-            try {
-                JsonNode outputNode = objectMapper.readTree(output);
-                model.updateModel(null, outputNode);
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-
-            return output;
-        }
-    }
-
-    private final class ShowFailureFunction implements Function<SshPollValue, String> {
-        @Override
-        public String apply(SshPollValue input) {
-            if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(SHOW.getName())) {
-                return (String) lastCommandOutputs.get(SHOW.getName());
-            } else {
-                return input.getStderr();
-            }
-        }
-    }
-
     private final class StateSuccessFunction implements Function<SshPollValue, Map<String, Object>> {
         @Override
         public Map<String, Object> apply(SshPollValue input) {
             try {
-                Map<String, Object> state = getDriver().getState();
+                Map<String, Object> state = new ObjectMapper().readValue(input.getStdout(), Map.class);
+               /*
+               TODO -> For resource names matching children refresh sensors, for extra resources create EntitySpec and add child.
+               for (Map<String,Object> resource : ((List<Map<String,Object>>) state.get("resources"))) {
+                    if("managed".equals(resource.get("mode"))) {
+                        final String resourceName = resource.get("name").toString();
+                        getChildren().stream().filter(c -> resourceName.equals(c.getConfig(ManagedResource.NAME))).findFirst().ifPresent(
+                                c -> ((ManagedResource)c).refreshSensors(resource)
+                        );
+                    }
+                }*/
                 lastCommandOutputs.put(STATE.getName(), state);
                 return state;
             } catch (Exception e) {
@@ -172,7 +157,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(STATE.getName())) {
                 return (Map<String, Object>) lastCommandOutputs.get(STATE.getName());
             } else {
-                return ImmutableMap.<String, Object>of("ERROR", "Failed to refresh state file.");
+                return ImmutableMap.of("ERROR", "Failed to refresh state file.");
             }
         }
     }
@@ -288,6 +273,32 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             throw new IllegalStateException("Cannot destroy configuration: the configuration has not been applied.");
         } else {
             throw new IllegalStateException("Cannot destroy configuration: another operation is in progress.");
+        }
+    }
+
+    @Override
+    public void destroyTarget(ManagedResource child) {
+        final boolean configurationApplied = isConfigurationApplied();
+        final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
+        if (configurationApplied && mayProceed) {
+            try {
+                child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING);
+                final String destroyTargetCommand = getDriver().destroyCommand().concat(" -target=")
+                    .concat(child.getConfig(ManagedResource.TYPE)).concat(".").concat(child.getConfig(ManagedResource.NAME));
+                int result = getDriver().runDestroyTargetTask(destroyTargetCommand);
+                if (result == 0 ) {
+                    child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
+                    getParent().removeChild(child);
+                } else {
+                    child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
+                }
+            } finally {
+                configurationChangeInProgress.set(false);
+            }
+        } else if (!configurationApplied) {
+            throw new IllegalStateException("Cannot destroy target: the configuration has not been applied.");
+        } else {
+            throw new IllegalStateException("Cannot destroy target: another operation is in progress.");
         }
     }
 
