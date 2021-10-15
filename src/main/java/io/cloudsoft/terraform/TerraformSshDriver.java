@@ -129,7 +129,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         commands.add(BashCommands.INSTALL_CURL);
         // Hashicorp server requires at least TLSv1.2
         commands.addAll(commandsToDownloadUrlsAsWithMinimumTlsVersion(urls, saveAs, "1.2"));
-        commands.add(format("unzip %s", saveAs));
+        commands.add(format("unzip -o %s", saveAs));
 
         newScript(INSTALLING).body.append(commands).execute();
     }
