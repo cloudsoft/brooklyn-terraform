@@ -12,12 +12,11 @@ import static java.lang.String.format;
 
 public interface TerraformDriver extends SoftwareProcessDriver {
 
-    Map<String, Object> getState() throws JsonParseException, JsonMappingException, IOException;
-
     int destroy();
 
     boolean runPlanTask();
     void runApplyTask();
+    String runShowTask();
     int runDestroyTask();
     int runDestroyTargetTask(String target);
 

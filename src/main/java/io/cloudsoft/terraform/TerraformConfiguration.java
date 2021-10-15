@@ -51,9 +51,6 @@ public interface TerraformConfiguration extends SoftwareProcess {
     AttributeSensor<Boolean> CONFIGURATION_IS_APPLIED = Sensors.newBooleanSensor("tf.configuration.isApplied",
             "Whether the supplied Terraform configuration has been successfully applied.");
 
-    AttributeSensor<String> SHOW = Sensors.newStringSensor("tf.show",
-            "The contents of the Terraform show command which provides a human-readable view of the state of the configuration.");
-
     AttributeSensor<String> PLAN = Sensors.newStringSensor("tf.plan",
             "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.");
 

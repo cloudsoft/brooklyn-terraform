@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;
@@ -179,14 +180,21 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void postLaunch() {
-        String state = DynamicTasks.queue(SshTasks.newSshFetchTaskFactory(getLocation(), getStateFilePath())).asTask().getUnchecked();
-        StateParser.parse(state).forEach(resource -> this.entity.addChild(
+        // call show to get data
+        final String output = runShowTask();
+        try {
+            final Map<String,Object> state = new ObjectMapper().readValue( output, Map.class);
+             /* TODO -> for each resource create entity spec and generate child.
+            StateParser.parse(state).forEach(resource -> this.entity.addChild(
                 EntitySpec.create(ManagedResource.class)
                         .configure(ManagedResource.STATE_CONTENTS, resource)
                         .configure(ManagedResource.TYPE, resource.get("resource.type").toString())
                         .configure(ManagedResource.PROVIDER, resource.get("resource.provider").toString())
                         .configure(ManagedResource.NAME, resource.get("resource.name").toString())
-        ));
+        ));*/
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("AMP cold not retrieve state to initialize resources.");
+        }
     }
 
     /**
@@ -213,6 +221,8 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return result.contains("No Changes."); // TODO make sure this is more precise.
     }
 
+
+
     @Override
     public void runApplyTask() {
         Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), applyCommand())
@@ -226,6 +236,28 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             throw new IllegalStateException("Error executing `terraform apply`!");
         }
         entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, true);
+    }
+
+    /**
+     *
+     * @return {@code String} containing json state of the infrastructure
+     */
+    @Override
+    public String runShowTask() {
+        Task<String> showTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), showCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary("Retrieve the most recent state snapshot")
+                .requiringZeroAndReturningStdout().newTask()
+                .asTask());
+        DynamicTasks.waitForLast();
+        if (showTask.asTask().isError()) {
+            throw new IllegalStateException("Error executing `terraform plan`!");
+        }
+        try {
+            return showTask.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+        }
     }
 
     /**
@@ -255,17 +287,5 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             InputStream tfStream =  new ResourceUtils(entity).getResourceFromUrl(varsURL);
             getMachine().copyTo(tfStream, getTfVarsFilePath());
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public Map<String, Object> getState() throws IOException {
-        // refresh and plan command seem to hinder each other and this pause seems to make them get along
-        DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getLocation(), "sleep 30" )
-                                .summary("Sleeping 30s to avoid the dreaded 'Error acquiring the state lock'")
-                                .requiringExitCodeZero().newTask()).asTask();
-        DynamicTasks.waitForLast();
-        String state = DynamicTasks.queue(SshTasks.newSshFetchTaskFactory(getLocation(), getStateFilePath())).asTask().getUnchecked();
-        return ImmutableMap.copyOf(new ObjectMapper().readValue(state, LinkedHashMap.class));
     }
 }
