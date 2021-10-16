@@ -230,7 +230,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         if (applyTask.asTask().isError()) {
             throw new IllegalStateException("Error executing `terraform refresh`!");
         }
-        entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, true);
     }
 
     @Override

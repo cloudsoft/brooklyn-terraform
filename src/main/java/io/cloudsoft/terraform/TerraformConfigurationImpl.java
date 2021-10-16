@@ -26,12 +26,12 @@ import org.apache.brooklyn.util.core.flags.TypeCoercions;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
+import org.apache.brooklyn.util.time.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Function;
 import com.google.common.base.Objects;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Maps.EntryTransformer;
 import com.google.gson.internal.LinkedTreeMap;
@@ -88,17 +88,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     .entity(this)
                     .period(FEED_UPDATE_PERIOD)
                     .machine(machine.get())
-                    // TODO consider doing this using sequential tasks
-                    //  TODO also condition reload of state based on the output of plan
-                    // TODO we should collect outputs then show immediately after a run or any change;
-                    // TODO then _also_ _afterwards_ periodically do the items below one by one, otherwise they lock each other out
-                    // eg:  tf.plan: Error: Error locking state: Error acquiring the state lock: resource temporarily unavailable
-                    // TODO would be nice if this were json -- but use outputs for that
-                    .poll(new CommandPollConfig<>(STATE)
-                            .env(env)
-                            .command(getDriver().showCommand())
-                            .onSuccess(new StateSuccessFunction())
-                            .onFailure(new StateFailureFunction()))
                     .poll(new CommandPollConfig<>(PLAN)
                             .env(env)
                             .command(getDriver().planCommand())
@@ -120,50 +109,35 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         super.disconnectSensors();
     }
 
-    private final class StateSuccessFunction implements Function<SshPollValue, Map<String, Object>> {
-        @Override
-        public Map<String, Object> apply(SshPollValue input) {
-            try {
-                Map<String, Object>  state = StateParser.parseResources(input.getStdout());
-                Map<String, Object>  resources = new HashMap<>(state);
-                getChildren().forEach(c -> {
-                    if(resources.containsKey(c.getConfig(ManagedResource.ADDRESS))) { //child in resource set, update sensors
-                        ((ManagedResource)c).refreshSensors((Map<String,Object>)resources.get(c.getConfig(ManagedResource.ADDRESS)));
-                        resources.remove(c.getConfig(ManagedResource.ADDRESS));
-                    } else {
-                        getChildren().remove(c); // else  child not in resource set (deleted by terraform -> remove child)
-                    }
-                });
-                if(!resources.isEmpty()) { // new resource, new child must be created
-                    resources.forEach((resourceName, resourceContents) -> {
-                        Map<String,Object> contentsMap = (Map<String,Object>) resourceContents;
-                        addChild(
-                                EntitySpec.create(ManagedResource.class)
-                                        .configure(ManagedResource.STATE_CONTENTS, contentsMap)
-                                        .configure(ManagedResource.TYPE, contentsMap.get("resource.type").toString())
-                                        .configure(ManagedResource.PROVIDER, contentsMap.get("resource.provider").toString())
-                                        .configure(ManagedResource.ADDRESS, contentsMap.get("resource.address").toString())
-                                        .configure(ManagedResource.NAME, contentsMap.get("resource.name").toString())
-                        );
-                    }) ;
-                }
-                lastCommandOutputs.put(STATE.getName(), state); // TODO kinda stupid to parse again, but until this works properly is better to have the state in the UI
-                return state;
-            } catch (Exception e) {
-                return ImmutableMap.of("ERROR","Problem refreshing state: " .concat(input.getStderr()));
-            }
-        }
-    }
-
-    private final class StateFailureFunction implements Function<SshPollValue, Map<String, Object>> {
-        @SuppressWarnings("unchecked")
-        @Override
-        public Map<String, Object> apply(SshPollValue input) {
-            if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(STATE.getName())) {
-                return (Map<String, Object>) lastCommandOutputs.get(STATE.getName());
+    /**
+     *  No need to update state when no changes were detected.
+     *  Since `terraform plan` is the only command reacting to changes, it makes sense entities to change according to its results.
+     */
+    private void updateDeploymentState() {
+        final String result = getDriver().runShowTask();
+        Map<String, Object> state = StateParser.parseResources(result);
+        sensors().set(TerraformConfiguration.STATE, state);
+        Map<String, Object> resources = new HashMap<>(state);
+        getChildren().forEach(c -> {
+            if (resources.containsKey(c.getConfig(ManagedResource.ADDRESS))) { //child in resource set, update sensors
+                ((ManagedResource) c).refreshSensors((Map<String, Object>) resources.get(c.getConfig(ManagedResource.ADDRESS)));
+                resources.remove(c.getConfig(ManagedResource.ADDRESS));
             } else {
-               return ImmutableMap.of("ERROR", "Failed to refresh state.");
+                getChildren().remove(c); // else  child not in resource set (deleted by terraform -> remove child)
             }
+        });
+        if (!resources.isEmpty()) { // new resource, new child must be created
+            resources.forEach((resourceName, resourceContents) -> {
+                Map<String, Object> contentsMap = (Map<String, Object>) resourceContents;
+                addChild(
+                        EntitySpec.create(ManagedResource.class)
+                                .configure(ManagedResource.STATE_CONTENTS, contentsMap)
+                                .configure(ManagedResource.TYPE, contentsMap.get("resource.type").toString())
+                                .configure(ManagedResource.PROVIDER, contentsMap.get("resource.provider").toString())
+                                .configure(ManagedResource.ADDRESS, contentsMap.get("resource.address").toString())
+                                .configure(ManagedResource.NAME, contentsMap.get("resource.name").toString())
+                );
+            });
         }
     }
 
@@ -177,6 +151,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 // user is asked to execute 'terraform apply'
                 // also at this point in the UI things should start blinking
             }
+            updateDeploymentState();
             lastCommandOutputs.put(PLAN.getName(), output);
             return output;
         }
@@ -259,17 +234,24 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
     public void apply() {
         final boolean configurationApplied = isConfigurationApplied();
-        final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
-        if (!configurationApplied && mayProceed) {
-            try {
-                getDriver().runApplyTask();
-            } finally {
-                configurationChangeInProgress.set(false);
+        if(!configurationApplied) {
+            int timeout = 60;
+            while(timeout > 0) {
+                if (configurationChangeInProgress.compareAndSet(false, true)) {
+                    try {
+                        getDriver().runApplyTask();
+                        return;
+                    } finally {
+                        configurationChangeInProgress.set(false);
+                    }
+                } else {
+                    Time.sleep(Duration.FIVE_SECONDS);
+                    timeout -= 5;
+                }
             }
-        } else if (!configurationApplied) {
-            throw new IllegalStateException("Cannot apply terraform plan: the configuration has already been applied.");
+            throw new IllegalStateException("Cannot apply configuration: operation timed out.");
         } else {
-            throw new IllegalStateException("Cannot apply configuration: another operation is in progress.");
+            throw new IllegalStateException("Cannot apply terraform plan: the configuration has already been applied.");
         }
     }
 
