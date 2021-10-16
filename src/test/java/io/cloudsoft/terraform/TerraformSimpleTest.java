@@ -31,7 +31,7 @@ public class TerraformSimpleTest {
         assertFalse(Strings.isNonBlank("") ^ Strings.isNonBlank(""));
     }
 
-    @Test(groups = "Local")
+    @Test(groups = "Live")
     public void readManagedResources() throws IOException {
         final String state =  new String(
                 Files.readAllBytes(new File("[your workspace]/brooklyn-terraform/src/test/resources/state/state.json").toPath()));

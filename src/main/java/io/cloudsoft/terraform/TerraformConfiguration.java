@@ -75,5 +75,5 @@ public interface TerraformConfiguration extends SoftwareProcess {
 
     boolean isConfigurationApplied();
 
-    public TerraformDriver getDriver();
+    TerraformDriver getDriver();
 }

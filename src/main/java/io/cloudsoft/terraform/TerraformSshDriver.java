@@ -218,7 +218,20 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return result.contains("No Changes."); // TODO make sure this is more precise(maybe1?).
     }
 
+    @Override
+    public void runRefreshTask() {
+        Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), refreshCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary("Updating terraform plan with infrastructure configuration applied outside terraform.")
+                .requiringZeroAndReturningStdout().newTask()
+                .asTask());
+        DynamicTasks.waitForLast();
 
+        if (applyTask.asTask().isError()) {
+            throw new IllegalStateException("Error executing `terraform refresh`!");
+        }
+        entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, true);
+    }
 
     @Override
     public void runApplyTask() {

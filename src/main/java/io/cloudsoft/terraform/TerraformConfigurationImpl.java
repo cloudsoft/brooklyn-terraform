@@ -3,6 +3,7 @@ package io.cloudsoft.terraform;
 import static com.google.common.collect.Maps.transformEntries;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -123,7 +124,8 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Override
         public Map<String, Object> apply(SshPollValue input) {
             try {
-                Map<String, Object>  resources = StateParser.parseResources(input.getStdout());
+                Map<String, Object>  state = StateParser.parseResources(input.getStdout());
+                Map<String, Object>  resources = new HashMap<>(state);
                 getChildren().forEach(c -> {
                     if(resources.containsKey(c.getConfig(ManagedResource.ADDRESS))) { //child in resource set, update sensors
                         ((ManagedResource)c).refreshSensors((Map<String,Object>)resources.get(c.getConfig(ManagedResource.ADDRESS)));
@@ -145,8 +147,8 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                         );
                     }) ;
                 }
-                lastCommandOutputs.put(STATE.getName(), "aaa");
-                return resources;
+                lastCommandOutputs.put(STATE.getName(), state); // TODO kinda stupid to parse again, but until this works properly is better to have the state in the UI
+                return state;
             } catch (Exception e) {
                 return ImmutableMap.of("ERROR","Problem refreshing state: " .concat(input.getStderr()));
             }
@@ -169,8 +171,9 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Override
         public String apply(SshPollValue input) {
             String output = input.getStdout();
-            if(!output.contains("No changes.")) {
+            if(!output.contains("No changes.")) { // TODO or contains Drift detected - improve this
                 sensors().set(CONFIGURATION_IS_APPLIED, false);
+                getDriver().runRefreshTask();
                 // user is asked to execute 'terraform apply'
                 // also at this point in the UI things should start blinking
             }
@@ -253,7 +256,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     }
 
     @Override
-    @Effector(description = "Apply the Terraform configuration")
+    @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
     public void apply() {
         final boolean configurationApplied = isConfigurationApplied();
         final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);

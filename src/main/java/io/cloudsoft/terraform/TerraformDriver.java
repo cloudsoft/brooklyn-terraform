@@ -16,6 +16,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     boolean runPlanTask();
     void runApplyTask();
+    void runRefreshTask();
     String runShowTask();
     int runDestroyTask();
     int runDestroyTargetTask(String target);
