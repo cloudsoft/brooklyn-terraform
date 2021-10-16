@@ -180,21 +180,18 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void postLaunch() {
-        // call show to get data
-        final String output = runShowTask();
-        try {
-            final Map<String,Object> state = new ObjectMapper().readValue( output, Map.class);
-             /* TODO -> for each resource create entity spec and generate child.
-            StateParser.parse(state).forEach(resource -> this.entity.addChild(
-                EntitySpec.create(ManagedResource.class)
-                        .configure(ManagedResource.STATE_CONTENTS, resource)
-                        .configure(ManagedResource.TYPE, resource.get("resource.type").toString())
-                        .configure(ManagedResource.PROVIDER, resource.get("resource.provider").toString())
-                        .configure(ManagedResource.NAME, resource.get("resource.name").toString())
-        ));*/
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("AMP cold not retrieve state to initialize resources.");
-        }
+        final String state = runShowTask();
+        StateParser.parseResources(state).forEach((resourceName, resourceContents) ->  {
+            Map<String,Object> contentsMap = (Map<String,Object>) resourceContents;
+            this.entity.addChild(
+                    EntitySpec.create(ManagedResource.class)
+                            .configure(ManagedResource.STATE_CONTENTS, contentsMap)
+                            .configure(ManagedResource.TYPE, contentsMap.get("resource.type").toString())
+                            .configure(ManagedResource.PROVIDER, contentsMap.get("resource.provider").toString())
+                            .configure(ManagedResource.ADDRESS, contentsMap.get("resource.address").toString())
+                            .configure(ManagedResource.NAME, contentsMap.get("resource.name").toString())
+            );
+        });
     }
 
     /**
@@ -218,7 +215,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         } catch (InterruptedException | ExecutionException e) {
             throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
         }
-        return result.contains("No Changes."); // TODO make sure this is more precise.
+        return result.contains("No Changes."); // TODO make sure this is more precise(maybe1?).
     }
 
 

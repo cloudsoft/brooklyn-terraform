@@ -32,14 +32,19 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
     protected void connectSensors() {
         Map<String, Object> resourceDetails = this.getConfig(ManagedResource.STATE_CONTENTS);
         resourceDetails.forEach((k,v) -> sensors().set(Sensors.newStringSensor(k), v.toString()));
+        if(!resourceDetails.containsKey("resource.status")) {
+            sensors().set(RESOURCE_STATUS, "ok"); // the provider doesn't provide any property to let us know the state of the resource
+        }
         sensors().set(SERVICE_UP, Boolean.TRUE);
+        this.setDisplayName(getConfig(ManagedResource.ADDRESS));
         updateServiceState();
     }
 
     @Override
-    public void refreshSensors(Map<String, Object> resource) {
-        StateParser.parseResource(resource).forEach((k, v) -> sensors().set(Sensors.newStringSensor(k), v.toString()));
+    public boolean refreshSensors(Map<String, Object> resource) {
+        //StateParser.parseResources(resource).forEach((k, v) -> sensors().set(Sensors.newStringSensor(k), v.toString()));
         updateServiceState();
+        return true;
     }
 
     @Override
@@ -59,16 +64,16 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
     }
 
     private void updateServiceState(){
-        final String instanceStatus = sensors().get(Sensors.newStringSensor("instance.status"));
-        if (ACCEPTED_STATE.contains(instanceStatus)) {
+        final String resourceStatus = sensors().get(RESOURCE_STATUS);
+        if (ACCEPTED_STATE.contains(resourceStatus)) {
             sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
         }
-        if (instanceStatus.equalsIgnoreCase(Lifecycle.STOPPING.name())) {
+        if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPING.name())) {
             sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING);
         }
-        if (instanceStatus.equalsIgnoreCase(Lifecycle.STOPPED.name())) {
+        if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPED.name())) {
             sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
         }

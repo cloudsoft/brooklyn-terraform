@@ -1,106 +1,101 @@
 {
-  "version": 4,
+  "format_version": "0.2",
   "terraform_version": "1.0.8",
-  "serial": 16,
-  "lineage": "b1c37185-45b7-7df0-edc3-0c9064acb487",
-  "outputs": {},
-  "resources": [
-    {
-      "mode": "data",
-      "type": "vsphere_compute_cluster",
-      "name": "cluster",
-      "provider": "provider[\"registry.terraform.io/hashicorp/vsphere\"]",
-      "instances": [
+  "values": {
+    "outputs": {
+      "ip": {
+        "sensitive": false,
+        "value": [
+          "135.181.244.119"
+        ]
+      },
+      "vm-moref": {
+        "sensitive": false,
+        "value": "vm-8149"
+      }
+    },
+    "root_module": {
+      "resources": [
         {
+          "address": "data.vsphere_compute_cluster.cluster",
+          "mode": "data",
+          "type": "vsphere_compute_cluster",
+          "name": "cluster",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
           "schema_version": 0,
-          "attributes": {
+          "values": {
             "datacenter_id": "datacenter-3",
             "id": "domain-c1003",
             "name": "ESXi Cluster",
             "resource_pool_id": "resgroup-1004"
           },
-          "sensitive_attributes": []
-        }
-      ]
-    },
-    {
-      "mode": "data",
-      "type": "vsphere_datacenter",
-      "name": "dc",
-      "provider": "provider[\"registry.terraform.io/hashicorp/vsphere\"]",
-      "instances": [
+          "sensitive_values": {}
+        },
         {
+          "address": "data.vsphere_datacenter.dc",
+          "mode": "data",
+          "type": "vsphere_datacenter",
+          "name": "dc",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
           "schema_version": 0,
-          "attributes": {
+          "values": {
             "id": "datacenter-3",
             "name": "Hetzner Environment"
           },
-          "sensitive_attributes": []
-        }
-      ]
-    },
-    {
-      "mode": "data",
-      "type": "vsphere_datastore",
-      "name": "datastore",
-      "provider": "provider[\"registry.terraform.io/hashicorp/vsphere\"]",
-      "instances": [
+          "sensitive_values": {}
+        },
         {
+          "address": "data.vsphere_datastore.datastore",
+          "mode": "data",
+          "type": "vsphere_datastore",
+          "name": "datastore",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
           "schema_version": 0,
-          "attributes": {
+          "values": {
             "datacenter_id": "datacenter-3",
             "id": "datastore-6014",
             "name": "esx41-SSD1"
           },
-          "sensitive_attributes": []
-        }
-      ]
-    },
-    {
-      "mode": "data",
-      "type": "vsphere_network",
-      "name": "network",
-      "provider": "provider[\"registry.terraform.io/hashicorp/vsphere\"]",
-      "instances": [
+          "sensitive_values": {}
+        },
         {
+          "address": "data.vsphere_network.network",
+          "mode": "data",
+          "type": "vsphere_network",
+          "name": "network",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
           "schema_version": 0,
-          "attributes": {
+          "values": {
             "datacenter_id": "datacenter-3",
             "distributed_virtual_switch_uuid": null,
             "id": "network-6009",
             "name": "Public 4020 esx41",
             "type": "Network"
           },
-          "sensitive_attributes": []
-        }
-      ]
-    },
-    {
-      "mode": "data",
-      "type": "vsphere_resource_pool",
-      "name": "pool",
-      "provider": "provider[\"registry.terraform.io/hashicorp/vsphere\"]",
-      "instances": [
+          "sensitive_values": {}
+        },
         {
+          "address": "data.vsphere_resource_pool.pool",
+          "mode": "data",
+          "type": "vsphere_resource_pool",
+          "name": "pool",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
           "schema_version": 0,
-          "attributes": {
+          "values": {
             "datacenter_id": "datacenter-3",
             "id": "resgroup-1004",
             "name": "Resources"
           },
-          "sensitive_attributes": []
-        }
-      ]
-    },
-    {
-      "mode": "data",
-      "type": "vsphere_virtual_machine",
-      "name": "template",
-      "provider": "provider[\"registry.terraform.io/hashicorp/vsphere\"]",
-      "instances": [
+          "sensitive_values": {}
+        },
         {
+          "address": "data.vsphere_virtual_machine.template",
+          "mode": "data",
+          "type": "vsphere_virtual_machine",
+          "name": "template",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
           "schema_version": 0,
-          "attributes": {
+          "values": {
             "alternate_guest_name": "",
             "annotation": "",
             "boot_delay": 0,
@@ -181,27 +176,36 @@
             "vbs_enabled": false,
             "vvtd_enabled": false
           },
-          "sensitive_attributes": []
-        }
-      ]
-    },
-    {
-      "mode": "managed",
-      "type": "vsphere_virtual_machine",
-      "name": "vm01",
-      "provider": "provider[\"registry.terraform.io/hashicorp/vsphere\"]",
-      "instances": [
+          "sensitive_values": {
+            "disks": [
+              {}
+            ],
+            "extra_config": {},
+            "guest_ip_addresses": [],
+            "network_interface_types": [
+              false
+            ],
+            "network_interfaces": [
+              {}
+            ],
+            "vapp_transport": []
+          }
+        },
         {
-          "status": "tainted",
+          "address": "vsphere_virtual_machine.vm01",
+          "mode": "managed",
+          "type": "vsphere_virtual_machine",
+          "name": "vm01",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
           "schema_version": 3,
-          "attributes": {
+          "values": {
             "alternate_guest_name": "",
             "annotation": "",
             "boot_delay": 0,
             "boot_retry_delay": 10000,
             "boot_retry_enabled": false,
             "cdrom": [],
-            "change_version": "2021-10-14T10:21:29.698122Z",
+            "change_version": "2021-10-16T04:51:23.020404Z",
             "clone": [
               {
                 "customize": [],
@@ -223,7 +227,7 @@
             "datacenter_id": null,
             "datastore_cluster_id": null,
             "datastore_id": "datastore-6014",
-            "default_ip_address": "135.181.244.92",
+            "default_ip_address": "135.181.244.119",
             "disk": [
               {
                 "attach": false,
@@ -240,12 +244,12 @@
                 "keep_on_remove": false,
                 "key": 2000,
                 "label": "vm-one.vmdk",
-                "path": "vm01/vm01.vmdk",
+                "path": "terraform-test-vm/terraform-test-vm.vmdk",
                 "size": 30,
                 "storage_policy_id": "",
                 "thin_provisioned": true,
                 "unit_number": 0,
-                "uuid": "6000C29d-ec18-94a8-39df-9dbb81722c24",
+                "uuid": "6000C291-1493-3664-418f-4c52eca2798d",
                 "write_through": false
               }
             ],
@@ -259,14 +263,14 @@
             "force_power_off": true,
             "guest_id": "ubuntu64Guest",
             "guest_ip_addresses": [
-              "135.181.244.92",
-              "2a01:4f9:4a:13d6:250:56ff:fea1:44a1",
-              "fe80::250:56ff:fea1:44a1"
+              "135.181.244.119",
+              "2a01:4f9:4a:13d6:250:56ff:fea1:e46a",
+              "fe80::250:56ff:fea1:e46a"
             ],
             "hardware_version": 17,
             "host_system_id": "host-10",
             "hv_mode": "hvAuto",
-            "id": "42213778-2e59-6183-f463-516932f1cee7",
+            "id": "4221223e-1f0a-1f1d-9f5f-4f4caeff1796",
             "ide_controller_count": 2,
             "ignored_guest_ips": null,
             "imported": null,
@@ -278,8 +282,8 @@
             "memory_share_count": 40960,
             "memory_share_level": "normal",
             "migrate_wait_timeout": 30,
-            "moid": "vm-8134",
-            "name": "vm01",
+            "moid": "vm-8149",
+            "name": "terraform-test-vm",
             "nested_hv_enabled": false,
             "network_interface": [
               {
@@ -290,7 +294,7 @@
                 "bandwidth_share_level": "normal",
                 "device_address": "pci:0:7",
                 "key": 4000,
-                "mac_address": "00:50:56:a1:44:a1",
+                "mac_address": "00:50:56:a1:e4:6a",
                 "network_id": "network-6009",
                 "ovf_mapping": "",
                 "use_static_mac": false
@@ -319,20 +323,40 @@
             "sync_time_with_host": false,
             "sync_time_with_host_periodically": false,
             "tags": null,
-            "uuid": "42213778-2e59-6183-f463-516932f1cee7",
+            "uuid": "4221223e-1f0a-1f1d-9f5f-4f4caeff1796",
             "vapp": [],
             "vapp_transport": [],
             "vbs_enabled": false,
             "vmware_tools_status": "guestToolsRunning",
-            "vmx_path": "vm01/vm01.vmx",
+            "vmx_path": "terraform-test-vm/terraform-test-vm.vmx",
             "vvtd_enabled": false,
             "wait_for_guest_ip_timeout": 0,
             "wait_for_guest_net_routable": true,
             "wait_for_guest_net_timeout": 5
           },
-          "sensitive_attributes": [],
-          "private": "eyJzY2hlbWFfdmVyc2lvbiI6IjMifQ==",
-          "dependencies": [
+          "sensitive_values": {
+            "cdrom": [],
+            "clone": [
+              {
+                "customize": []
+              }
+            ],
+            "disk": [
+              {}
+            ],
+            "guest_ip_addresses": [
+              false,
+              false,
+              false
+            ],
+            "network_interface": [
+              {}
+            ],
+            "ovf_deploy": [],
+            "vapp": [],
+            "vapp_transport": []
+          },
+          "depends_on": [
             "data.vsphere_datastore.datastore",
             "data.vsphere_network.network",
             "data.vsphere_resource_pool.pool",
@@ -341,5 +365,5 @@
         }
       ]
     }
-  ]
+  }
 }

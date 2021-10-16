@@ -8,6 +8,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.cloudsoft.terraform.entity.ManagedResource;
+import io.cloudsoft.terraform.parser.StateParser;
+import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.entity.Attributes;
@@ -121,21 +123,32 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Override
         public Map<String, Object> apply(SshPollValue input) {
             try {
-                Map<String, Object> state = new ObjectMapper().readValue(input.getStdout(), Map.class);
-               /*
-               TODO -> For resource names matching children refresh sensors, for extra resources create EntitySpec and add child.
-               for (Map<String,Object> resource : ((List<Map<String,Object>>) state.get("resources"))) {
-                    if("managed".equals(resource.get("mode"))) {
-                        final String resourceName = resource.get("name").toString();
-                        getChildren().stream().filter(c -> resourceName.equals(c.getConfig(ManagedResource.NAME))).findFirst().ifPresent(
-                                c -> ((ManagedResource)c).refreshSensors(resource)
-                        );
+                Map<String, Object>  resources = StateParser.parseResources(input.getStdout());
+                getChildren().forEach(c -> {
+                    if(resources.containsKey(c.getConfig(ManagedResource.ADDRESS))) { //child in resource set, update sensors
+                        ((ManagedResource)c).refreshSensors((Map<String,Object>)resources.get(c.getConfig(ManagedResource.ADDRESS)));
+                        resources.remove(c.getConfig(ManagedResource.ADDRESS));
+                    } else {
+                        getChildren().remove(c); // else  child not in resource set (deleted by terraform -> remove child)
                     }
-                }*/
-                lastCommandOutputs.put(STATE.getName(), state);
-                return state;
+                });
+                if(!resources.isEmpty()) { // new resource, new child must be created
+                    resources.forEach((resourceName, resourceContents) -> {
+                        Map<String,Object> contentsMap = (Map<String,Object>) resourceContents;
+                        addChild(
+                                EntitySpec.create(ManagedResource.class)
+                                        .configure(ManagedResource.STATE_CONTENTS, contentsMap)
+                                        .configure(ManagedResource.TYPE, contentsMap.get("resource.type").toString())
+                                        .configure(ManagedResource.PROVIDER, contentsMap.get("resource.provider").toString())
+                                        .configure(ManagedResource.ADDRESS, contentsMap.get("resource.address").toString())
+                                        .configure(ManagedResource.NAME, contentsMap.get("resource.name").toString())
+                        );
+                    }) ;
+                }
+                lastCommandOutputs.put(STATE.getName(), "aaa");
+                return resources;
             } catch (Exception e) {
-                return ImmutableMap.of("ERROR", "Failed to parse state file.");
+                return ImmutableMap.of("ERROR","Problem refreshing state: " .concat(input.getStderr()));
             }
         }
     }
@@ -147,7 +160,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(STATE.getName())) {
                 return (Map<String, Object>) lastCommandOutputs.get(STATE.getName());
             } else {
-                return ImmutableMap.of("ERROR", "Failed to refresh state file.");
+               return ImmutableMap.of("ERROR", "Failed to refresh state.");
             }
         }
     }
