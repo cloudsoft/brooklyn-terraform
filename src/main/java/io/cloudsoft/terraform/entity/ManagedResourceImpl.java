@@ -42,7 +42,7 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
 
     @Override
     public boolean refreshSensors(Map<String, Object> resource) {
-        resource.forEach((k, v) -> sensors().set(Sensors.newStringSensor(k), v.toString()));
+        resource.forEach((k, v) -> sensors().set(Sensors.newStringSensor("tf." + k), v.toString()));
         updateServiceState();
         return true;
     }
