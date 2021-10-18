@@ -4,15 +4,12 @@ import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_U
 import static java.lang.String.format;
 import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
 
-import java.io.IOException;
 import java.io.InputStream;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;

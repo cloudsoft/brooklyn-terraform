@@ -31,7 +31,7 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
 
     protected void connectSensors() {
         Map<String, Object> resourceDetails = this.getConfig(ManagedResource.STATE_CONTENTS);
-        resourceDetails.forEach((k,v) -> sensors().set(Sensors.newStringSensor(k), v.toString()));
+        resourceDetails.forEach((k,v) -> sensors().set(Sensors.newStringSensor("tf." + k), v.toString()));
         if(!resourceDetails.containsKey("resource.status")) {
             sensors().set(RESOURCE_STATUS, "ok"); // the provider doesn't provide any property to let us know the state of the resource
         }

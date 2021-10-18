@@ -23,25 +23,25 @@ public interface ManagedResource extends BasicEntity, Startable {
             "Contents of the state of this resource as returned by Terrraform.");
 
     @SetFromFlag("type")
-    ConfigKey<String> TYPE =  ConfigKeys.newStringConfigKey("resource.type",
+    ConfigKey<String> TYPE =  ConfigKeys.newStringConfigKey("tf.resource.type",
             "Terraform resource type (vsphere_virtual_machine, aws_instance, vpc, security group, etc)", null);
 
     @SetFromFlag("provider")
-    ConfigKey<String> PROVIDER =  ConfigKeys.newStringConfigKey("resource.provider",
+    ConfigKey<String> PROVIDER =  ConfigKeys.newStringConfigKey("tf.resource.provider",
             "Terraform resource provider (cloud provider)", null);
 
     @SetFromFlag("name")
-    ConfigKey<String> NAME =  ConfigKeys.newStringConfigKey("resource.name",
+    ConfigKey<String> NAME =  ConfigKeys.newStringConfigKey("tf.resource.name",
             "Terraform resource name.", null);
 
     @SetFromFlag("address")
-    ConfigKey<String> ADDRESS =  ConfigKeys.newStringConfigKey("resource.address",
+    ConfigKey<String> ADDRESS =  ConfigKeys.newStringConfigKey("tf.resource.address",
             "Terraform resource address.", null);
 
     @Effector(description="Performs the Terraform destroy command which will destroy this resource.")
     void destroy();
 
-    AttributeSensor<String> RESOURCE_STATUS = Sensors.newStringSensor("resource.status",
+    AttributeSensor<String> RESOURCE_STATUS = Sensors.newStringSensor("tf.resource.status",
             "The status of this resource");
 
     boolean refreshSensors(Map<String,Object> resource);

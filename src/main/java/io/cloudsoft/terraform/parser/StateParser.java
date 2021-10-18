@@ -24,17 +24,16 @@ public class StateParser {
             }
 
             if(!root.has("values")) {
-                throw new  IllegalArgumentException ("A valid deployment state should have values!");
+                throw new  IllegalArgumentException ("A valid deployment state should have a values node!");
             }
             if(!root.get("values").has("root_module")) {
-                throw new  IllegalArgumentException ("A valid deployment state should have a root_module!");
+                throw new  IllegalArgumentException ("A valid deployment state should have a root_module node!");
             }
             if(!root.get("values").get("root_module").has("resources")) {
-                throw new  IllegalArgumentException ("A valid deployment state should have a resources!");
+                throw new  IllegalArgumentException ("A valid deployment state should have a resources node!");
             }
 
-            JsonNode resourceNode = root.get("values").get("root_module").get("resources");
-
+            JsonNode resourceNode = root.at("/values/root_module/resources");
             resourceNode.forEach(resource ->  {
                 Map<String, Object>  resourceBody = new LinkedHashMap<>();
 
