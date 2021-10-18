@@ -4,4 +4,4 @@ services:
     brooklyn.config:
       # requires aws cli + creds installed on the machine deploying this or add 'shell.env'
       # Fetching archives over HTTP
-      tf.configuration.url: https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/tf-deployment.zip?archive=zip"
+      tf.configuration.url: https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/tf-deployment.zip?archive=zip

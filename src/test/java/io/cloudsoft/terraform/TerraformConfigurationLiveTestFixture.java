@@ -47,8 +47,6 @@ public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppL
         env = ImmutableMap.of(
                 "AWS_ACCESS_KEY_ID", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.identity", "brooklyn.jclouds.aws-ec2.identity"),
                 "AWS_SECRET_ACCESS_KEY", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.credential", "brooklyn.jclouds.aws-ec2.credential"),
-                // TODO do we need both?
-                "AWS_DEFAULT_REGION", REGION_NAME,
                 "AWS_REGION", REGION_NAME);
     }
 

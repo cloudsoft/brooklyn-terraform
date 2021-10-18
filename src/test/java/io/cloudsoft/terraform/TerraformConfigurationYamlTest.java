@@ -14,6 +14,10 @@ import org.apache.brooklyn.entity.stock.BasicApplication;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
+import java.util.Collection;
+
+import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEqualsEventually;
+
 /**
  * Requires in .brooklyn/brooklyn.properties:
  *
@@ -51,7 +55,19 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
         EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
-        // TODO tests about sensors being populated with expected values here
+
+        Assert.assertTrue(((Integer) entity.getChildren().size()).equals(1));
+        Entity resource = Iterables.getOnlyElement(entity.getChildren());
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.address"), v -> v.equals("aws_instance.web"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.mode"), v -> v.equals("managed"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.type"), v -> v.equals("aws_instance"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.name"), v -> v.equals("web"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.provider"), v -> v.equals("registry.terraform.io/hashicorp/aws"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.status"), v -> v.equals("running"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.ami"), v -> v.equals("\"ami-02df9ea15c1778c9c\""));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.instance_type"), v -> v.equals("\"t2.micro\""));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.tags"), v -> v.equals("{\"Name\":\"terraform-test-cfg-in-bundle\"}"));
+
 
         // gracefully shutdown and test children are stopped
         ((BasicApplication)app).stop();
@@ -66,7 +82,18 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
         EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
-        // TODO tests about sensors being populated with expected values here
+
+        Assert.assertTrue(((Integer) entity.getChildren().size()).equals(1));
+        Entity resource = Iterables.getOnlyElement(entity.getChildren());
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.address"), v -> v.equals("aws_instance.example1"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.mode"), v -> v.equals("managed"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.type"), v -> v.equals("aws_instance"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.name"), v -> v.equals("example1"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.provider"), v -> v.equals("registry.terraform.io/hashicorp/aws"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.status"), v -> v.equals("running"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.ami"), v -> v.equals("\"ami-02df9ea15c1778c9c\""));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.instance_type"), v -> v.equals("\"t1.micro\""));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.tags"), v -> v.equals("{\"Name\":\"terraform-test-cfg-in-blueprint\"}"));
 
         // gracefully shutdown and test children are stopped
         ((BasicApplication)app).stop();
@@ -75,13 +102,25 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
     }
 
     @Test(groups="Live") // TF on localhost (AMP machine)
+    // TODO - Note: looks like this test case requires vault set up as per tf-cfg-in-artifactory.bom - do we need/want it?
     public void testDeployFromLocalhostFromCfgFileInArtifactory() throws Exception {
         Application app = deploy("localhost_location", "classpath://blueprints/tf-cfg-in-artifactory.bom");
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
         EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
-        // TODO tests about sensors being populated with expected values here
+
+        Assert.assertTrue(((Integer) entity.getChildren().size()).equals(1));
+        Entity resource = Iterables.getOnlyElement(entity.getChildren());
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.address"), v -> v.equals("aws_instance.web"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.mode"), v -> v.equals("managed"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.type"), v -> v.equals("aws_instance"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.name"), v -> v.equals("web"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.provider"), v -> v.equals("registry.terraform.io/hashicorp/aws"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.status"), v -> v.equals("running"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.ami"), v -> v.equals("\"ami-02df9ea15c1778c9c\""));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.instance_type"), v -> v.equals("\"t2.micro\""));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.tags"), v -> v.equals("{\"Name\":\"terraform-test-cfg-with-input-vars\"}"));
 
         // gracefully shutdown and test children are stopped
         ((BasicApplication)app).stop();
@@ -96,7 +135,18 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
         EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
-        // TODO tests about sensors being populated with expected values here
+
+        Assert.assertTrue(((Integer) entity.getChildren().size()).equals(1));
+        Entity resource = Iterables.getOnlyElement(entity.getChildren());
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.address"), v -> v.equals("aws_instance.example"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.mode"), v -> v.equals("managed"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.type"), v -> v.equals("aws_instance"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.name"), v -> v.equals("example"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.provider"), v -> v.equals("registry.terraform.io/hashicorp/aws"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.status"), v -> v.equals("running"));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.ami"), v -> v.equals("\"ami-02df9ea15c1778c9c\""));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.instance_type"), v -> v.equals("\"t1.micro\""));
+        EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.tags"), v -> v.equals("{\"Name\":\"terraform-test-cfg-in-zip-in-bucket\"}"));
 
         // gracefully shutdown and test children are stopped
         ((BasicApplication)app).stop();
