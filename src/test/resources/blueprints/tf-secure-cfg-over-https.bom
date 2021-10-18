@@ -1,0 +1,10 @@
+location: tosca.default.location
+name: Bundle with Terraform
+services:
+- type: terraform
+  name: Terraform Configuration
+  brooklyn.config:
+    # requires aws cli + creds installed on the machine deploying this or add 'shell.env'
+    # Fetching archives over HTTP
+    tf.configuration.url: https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/multiple-config.zip
+    #tf.tfvars.url: classpath://terraform.tfvars  # should be part of deployed the bundle, or point this to a secure location, this bundle requires credentials in tfvars
