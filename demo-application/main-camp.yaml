@@ -1,0 +1,30 @@
+location: terraform-location
+name: Socks Backend Deployment
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      tf.configuration.url: my.artifactory.com/socks-1.0.0.zip
+    brooklyn.initializers:
+      - type: org.apache.brooklyn.core.sensor.http.HttpRequestSensor
+        brooklyn.config:
+          name: latest.configuration.url
+          description: most recent version detection policy
+    brooklyn.policies:
+      - type: InvokeEffectorOnSensorChange
+        brooklyn.config:
+          sensor: latest.configuration.url
+          effector: openInident
+
+# How do we add this to sub component that is the tomcat server?
+
+#      - type: org.apache.brooklyn.core.sensor.http.HttpRequestSensor
+#        brooklyn.config:
+#          name: service.isHealthy
+#          period: 5s
+#          suppressDuplicates: true
+#          jsonPath: "$"
+#          uri:
+#            $brooklyn:formatString:
+#              - "%s/v1/server/healthy"
+#              - $brooklyn:attributeWhenReady("main.uri.public")
