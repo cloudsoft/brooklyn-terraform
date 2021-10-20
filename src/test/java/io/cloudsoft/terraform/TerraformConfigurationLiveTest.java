@@ -4,12 +4,15 @@ import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEqual
 import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEventuallyNonNull;
 import static org.testng.Assert.assertNotNull;
 
+import io.cloudsoft.terraform.predicates.TerraformDiscoveryPredicates;
+import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 
+import org.apache.brooklyn.entity.group.DynamicGroup;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.test.Asserts;
 import org.slf4j.Logger;
@@ -61,4 +64,31 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         app.stop();
     }
 
+    @Test(groups="Live")
+    public void testCreateInstanceWithDynamicGroups() throws Exception {
+        terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
+                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
+                .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
+                terraformConfiguration
+                        .addChild(EntitySpec.create(DynamicGroup.class)
+                                .configure(DynamicGroup.ENTITY_FILTER,
+                                        TerraformDiscoveryPredicates.sensorMatches("tf.resource.type", "aws_instance")));
+        app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
+
+        assertNotNull(terraformConfiguration.getAttribute(TerraformConfiguration.HOSTNAME));
+        assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_UP, true);
+        assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
+        assertAttributeEventuallyNonNull(terraformConfiguration, TerraformConfiguration.OUTPUT);
+
+        for (Entity child : terraformConfiguration.getChildren()) {
+            System.out.println(child.getDisplayName());
+        }
+
+        Entities.dumpInfo(app);
+
+        // Terraform can take more than thirty seconds to destroy the instance which
+        // trips tearDown's timeout. Stop the application here instead.
+        LOG.debug("Stopping application ...");
+        app.stop();
+    }
 }
