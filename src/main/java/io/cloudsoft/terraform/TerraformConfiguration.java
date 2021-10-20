@@ -24,6 +24,13 @@ import org.apache.brooklyn.util.core.flags.SetFromFlag;
 public interface TerraformConfiguration extends SoftwareProcess {
     public static final String TERRAFORM_DOWNLOAD_URL = "https://releases.hashicorp.com/terraform/${version}/terraform_${version}_${driver.osTag}.zip";
 
+    public enum TerraformStatus {
+        SYNC, // plan and configuration match
+        DESYNCHRONIZED, // plan and configuration to not match,
+        DRIFT,  // resources have changed outside terraform
+        ERROR // configuration was edited manually and it is incorrect
+    }
+
     // Update reference.json when changing this value.
     @SetFromFlag("version")
     ConfigKey<String> SUGGESTED_VERSION = ConfigKeys.newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.8");

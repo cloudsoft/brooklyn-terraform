@@ -1,17 +1,29 @@
 package io.cloudsoft.terraform.parser;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
+import io.cloudsoft.terraform.TerraformConfiguration;
 
 import java.util.*;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
 
 /**
  * Naive version. To be improved further.
  */
 public class StateParser {
     public static final ImmutableList blankItems = ImmutableList.of("[]", "", "null", "\"\"", "{}", "[{}]");
+
+    private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.CHANGE_SUMMARY;
+    private static  Predicate<? super PlanLogEntry> outputsPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.OUTPUTS;
+    private static  Predicate<? super PlanLogEntry> plannedChangedPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.PLANNED_CHANGE;
+    private static  Predicate<? super PlanLogEntry> driftPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.RESOURCE_DRIFT;
+    private static  Predicate<? super PlanLogEntry> errorPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC;
 
     public static Map<String, Object> parseResources(final String state){
         Map<String, Object> result  = new HashMap<>();
@@ -72,6 +84,70 @@ public class StateParser {
             });
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Cannot parse Terraform state!", e);
+        }
+        return result;
+    }
+
+    public static Map<String, Object> parsePlanLogEntries(final String planLogEntriesAsStr){
+        String[] planLogEntries = planLogEntriesAsStr.split(System.lineSeparator());
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+        List<PlanLogEntry> planLogs = Arrays.stream(planLogEntries).map(log -> {
+            try {
+                return objectMapper.readValue(log, PlanLogEntry.class);
+            } catch (JsonProcessingException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }).collect(Collectors.toList());
+
+        Map<String, Object> result = new HashMap<>();
+
+        Optional<PlanLogEntry> changeSummaryLog = planLogs.stream().filter(changeSummaryPredicate).findFirst(); // it is not there when the config is broken
+        if(changeSummaryLog.isPresent()) {
+            if (NO_CHANGES.equals(changeSummaryLog.get().message)) {
+                result.put("tf.plan.message", "No changes. Your infrastructure matches the configuration.");
+                result.put("tf.plan", TerraformConfiguration.TerraformStatus.SYNC);
+            } else {
+                result.put("tf.plan.message", "Configuration and infrastructure do not match." + changeSummaryLog.get().message);
+                result.put("tf.plan", TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+            }
+        }
+
+        planLogs.stream().filter(outputsPredicate).findFirst().ifPresent(ple ->
+                ple.outputs.forEach((oK,oV) -> {
+                    if (!"noop".equals(oV.get("action"))) {
+                        result.put("tf.output." + oK, oV.get("action").toString());
+                    }
+                })
+        );
+
+        planLogs.stream().filter(plannedChangedPredicate).forEach(ple -> {
+            if (!"noop".equals(ple.change.get("action"))) {
+                result.put("tf.resource." + ((Map<String, String>)ple.change.get("resource")).get("addr"), ple.change.get("action").toString());
+            }
+        });
+
+
+        if (planLogs.stream().anyMatch(driftPredicate)) {
+            planLogs.stream().filter(driftPredicate).forEach(ple -> {
+                if (!"noop".equals(ple.change.get("action"))) {
+                    result.put("tf.resource." + ((Map<String, String>) ple.change.get("resource")).get("addr"), ple.change.get("action").toString());
+                }
+            });
+            result.put("tf.plan", TerraformConfiguration.TerraformStatus.DRIFT);
+            result.put("tf.plan.message", "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration." +  changeSummaryLog.get().message);
+        }
+
+        if (planLogs.stream().anyMatch(errorPredicate)) {
+            result.put("tf.plan.message", "Something went wrong. Check your configuration.");
+            result.put("tf.plan", TerraformConfiguration.TerraformStatus.ERROR);
+            StringBuilder sb = new StringBuilder();
+            planLogs.stream().filter(ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC).forEach(ple ->
+                sb.append(ple.diagnostic.get("summary")).append(":").append("detail").append("\n")
+            );
+            result.put("tf.errors",  sb);
         }
         return result;
     }

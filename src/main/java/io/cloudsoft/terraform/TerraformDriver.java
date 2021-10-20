@@ -26,8 +26,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return makeTerraformCommand("init -input=false"); // Prepare your working directory for other commands
     }
     default String planCommand() {
-        //TODO consider adding -json here as well after the model is ready and just look for the changes -> change number.
-        return makeTerraformCommand("plan -out=tfplan -lock=false -no-color"); // Show changes required by the current configuration
+        return makeTerraformCommand("plan -out=tfplan -lock=false -no-color -json"); // Show changes required by the current configuration
     }
     default String applyCommand() {
         return makeTerraformCommand("apply -no-color -input=false tfplan"); // Create or update infrastructure

@@ -212,7 +212,8 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         } catch (InterruptedException | ExecutionException e) {
             throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
         }
-        return result.contains("No Changes."); // TODO make sure this is more precise(maybe1?).
+        Map<String, Object> tfPlanStatus = StateParser.parsePlanLogEntries(result);
+        return tfPlanStatus.get("tf.status") == TerraformConfiguration.TerraformStatus.SYNC;
     }
 
     @Override

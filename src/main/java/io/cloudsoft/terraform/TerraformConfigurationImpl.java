@@ -1,20 +1,21 @@
 package io.cloudsoft.terraform;
 
-import static com.google.common.collect.Maps.transformEntries;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Function;
+import com.google.common.base.Objects;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Maps.EntryTransformer;
+import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.entity.Attributes;
+import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
+import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
@@ -30,13 +31,12 @@ import org.apache.brooklyn.util.time.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Function;
-import com.google.common.base.Objects;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Maps.EntryTransformer;
-import com.google.gson.internal.LinkedTreeMap;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.fasterxml.jackson.databind.*;
+import static com.google.common.collect.Maps.transformEntries;
 
 
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
@@ -88,7 +88,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     .entity(this)
                     .period(FEED_UPDATE_PERIOD)
                     .machine(machine.get())
-                    .poll(new CommandPollConfig<>(PLAN)
+                    .poll(CommandPollConfig.forMultiple()
                             .env(env)
                             .command(getDriver().planCommand())
                             .onSuccess(new PlanSuccessFunction())
@@ -141,30 +141,37 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
-    private final class PlanSuccessFunction implements Function<SshPollValue, String> {
+    private final class PlanSuccessFunction implements Function<SshPollValue, Void> {
         @Override
-        public String apply(SshPollValue input) {
+        public Void apply(SshPollValue input) {
             String output = input.getStdout();
-            if(!output.contains("No changes.")) { // TODO or contains Drift detected - improve this
+            Map<String, Object> tfPlanStatus = StateParser.parsePlanLogEntries(output);
+            if(!tfPlanStatus.get("tf.plan").equals( TerraformConfiguration.TerraformStatus.SYNC)) {
                 sensors().set(CONFIGURATION_IS_APPLIED, false);
-                getDriver().runRefreshTask();
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan.");
                 // user is asked to execute 'terraform apply'
-                // also at this point in the UI things should start blinking
+                TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
+            } else {
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
             }
+            TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan"), tfPlanStatus.get("tf.plan"));
+            TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.message"), tfPlanStatus.get("tf.plan.message"));
             updateDeploymentState();
-            lastCommandOutputs.put(PLAN.getName(), output);
-            return output;
+            lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
+            return null;
         }
     }
 
-    private final class PlanFailureFunction implements Function<SshPollValue, String> {
+    private final class PlanFailureFunction implements Function<SshPollValue, Void> {
         @Override
-        public String apply(SshPollValue input) {
-            if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(PLAN.getName())) {
-                return (String) lastCommandOutputs.get(PLAN.getName());
-            } else {
-                return input.getStderr();
-            }
+        public Void apply(SshPollValue input) {
+            // TODO figure how with what to replace this.
+//            if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(PLAN.getName())) {
+//                (String) lastCommandOutputs.get(PLAN.getName());
+//            } else {
+//               input.getStderr();
+//            }
+            return null;
         }
     }
 
@@ -259,7 +266,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Effector(description = "Destroy the Terraform configuration")
     public void destroy() {
         final boolean configurationApplied = isConfigurationApplied();
-        final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
+        final boolean mayProceed = configurationChangeInProgress.compareAndSet(false, true);
         if (configurationApplied && mayProceed) {
             try {
                 getDriver().runDestroyTask();
