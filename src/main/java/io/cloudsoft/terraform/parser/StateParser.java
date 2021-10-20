@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.cloudsoft.terraform.TerraformConfiguration;
 
 import java.util.*;
@@ -108,41 +109,64 @@ public class StateParser {
         if(changeSummaryLog.isPresent()) {
             if (NO_CHANGES.equals(changeSummaryLog.get().message)) {
                 result.put("tf.plan.message", "No changes. Your infrastructure matches the configuration.");
-                result.put("tf.plan", TerraformConfiguration.TerraformStatus.SYNC);
+                result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.SYNC);
             } else {
                 result.put("tf.plan.message", "Configuration and infrastructure do not match." + changeSummaryLog.get().message);
-                result.put("tf.plan", TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+                result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
             }
         }
 
-        planLogs.stream().filter(outputsPredicate).findFirst().ifPresent(ple ->
-                ple.outputs.forEach((oK,oV) -> {
-                    if (!"noop".equals(oV.get("action"))) {
-                        result.put("tf.output." + oK, oV.get("action").toString());
-                    }
-                })
-        );
-
-        planLogs.stream().filter(plannedChangedPredicate).forEach(ple -> {
-            if (!"noop".equals(ple.change.get("action"))) {
-                result.put("tf.resource." + ((Map<String, String>)ple.change.get("resource")).get("addr"), ple.change.get("action").toString());
+        planLogs.stream().filter(outputsPredicate).findFirst().ifPresent(ple -> {
+            List<Map<String,Object>> outputs = new ArrayList<>();
+            ple.outputs.forEach((oK, oV) -> {
+                if (!"noop".equals(oV.get("action"))) {
+                    outputs.add(ImmutableMap.of(
+                            "output.addr", oK,
+                            "output.action", oV.get("action").toString()
+                    ));
+                }
+            });
+            if(!outputs.isEmpty()) {
+                result.put("tf.output.changes", outputs);
             }
         });
 
-
-        if (planLogs.stream().anyMatch(driftPredicate)) {
-            planLogs.stream().filter(driftPredicate).forEach(ple -> {
+        if (planLogs.stream().anyMatch(plannedChangedPredicate)) {
+            List<Map<String,Object>> resources = new ArrayList<>();
+            planLogs.stream().filter(plannedChangedPredicate).forEach(ple -> {
                 if (!"noop".equals(ple.change.get("action"))) {
-                    result.put("tf.resource." + ((Map<String, String>) ple.change.get("resource")).get("addr"), ple.change.get("action").toString());
+                    resources.add(ImmutableMap.of(
+                            "resource.addr", ((Map<String, String>) ple.change.get("resource")).get("addr"),
+                            "resource.action", ple.change.get("action").toString()
+                    ));
                 }
             });
-            result.put("tf.plan", TerraformConfiguration.TerraformStatus.DRIFT);
-            result.put("tf.plan.message", "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration." +  changeSummaryLog.get().message);
+            if(!resources.isEmpty()) {
+                result.put("tf.resource.changes", resources);
+            }
+        }
+
+
+        if (planLogs.stream().anyMatch(driftPredicate)) {
+            List<Map<String,Object>> resources = new ArrayList<>();
+            planLogs.stream().filter(driftPredicate).forEach(ple -> {
+                if (!"noop".equals(ple.change.get("action"))) {
+                    resources.add(ImmutableMap.of(
+                            "resource.addr", ((Map<String, String>) ple.change.get("resource")).get("addr"),
+                            "resource.action", ple.change.get("action").toString()
+                    ));
+                }
+            });
+            if(!resources.isEmpty()) {
+                result.put("tf.resource.changes", resources);
+                result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.DRIFT);
+                result.put("tf.plan.message", "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration." +  changeSummaryLog.get().message);
+            }
         }
 
         if (planLogs.stream().anyMatch(errorPredicate)) {
             result.put("tf.plan.message", "Something went wrong. Check your configuration.");
-            result.put("tf.plan", TerraformConfiguration.TerraformStatus.ERROR);
+            result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.ERROR);
             StringBuilder sb = new StringBuilder();
             planLogs.stream().filter(ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC).forEach(ple ->
                 sb.append(ple.diagnostic.get("summary")).append(":").append("detail").append("\n")

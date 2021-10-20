@@ -1,12 +1,8 @@
 package io.cloudsoft.terraform;
 
-import java.io.IOException;
 import java.util.Map;
 
 import org.apache.brooklyn.entity.software.base.SoftwareProcessDriver;
-
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 
 import static java.lang.String.format;
 
@@ -14,9 +10,9 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     int destroy();
 
-    boolean runPlanTask();
+    Map<String, Object> runPlanTask();
     void runApplyTask();
-    void runRefreshTask();
+    String runOutputTask();
     String runShowTask();
     int runDestroyTask();
     int runDestroyTargetTask(String target);
@@ -34,9 +30,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     default String showCommand() {
         return makeTerraformCommand("show -no-color -json"); // Show the current state or a saved plan
     }
-    default String refreshCommand() {
-        return makeTerraformCommand("refresh -input=false -no-color -json"); // update the state to match remote systems
-    }
+
     default String outputCommand() {
         return makeTerraformCommand("output -no-color -json"); // Show output values from your root module
     }

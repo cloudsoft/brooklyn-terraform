@@ -8,6 +8,7 @@ import org.testng.annotations.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.Map;
 
 import static org.testng.Assert.assertFalse;
@@ -50,8 +51,8 @@ public class TerraformSimpleTest {
         final String logs = new String(Files.readAllBytes(file.toPath()));
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(2, result.size());
-        Assert.assertEquals(result.get("tf.plan"), TerraformConfiguration.TerraformStatus.SYNC);
+        Assert.assertEquals(result.size(), 2);
+        Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.SYNC);
         Assert.assertEquals(result.get("tf.plan.message"), "No changes. Your infrastructure matches the configuration.");
     }
 
@@ -62,14 +63,16 @@ public class TerraformSimpleTest {
         final String logs = new String(Files.readAllBytes(file.toPath()));
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(result.get("tf.plan"), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+        Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         Assert.assertEquals(result.get("tf.plan.message"), "Configuration and infrastructure do not match.Plan: 2 to add, 0 to change, 0 to destroy.");
-        Assert.assertEquals(result.get("tf.output.group_name"), "create");
-        Assert.assertEquals(result.get("tf.output.group_id"), "create");
-        Assert.assertEquals(result.get("tf.output.group_id2"), "create");
-        Assert.assertEquals(result.get("tf.output.group_name2"), "create");
-        Assert.assertEquals(result.get("tf.resource.aws_security_group.allow_all2"), "create");
-        Assert.assertEquals(result.get("tf.resource.aws_security_group.allow_all"), "create");
+        List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
+        Assert.assertEquals(outputs.size(), 4);
+
+        Assert.assertEquals(outputs.stream().filter(m -> m.containsValue("create")).count(), 4);
+
+        List<Map<String, Object>> resources = ((List<Map<String, Object>>)result.get("tf.resource.changes"));
+        Assert.assertEquals(resources.size(), 2);
+        Assert.assertEquals(resources.stream().filter(m -> m.containsValue("create")).count(), 2);
     }
 
     @Test
@@ -79,11 +82,11 @@ public class TerraformSimpleTest {
         final String logs = new String(Files.readAllBytes(file.toPath()));
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(4, result.size());
-        Assert.assertEquals(result.get("tf.plan"), TerraformConfiguration.TerraformStatus.DRIFT);
-        Assert.assertEquals(result.get("tf.plan.message"), "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 0 to add, 2 to change, 0 to destroy.");
-        Assert.assertEquals(result.get("tf.resource.aws_security_group.allow_all2"), "update");
-        Assert.assertEquals(result.get("tf.resource.aws_security_group.allow_all"), "update");
+        Assert.assertEquals(result.size(), 3);
+
+        List<Map<String, Object>> resources = ((List<Map<String, Object>>)result.get("tf.resource.changes"));
+        Assert.assertEquals( resources.size(), 2);
+        Assert.assertEquals(resources.stream().filter(m -> m.containsValue("update")).count(), 2);
     }
 
     @Test // apparently adding a new resource is not actually a drift
@@ -93,12 +96,17 @@ public class TerraformSimpleTest {
         final String logs = new String(Files.readAllBytes(file.toPath()));
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(5, result.size());
+        Assert.assertEquals( result.size(), 4);
+        Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         Assert.assertEquals(result.get("tf.plan.message"), "Configuration and infrastructure do not match.Plan: 1 to add, 0 to change, 0 to destroy.");
-        Assert.assertEquals(result.get("tf.plan"), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
-        Assert.assertEquals(result.get("tf.resource.aws_security_group.allow_all2"), "create");
-        Assert.assertEquals(result.get("tf.output.group_id2"), "create");
-        Assert.assertEquals(result.get("tf.output.group_name2"), "create");
+
+        List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
+        Assert.assertEquals(outputs.size(), 2);
+        Assert.assertEquals(outputs.stream().filter(m -> m.containsValue("create")).count(), 2);
+
+        List<Map<String, Object>> resources = ((List<Map<String, Object>>)result.get("tf.resource.changes"));
+        Assert.assertEquals(resources.size(), 1);
+        Assert.assertEquals(resources.stream().filter(m -> m.containsValue("create")).count(), 1);
     }
 
     @Test // apparently deleting a resource is not actually a drift
@@ -108,12 +116,17 @@ public class TerraformSimpleTest {
         final String logs = new String(Files.readAllBytes(file.toPath()));
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(5, result.size());
+        Assert.assertEquals( result.size(), 4);
         Assert.assertEquals(result.get("tf.plan.message"), "Configuration and infrastructure do not match.Plan: 0 to add, 0 to change, 1 to destroy.");
-        Assert.assertEquals(result.get("tf.plan"), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
-        Assert.assertEquals(result.get("tf.resource.aws_security_group.allow_all2"), "delete");
-        Assert.assertEquals(result.get("tf.output.group_id2"), "delete");
-        Assert.assertEquals(result.get("tf.output.group_name2"), "delete");
+        Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+
+        List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
+        Assert.assertEquals( outputs.size(), 2);
+        Assert.assertEquals(outputs.stream().filter(m -> m.containsValue("delete")).count(), 2);
+
+        List<Map<String, Object>> resources = ((List<Map<String, Object>>)result.get("tf.resource.changes"));
+        Assert.assertEquals( resources.size(), 1);
+        Assert.assertEquals(resources.stream().filter(m -> m.containsValue("delete")).count(), 1);
     }
 
     @Test // changing state of an instance to stopping is a drift
@@ -123,10 +136,13 @@ public class TerraformSimpleTest {
         final String logs = new String(Files.readAllBytes(file.toPath()));
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(3, result.size());
+        Assert.assertEquals( result.size(), 3);
         Assert.assertEquals(result.get("tf.plan.message"), "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 0 to add, 0 to change, 0 to destroy.");
-        Assert.assertEquals(result.get("tf.plan"), TerraformConfiguration.TerraformStatus.DRIFT);
-        Assert.assertEquals(result.get("tf.resource.aws_instance.example1"), "update");
+        Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.DRIFT);
+
+        List<Map<String, Object>> resources = ((List<Map<String, Object>>)result.get("tf.resource.changes"));
+        Assert.assertEquals( resources.size(), 1);
+        Assert.assertEquals(resources.stream().filter(m -> m.containsValue("update")).count(), 1);
     }
 
     @Test // terminating an instance is a drift
@@ -136,11 +152,17 @@ public class TerraformSimpleTest {
         final String logs = new String(Files.readAllBytes(file.toPath()));
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(4, result.size());
-        Assert.assertEquals(result.get("tf.plan"), TerraformConfiguration.TerraformStatus.DRIFT);
+        Assert.assertEquals( result.size(), 4);
+        Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.DRIFT);
         Assert.assertEquals(result.get("tf.plan.message"), "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 1 to add, 0 to change, 0 to destroy.");
-        Assert.assertEquals(result.get("tf.resource.aws_instance.example1"), "delete");
-        Assert.assertEquals(result.get("tf.output.address1"), "update"); // output can no longer be populated, since the VM is terminated
+
+        List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
+        Assert.assertEquals( outputs.size(), 1); // output can no longer be populated, since the VM is terminated
+        Assert.assertEquals(outputs.stream().filter(m -> m.containsValue("update")).count(), 1);
+
+        List<Map<String, Object>> resources = ((List<Map<String, Object>>)result.get("tf.resource.changes"));
+        Assert.assertEquals( resources.size(), 1);
+        Assert.assertEquals(resources.stream().filter(m -> m.containsValue("delete")).count(), 1);
     }
 
     @Test // a bad configuration is a serious error
@@ -151,7 +173,7 @@ public class TerraformSimpleTest {
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals(3, result.size());
-        Assert.assertEquals(result.get("tf.plan"), TerraformConfiguration.TerraformStatus.ERROR);
+        Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.ERROR);
         Assert.assertEquals(result.get("tf.plan.message"), "Something went wrong. Check your configuration.");
         Assert.assertTrue(result.containsKey("tf.errors"));
     }
