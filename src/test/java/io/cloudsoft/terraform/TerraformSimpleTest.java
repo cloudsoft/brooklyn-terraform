@@ -158,7 +158,7 @@ public class TerraformSimpleTest {
      * TF plan status = DRIFT,  TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green)
      * compliance.drift sensor is added.
      * 2 Actions possible:
-     * -> apply -> accepts the state as normal ans terrform goes back to expect TF plan status = SYNC, child is marked as STOPPED,  TF configuration is RUNNING, Application is RUNNING
+     * -> apply -> accepts the state as normal and terrform goes back to expect TF plan status = SYNC, child is marked as STOPPED,  TF configuration is RUNNING, Application is RUNNING
      * -> manually start the instance + invoke apply (Here is where AMP could be a great help - I think-  if we could get access to the location, because it could save the user the hassle to go to the cloud console to start it)
      * @throws IOException
      */
@@ -177,7 +177,7 @@ public class TerraformSimpleTest {
     }
 
     /**
-     * 5. Resource state is not as expected (2)
+     * 5. Resource state is not as expected (2) - well, resource is missing
      * VM is terminated outside terraform, terraform expects it to be up, thus drift happens
      * TF plan status = DRIFT,  TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green)
      * compliance.drift sensor is added.

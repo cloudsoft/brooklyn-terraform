@@ -12,22 +12,26 @@ This project provides an [Apache Brooklyn](https://brooklyn.apache.org/) entity 
 
 Clone the project then `cd` to the newly created repository and run:
 
-    mvn clean install
-
+```shell
+mvn clean install
+```
 
 ## Install
 
 Use the [Brooklyn CLI](https://brooklyn.apache.org/download/index.html#command-line-client) to add the resulting bundle to the catalog(or import it from the GUI):
 
-     br catalog add target/brooklyn-terraform-1.1.0-SNAPSHOT.jar
+```shell
+br catalog add target/brooklyn-terraform-1.1.0-SNAPSHOT.jar
+```
 
 Alternatively, for quick tests, copy the latest jar to the Brooklyn distribution's `dropins` directory
 and then launch (or restart) Brooklyn.
 
+```shell
     wget -O brooklyn-terraform-1.1.0-SNAPSHOT.jar "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=io.cloudsoft.terraform&a=brooklyn-terraform&v=1.1.0-SNAPSHOT&e=jar"
     mv brooklyn-terraform-1.1.0-SNAPSHOT.jar $BROOKLYN_HOME/lib/dropins/
     nohup $BROOKLYN_HOME/bin/brooklyn launch &
-
+```
 
 ## Use
 
@@ -36,103 +40,148 @@ and then launch (or restart) Brooklyn.
 `io.cloudsoft.terraform.TerraformConfiguration` instead. Examples below refer to `terraform`.
 
 The entity requires a value for one of the `tf.configuration.contents` and `tf.configuration.url`
-cofiguration keys. The former allows you to include a plan directly in a blueprint. The latter
-has the entity load a remote resource at runtime. The resource must be accessible to the Brooklyn
-server.
+cofiguration keys.
+
+`tf.configuration.contents` allows you to include a plan directly in a blueprint.
+
+`tf.configuration.url` has the entity load a remote resource at runtime. The resource must be accessible to the Brooklyn
+server. The resource can be a single `configuration.tf` file or a `*.zip` archive containing multiple `*.tf` files and `terraform.tfvars` file.
 
 When started the entity installs Terraform and applies the configured plan. For example, to run
 Terraform on localhost with a plan that provisions an instance in Amazon EC2 us-east-1 and assigns
 it an elastic IP:
 
-    location: localhost
-    name: Brooklyn Terraform Deployment
-    services:
-    - type: terraform
-      name: Terraform Configuration
-      brooklyn.config:
-        tf.configuration.contents: |
-            provider "aws" {
-                access_key = "YOUR_ACCESS_KEY"
-                secret_key = "YOUR_SECRET_KEY"
-                region = "us-east-1"
+```yaml
+location: localhost
+name: Brooklyn Terraform Deployment
+services:
+- type: terraform
+  name: Terraform Configuration
+  brooklyn.config:
+    tf.configuration.contents: |
+        provider "aws" {
+            access_key = "YOUR_ACCESS_KEY"
+            secret_key = "YOUR_SECRET_KEY"
+            region = "us-east-1"
+        }
+
+        resource "aws_instance" "example" {
+            ami = "ami-408c7f28"
+            instance_type = "t1.micro"
+            tags {
+                Name = "brooklyn-terraform-test"
             }
+        }
 
-            resource "aws_instance" "example" {
-                ami = "ami-408c7f28"
-                instance_type = "t1.micro"
-                tags {
-                    Name = "brooklyn-terraform-test"
-                }
-            }
+        resource "aws_eip" "ip" {
+            instance = "${aws_instance.example.id}"
+        }
+```
 
-            resource "aws_eip" "ip" {
-                instance = "${aws_instance.example.id}"
-            }
+Instructions for declaring localhost as a location are given in the Brooklyn documentation for
+[configuring localhost as a location](https://brooklyn.apache.org/v/latest/locations/index.html#localhost). 
+If you want to use a remote location, just make sure it is a Linux or Unix based, because currently the Brooklyn Terraform Drive does not work on Windows systems. 
 
-Instructions are given in the Brooklyn documentation for
-[configuring localhost as a location](https://brooklyn.apache.org/v/latest/locations/index.html#localhost).
+### Terraform Outputs
 
-The Terraform plan's [outputs](https://www.terraform.io/intro/getting-started/outputs.html)
-are published as Brooklyn sensors prefixed with `tf.output`. Use this to communicate
-information about the infrastructure created by Terraform to other components of the
-blueprint via Brooklyn's [dependent configuration](https://brooklyn.apache.org/v/0.11.0/yaml/yaml-reference.html#dsl-commands).
+The Terraform plan's [outputs](https://www.terraform.io/intro/getting-started/outputs.html) are published as Brooklyn sensors prefixed with `tf.output.`. Use this to communicate
+information about the infrastructure created by Terraform to other components of the blueprint via Brooklyn's [dependent configuration](https://brooklyn.apache.org/v/0.11.0/yaml/yaml-reference.html#dsl-commands).
 
-For example, to attach a `TomcatServer` to an AWS security group that was created by
-a Terraform plan:
+For example, to attach a `TomcatServer` to an AWS security group that was created by a Terraform plan:
 
-    services:
+```shell
 
-    - type: org.apache.brooklyn.entity.webapp.tomcat.TomcatServer
-      location:
-        jclouds:aws-ec2:us-west-2:
-          osFamily: centos
-          templateOptions:
-            securityGroupIds:
-            - $brooklyn:component("tf").attributeWhenReady("tf.output.securityGroupId")
-      brooklyn.config:
-        launch.latch: $brooklyn:component("tf").attributeWhenReady("service.isUp")
-        wars.root: http://search.maven.org/remotecontent?filepath=org/apache/brooklyn/example/brooklyn-example-hello-world-webapp/0.9.0/brooklyn-example-hello-world-webapp-0.9.0.war
+services:
 
-    - type: terraform
-      id: tf
-      location: localhost
-      brooklyn.config:
-        tf.configuration.contents: |
-            # Credentials are given here for a self-contained blueprint. In practice you
-            # would inject the values with an external configuration provider.
-            provider "aws" {
-                access_key = "..."
-                secret_key = "..."
-                region = "us-west-2"
-            }
+- type: org.apache.brooklyn.entity.webapp.tomcat.TomcatServer
+  location:
+    jclouds:aws-ec2:us-west-2:
+      osFamily: centos
+      templateOptions:
+        securityGroupIds:
+        - $brooklyn:component("tf").attributeWhenReady("tf.output.securityGroupId")
+  brooklyn.config:
+    launch.latch: $brooklyn:component("tf").attributeWhenReady("service.isUp")
+    wars.root: http://search.maven.org/remotecontent?filepath=org/apache/brooklyn/example/brooklyn-example-hello-world-webapp/0.9.0/brooklyn-example-hello-world-webapp-0.9.0.war
 
-            resource "aws_security_group" "allow_all" {
-              description = "test-security-group allowing all access"
+- type: terraform
+  id: tf
+  location: localhost
+  brooklyn.config:
+    tf.configuration.contents: |
+        # Credentials are given here for a self-contained blueprint. In practice you
+        # would inject the values with an external configuration provider.
+        provider "aws" {
+            access_key = "..."
+            secret_key = "..."
+            region = "us-west-2"
+        }
 
-              ingress {
-                from_port = 0
-                to_port = 0
-                protocol = "-1"
-                cidr_blocks = ["0.0.0.0/0"]
-              }
+        resource "aws_security_group" "allow_all" {
+          description = "test-security-group allowing all access"
 
-              egress {
-                from_port = 0
-                to_port = 0
-                protocol = "-1"
-                cidr_blocks = ["0.0.0.0/0"]
-              }
-            }
+          ingress {
+            from_port = 0
+            to_port = 0
+            protocol = "-1"
+            cidr_blocks = ["0.0.0.0/0"]
+          }
 
-            output "securityGroupId" {
-                value = "${aws_security_group.allow_all.id}"
-            }
+          egress {
+            from_port = 0
+            to_port = 0
+            protocol = "-1"
+            cidr_blocks = ["0.0.0.0/0"]
+          }
+        }
 
-Keep credentials out of your blueprint by using Brooklyn's
-[external configuration providers](https://brooklyn.apache.org/v/latest/ops/externalized-configuration.html).
-For example, rather than including the `provider` block in the example above,
-you might write:
+        output "securityGroupId" {
+            value = "${aws_security_group.allow_all.id}"
+        }
+```
 
+### Terraform Managed Resources
+
+Each resource that Terraform manages corresponds to an entity represented in Apache Brooklyn as a child of the Terraform Configuration entity. **(TODO add more information here after the discovery work is done)**
+
+### Terraform Variables Support
+
+Values for Terraform variables referenced in the configuration can be provided by declaring environment variables in the blueprint using `shell.env`.
+The Terraform environment variables should be named according to the specifications in the [official Terraform documentation](https://www.terraform.io/docs/language/values/variables.html#environment-variables).
+
+For example, the following blueprint describes a Terraform deployment with the configuration provided as a single file hosted on an Artifactory server. The AWS credentials values
+are provided by a Vault installation using Terraform environment variables.
+
+```yaml
+location: localhost
+name: Brooklyn Terraform Deployment With Environment Variables
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      tf.configuration.url: https://search.maven.org/remotecontent?filepath=org/apache/brooklyn/instance-with-vars.tf
+
+      shell.env:
+        TF_VAR_aws_identity: $brooklyn:external("vault", "aws_identity")
+        TF_VAR_aws_credential: $brooklyn:external("vault", "aws_credential")
+```
+
+Brooklyn also supports providing a `terraform.tfvars` a remote resource at runtime using `tf.tfvars.url`.
+
+```yaml
+location: localhost
+name: Brooklyn Terraform Deployment With remote 'terraform.tfvars'
+services:
+- type: terraform
+  name: Terraform Configuration
+  brooklyn.config:
+    tf.configuration.url: https://search.maven.org/remotecontent?filepath=org/apache/brooklyn/big-config.zip
+    tf.tfvars.url: https://[secure-location]/vs-terraform.tfvars 
+```
+
+Keep credentials out of your blueprint by using Brooklyn's [external configuration providers](https://brooklyn.apache.org/v/latest/ops/externalized-configuration.html).
+For example, rather than including the `provider` block in the example above, you might write:
+```yaml
     type: terraform
     brooklyn.config:
       aws.identity: $brooklyn:external("terraform", "aws.identity")
@@ -142,11 +191,112 @@ you might write:
         AWS_ACCESS_KEY_ID: $brooklyn:config("aws.identity")
         AWS_SECRET_ACCESS_KEY: $brooklyn:config("aws.credential")
         AWS_DEFAULT_REGION: $brooklyn:config("aws.region")
+```
 
 And configure the `terraform` provider in `brooklyn.properties`:
-
+```shell
     # Refer to the Brooklyn docs for information on other kind of suppliers.
     brooklyn.external.terraform=org.apache.brooklyn.core.config.external.InPlaceExternalConfigSupplier
     brooklyn.external.terraform.aws.identity=...
     brooklyn.external.terraform.aws.credential=...
+```
 
+### Terraform Drift Managing
+
+One challenge when managing infrastructure as code is drift. Drift is the term for when the real-world state of your infrastructure differs from the state defined in your configuration.
+Apache Brooklyn collaborates with Terraform to report the status of the  managed infrastructure accurately. Apache Brooklyn uses the `terraform plan` command JSON output 
+to extract information relevant to the situation the deployment is in and how it got there. That information is analyzed and the conclusions are displayed by the `tf.plan` sensor. The `tf.plan` sensors contains key-value pairs, containing, the plan state, resources that were changed,
+outputs that were changed and the type of change. 
+
+Apache Brooklyn inspects the Terraform deployment every 30 seconds and updates the sensors and the Brooklyn managed entities.
+
+**Note** In this section infrastructure is used to describe a collection of cloud resources managed by Terraform. 
+
+#### All is Well With the World
+
+When the infrastructure is in the configured state, the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+The `tf.plan.status=SYNC` means the plan that was executed (based on the provided configuration) is in sync with the infrastructure, so the plan and the infrastructure are in sync.
+
+#### Resource is Changed Outside Terraform
+
+When a resource is changed outside Terraform (e.g. the tag of an AWS instance is changed) the `tf.plan` sensor displays `{tf.plan.status=DRIFT, <resource change details>}`. This is known as an `update drift`.
+The `tf.plan.status=DRIFT` means the plan that was executed (based on the provided configuration) no longer matches the managed infrastructure. Based on the information provided by the `tf.plan` sensor the affected entities are shown as being `ON_FIRE`. 
+The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`.
+In this situation manual intervention is required, and there are two possible actions:
+
+- Invoking the `apply` effector of the Terraform Configuration entity resets the resources to their initial configuration (e.g. the tag of an AWS instance is reverted to the value declared in the configuration)
+- Manually edit the terraform configuration file(s) to include the infrastructure updates and then invoke the `apply` effector
+
+In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+
+#### Resource or Output Declaration is Added to the Configuration File(s)
+
+When a new resource or output declaration is manually added to the configuration file the `tf.plan` sensor displays `{tf.plan.status=DESYNCHRONIZED, <configuration change details>}`.
+The `tf.plan.status=DESYNCHRONIZED` means the plan that was executed (based on the most recent configuration) no longer matches the infrastructure, so the plan and the infrastructure are not in sync.
+The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`.
+In this situation manual intervention is required, and the only possible action is to invoke the `apply` effector of the Terraform Configuration entity. This triggers Terraform to execute the updated plan, create the new resources and outputs.
+
+In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, new entities corresponding the newly created resources are added, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+
+#### Resource or Output Declaration is Removed to the Configuration File(s)
+
+This situation is 99% to the previous one, with the exception being that at the next Apache Brooklyn inspection, entities matching deleted resources are removed. 
+
+
+#### Resource is Destroyed Outside Terraform
+
+When a resource is destroyed outside Terraform (e.g. an AWS instance is terminated) the `tf.plan` sensor displays `{tf.plan.status=DRIFT, <resource change details>}`. This is known as an `delete drift`.
+The `tf.plan.status=DRIFT` means the plan that was executed (based on the provided configuration) no longer matches the managed infrastructure.
+
+Based on the information provided by the `tf.plan` sensor the affected entities are shown as being `ON_FIRE`.
+The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`.
+In this situation manual intervention is required, and there are two possible actions:
+
+- Invoking the `apply` effector of the Terraform Configuration entity resets the resources to their initial configuration (e.g. the missing resource is re-created with the details from the configuration)
+- Manually edit the terraform configuration file(s) to remove the configuration for the destroyed resource and then invoke the `apply` effector
+
+In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+If the choice was to re-create the destroyed resource, an entity matching the new resource appears under the  Terraform Configuration entity, otherwise the entity without a matching resource is removed. 
+
+#### Resource State is Not as Expected
+
+This is a special situation when a resource is changed outside terraform, but the characteristic that changed is not something that Terraform manages. For example, let's consider a Terraform configuration declaring an AWS instance to be created.
+The plan is executed and the resource is created. What happens if the AWS instance is stopped?
+
+This resource state change is reported as an `update drift` by Terraform.
+Based on the information provided by the `tf.plan` sensor the affected entity are shown as being `ON_FIRE`. 
+The `tf.plan` sensor displays:
+```
+{
+  tf.plan.message=Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 0 to add, 0 to change, 0 to destroy., 
+  tf.plan.status=DRIFT, 
+  tf.resource.changes=[
+    {
+      resource.addr=aws_instance.example,
+      resource.action=update
+    }
+  ]
+}
+```
+The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`. 
+The `tf.plan` contents are somewhat conflicting because although there are resource changes, its message says `Plan: 0 to add, 0 to change, 0 to destroy.`
+This is because the resource is unreacheable, but none of its configurations as known by terraform are changed. 
+
+In this situation there are two possible actions:
+
+- Invoke the `apply` effector of the Terraform Configuration entity, this will apply the configuration, conclude there is nothing to apply because nothing has changed. The resource state will be refreshed, and the new instance state of 'stopped' will be recorded.
+- Manually start the instance and then invoke the `apply` effector,  this will apply the configuration, conclude there is nothing to apply because nothing has changed. The resource state will be refreshed, and the new instance state of 'running' will be recorded.
+
+In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correct. The `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+If the instance was not started manually, the matching entity is shown as stopped (grey bubble). If the instance was started the matching entity is shown as running(green bubble). 
+The Terraform Configuration entity managing and unaffected entities are shown as `RUNNING`.
+
+#### Editing the Configuration File(s) Goes Wrong
+
+Manually editing the Terraform configuration file(s) is a risky business(we are only humans, after all) and in case there are errors Apache Brooklyn reflects this situation as well.
+In case of duplicate resources, or syntax errors, the `tf.plan` sensor displays `{tf.plan.status=ERROR, <hints about what is wrong>}`. There is also a special Apache Brooklyn sensor named `service.problems` 
+that is populated with the details of the error and a very helpful message: `{"TF-ERROR":"Something went wrong. Check your configuration.<hints about what is wrong>"}`. 
+This sensor causes the Terraform Configuration entity and the application to be reported as being `ON_FIRE`, but the entities matching resouces are shown as `RUNNING` since they are not affected by the configuration errors.
+
+The only action possible in this situation is to repair the broken configuration file(s).  In about 30 seconds, at the next Apache Brooklyn inspection, all will be well with the world again. 
+If valid changes were added to the configuration, invoking the `apply` effector is required.
