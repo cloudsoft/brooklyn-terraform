@@ -168,7 +168,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void launch() {
-        boolean deploymentExists = runPlanTask().get("tf.status") == TerraformConfiguration.TerraformStatus.SYNC;
+        boolean deploymentExists = runJsonPlanTask().get("tf.status") == TerraformConfiguration.TerraformStatus.SYNC;
         if(deploymentExists) {
             LOG.debug("Terraform plan exists!!"); // apparently this is not possible
         } else {
@@ -196,8 +196,8 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
      *
      * @return {@code true} if deployment already exists
      */
-    public Map<String, Object> runPlanTask() {
-        Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), planCommand())
+    public Map<String, Object> runJsonPlanTask() {
+        Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), jsonPlanCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Initializing terraform plan")
                 .returning(p -> p.getStdout())
@@ -209,9 +209,25 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             result = planTask.get();
             LOG.debug("<T> `terraform plan` result: {}", result);
         } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
         }
         return  StateParser.parsePlanLogEntries(result);
+    }
+
+    @Override
+    public String runPlanTask() {
+        Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), planCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary("Inspecting terraform plan changes")
+                .returning(p -> p.getStdout())
+                .newTask()
+                .asTask());
+        DynamicTasks.waitForLast();
+        try {
+            return planTask.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+        }
     }
 
     @Override

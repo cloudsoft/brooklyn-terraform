@@ -10,6 +10,7 @@ import com.google.common.collect.Maps.EntryTransformer;
 import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.parser.StateParser;
+import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
@@ -32,10 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.google.common.collect.Maps.transformEntries;
@@ -106,6 +104,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     }
 
     /**
+     *  This method is called only when TF and AMP are in sync
      *  No need to update state when no changes were detected.
      *  Since `terraform plan` is the only command reacting to changes, it makes sense entities to change according to its results.
      */
@@ -114,14 +113,17 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         Map<String, Object> state = StateParser.parseResources(result);
         sensors().set(TerraformConfiguration.STATE, state);
         Map<String, Object> resources = new HashMap<>(state);
+        List<Entity> childrenToRemove = new ArrayList<>();
         getChildren().forEach(c -> {
+            c.sensors().set(ManagedResource.RESOURCE_STATUS, "running");
             if (resources.containsKey(c.getConfig(ManagedResource.ADDRESS))) { //child in resource set, update sensors
                 ((ManagedResource) c).refreshSensors((Map<String, Object>) resources.get(c.getConfig(ManagedResource.ADDRESS)));
                 resources.remove(c.getConfig(ManagedResource.ADDRESS));
             } else {
-                getChildren().remove(c); // else  child not in resource set (deleted by terraform -> remove child)
+                childrenToRemove.add(c);
             }
         });
+        childrenToRemove.forEach(c -> removeChild(c)); //  child not in resource set (deleted by terraform -> remove child)
         if (!resources.isEmpty()) { // new resource, new child must be created
             resources.forEach((resourceName, resourceContents) -> {
                 Map<String, Object> contentsMap = (Map<String, Object>) resourceContents;
@@ -145,7 +147,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
         @Override
         public Map<String, Object> get() {
-            return driver.runPlanTask();
+            return driver.runJsonPlanTask();
         }
     }
 
@@ -154,9 +156,9 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Override
         public String apply(@Nullable Map<String, Object> tfPlanStatus) {
             if(tfPlanStatus.get("tf.plan.status").equals( TerraformConfiguration.TerraformStatus.ERROR)) {
-                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC",
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                         tfPlanStatus.get("tf.plan.message") + ":" + tfPlanStatus.get("tf.errors"));
-            } else if(!tfPlanStatus.get("tf.plan.status").equals( TerraformConfiguration.TerraformStatus.SYNC)) {
+            } else if(!tfPlanStatus.get("tf.plan.status").equals(TerraformConfiguration.TerraformStatus.SYNC)) {
                 sensors().set(CONFIGURATION_IS_APPLIED, false);
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan.");
                 ((List<Map<String, Object>>)tfPlanStatus.get("tf.resource.changes")).forEach( changeMap -> {
@@ -169,8 +171,13 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 });
                 // user is asked to execute 'terraform apply'
                 TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
+                TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
             } else {
+                // plan status is SYNC so no errors, no ASYNC resources
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
+                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "compliance.drift"));
+                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
                 updateDeploymentState();
             }
             lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);

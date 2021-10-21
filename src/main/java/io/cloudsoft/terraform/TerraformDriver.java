@@ -10,7 +10,8 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     int destroy();
 
-    Map<String, Object> runPlanTask();
+    Map<String, Object> runJsonPlanTask();
+    String runPlanTask();
     void runApplyTask();
     String runOutputTask();
     String runShowTask();
@@ -21,8 +22,11 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     default String initCommand() {
         return makeTerraformCommand("init -input=false"); // Prepare your working directory for other commands
     }
-    default String planCommand() {
+    default String jsonPlanCommand() {
         return makeTerraformCommand("plan -out=tfplan -lock=false -no-color -json"); // Show changes required by the current configuration
+    }
+    default String planCommand() {
+        return makeTerraformCommand("plan -lock=false -no-color"); // Show changes required by the current in the normal TF style, provides more info than the json version
     }
     default String applyCommand() {
         return makeTerraformCommand("apply -no-color -input=false tfplan"); // Create or update infrastructure

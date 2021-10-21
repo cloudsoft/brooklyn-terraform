@@ -33,10 +33,7 @@ public class TerraformSimpleTest {
 
     @Test
     public void readManagedResources() throws IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("state/state.json").getFile());
-
-        final String state =  new String(Files.readAllBytes(file.toPath()));
+        final String state = loadTestData("state/state.json");
 
         Map<String,Object> resources = StateParser.parseResources(state);
         Assert.assertTrue(1 == resources.size());
@@ -44,11 +41,13 @@ public class TerraformSimpleTest {
         Assert.assertTrue(((Map<String,Object>)(resources.get("aws_instance.example1"))).containsKey("resource.status"));
     }
 
+    /**
+     * 0. Deploy Terraform config -> TF plan status = SYNC, Resources are created, AMP all green - pass
+     * @throws IOException
+     */
     @Test
     public void parseNoChanges() throws IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("state/plan-nothing.json").getFile());
-        final String logs = new String(Files.readAllBytes(file.toPath()));
+        final String logs = loadTestData("state/plan-nothing.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals(result.size(), 2);
@@ -56,11 +55,13 @@ public class TerraformSimpleTest {
         Assert.assertEquals(result.get("tf.plan.message"), "No changes. Your infrastructure matches the configuration.");
     }
 
+    /**
+     * The log processed by this test is returned when 'terraform plan' is executed before 'terraform apply'
+     * @throws IOException
+     */
     @Test
     public void parseCreate() throws IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("state/plan-create.json").getFile());
-        final String logs = new String(Files.readAllBytes(file.toPath()));
+        final String logs = loadTestData("state/plan-create.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
@@ -75,11 +76,19 @@ public class TerraformSimpleTest {
         Assert.assertEquals(resources.stream().filter(m -> m.containsValue("create")).count(), 2);
     }
 
-    @Test
+    /**
+     * 1. Drift detected (update):
+     * Resource update outside terraform
+     * TF plan status = DRIFT
+     * resource entity is ON_FIRE , TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green)
+     * compliance.drift sensor is added.
+     * Action: invoke apply effector on configuration node to reset back to configuration
+     * -> expect resource in initial state + AMP all green + compliance.drift sensor is removed - pass  (Obs: status returns back to green in 30 seconds after apply - is this acceptable?)
+     * @throws IOException
+     */
+    @Test // resource is changes outside terraform -> AWS example: renaming a tag
     public void parseUpdateDrift() throws IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("state/plan-drift-update.json").getFile());
-        final String logs = new String(Files.readAllBytes(file.toPath()));
+        final String logs = loadTestData("state/plan-drift-update.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals(result.size(), 3);
@@ -89,11 +98,18 @@ public class TerraformSimpleTest {
         Assert.assertEquals(resources.stream().filter(m -> m.containsValue("update")).count(), 2);
     }
 
-    @Test // apparently adding a new resource is not actually a drift
+    /**
+     * 2. Editing the configuration (1)
+     * Adding a new resource and/or output to the configuration.tf
+     * TF plan status = DESYNCHRONIZED, TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green)
+     * compliance.drift sensor is added.
+     * Action: invoke apply effector on configuration node to create the new reources and outputs
+     * -> expect TF plan status = SYNC, extra children added, AMP all  green + compliance.drift sensor is removed - pass
+     * @throws IOException
+     */
+    @Test // apparently adding a new resource to the configuration file is not actually a drift
     public void parseAddDrift() throws IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("state/plan-drift-create.json").getFile());
-        final String logs = new String(Files.readAllBytes(file.toPath()));
+        final String logs = loadTestData("state/plan-drift-create.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals( result.size(), 4);
@@ -109,11 +125,18 @@ public class TerraformSimpleTest {
         Assert.assertEquals(resources.stream().filter(m -> m.containsValue("create")).count(), 1);
     }
 
+    /**
+     * 3. Editing the configuration (2)
+     * Remove a new resource and/or output from the configuration.tf
+     * TF plan status = DESYNCHRONIZED, TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green)
+     * compliance.drift sensor is added.
+     * Action: invoke apply effector on configuration node to create the new reources and outputs
+     * -> expect TF plan status = SYNC, broken children removed, AMP all  green + compliance.drift sensor is removed - pass
+     * @throws IOException
+     */
     @Test // apparently deleting a resource is not actually a drift
     public void parseRemoveDrift() throws IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("state/plan-drift-remove.json").getFile());
-        final String logs = new String(Files.readAllBytes(file.toPath()));
+        final String logs = loadTestData("state/plan-drift-remove.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals( result.size(), 4);
@@ -129,11 +152,19 @@ public class TerraformSimpleTest {
         Assert.assertEquals(resources.stream().filter(m -> m.containsValue("delete")).count(), 1);
     }
 
+    /**
+     * 4. Resource state is not as expected (1)
+     * VM is stopped outside terraform, terraform expects it to be up, thus drift happens
+     * TF plan status = DRIFT,  TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green)
+     * compliance.drift sensor is added.
+     * 2 Actions possible:
+     * -> apply -> accepts the state as normal ans terrform goes back to expect TF plan status = SYNC, child is marked as STOPPED,  TF configuration is RUNNING, Application is RUNNING
+     * -> manually start the instance + invoke apply (Here is where AMP could be a great help - I think-  if we could get access to the location, because it could save the user the hassle to go to the cloud console to start it)
+     * @throws IOException
+     */
     @Test // changing state of an instance to stopping is a drift
     public void parseShutdownDrift() throws IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("state/plan-drift-shutdown.json").getFile());
-        final String logs = new String(Files.readAllBytes(file.toPath()));
+        final String logs = loadTestData("state/plan-drift-shutdown.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals( result.size(), 3);
@@ -145,11 +176,17 @@ public class TerraformSimpleTest {
         Assert.assertEquals(resources.stream().filter(m -> m.containsValue("update")).count(), 1);
     }
 
+    /**
+     * 5. Resource state is not as expected (2)
+     * VM is terminated outside terraform, terraform expects it to be up, thus drift happens
+     * TF plan status = DRIFT,  TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green)
+     * compliance.drift sensor is added.
+     * Action: invoke apply -> creates the resource, TF plan status = SYNC, running child is added, the deffective one is removed,  TF configuration is RUNNING, Application is RUNNING
+     * @throws IOException
+     */
     @Test // terminating an instance is a drift
     public void parseTerminateDrift() throws IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("state/plan-drift-terminate.json").getFile());
-        final String logs = new String(Files.readAllBytes(file.toPath()));
+        final String logs = loadTestData("state/plan-drift-terminate.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals( result.size(), 4);
@@ -165,16 +202,27 @@ public class TerraformSimpleTest {
         Assert.assertEquals(resources.stream().filter(m -> m.containsValue("delete")).count(), 1);
     }
 
+    /**
+     * 6. Manually breaking the configuration
+     * TF plan status = ERROR, TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green), service problems show TF-ERROR, compliance.drift sensor is added.
+     * Action: fix configuration file, in the next 30 AMP refreshes and all is green again. also service problems are gone.
+     * @throws IOException
+     */
     @Test // a bad configuration is a serious error
     public void parseBlowConfig() throws IOException {
-        ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("state/plan-bad-config.json").getFile());
-        final String logs = new String(Files.readAllBytes(file.toPath()));
+        final String logs = loadTestData("state/plan-bad-config.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals(3, result.size());
         Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.ERROR);
         Assert.assertEquals(result.get("tf.plan.message"), "Something went wrong. Check your configuration.");
         Assert.assertTrue(result.containsKey("tf.errors"));
+    }
+
+    private String loadTestData(final String filePathAsStr) throws IOException {
+        ClassLoader classLoader = getClass().getClassLoader();
+        File file = new File(classLoader.getResource(filePathAsStr).getFile());
+
+        return new String(Files.readAllBytes(file.toPath()));
     }
 }
