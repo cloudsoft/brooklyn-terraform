@@ -7,7 +7,6 @@ import org.apache.brooklyn.util.text.StringPredicates;
 
 import javax.annotation.Nullable;
 
-
 public class TerraformDiscoveryPredicates {
 
     public static Predicate<Entity> sensorMatches(final String sensorName, final String sensorValueRegex) {

@@ -146,7 +146,6 @@ public class StateParser {
             }
         }
 
-
         if (planLogs.stream().anyMatch(driftPredicate)) {
             List<Map<String,Object>> resources = new ArrayList<>();
             planLogs.stream().filter(driftPredicate).forEach(ple -> {

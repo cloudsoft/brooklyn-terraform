@@ -77,6 +77,5 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
             sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
         }
-        // TODO - what do we do if 'shutting-down' or 'terminated'?
     }
 }

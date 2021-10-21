@@ -34,7 +34,6 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     default String showCommand() {
         return makeTerraformCommand("show -no-color -json"); // Show the current state or a saved plan
     }
-
     default String outputCommand() {
         return makeTerraformCommand("output -no-color -json"); // Show output values from your root module
     }

@@ -39,8 +39,6 @@ public class PlanLogEntry {
     // interested in config error for type = DIAGNOSTIC
     public Map<String,Object> diagnostic;
 
-
-    // change_summary
     public LType type;
 
     @Override
