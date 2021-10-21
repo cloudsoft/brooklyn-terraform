@@ -299,7 +299,7 @@ In this situation there are two possible actions:
 - Invoke the `apply` effector of the Terraform Configuration entity, this will apply the configuration, conclude there is nothing to apply because nothing has changed. The resource state will be refreshed, and the new instance state of 'stopped' will be recorded.
 - Manually start the instance and then invoke the `apply` effector,  this will apply the configuration, conclude there is nothing to apply because nothing has changed. The resource state will be refreshed, and the new instance state of 'running' will be recorded.
 
-In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correct. The `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 If the instance was not started manually, the matching entity is shown as stopped (grey bubble). If the instance was started the matching entity is shown as running(green bubble). 
 The Terraform Configuration entity managing and unaffected entities are shown as `RUNNING`.
 
