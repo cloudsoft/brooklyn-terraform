@@ -29,15 +29,12 @@ import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
 import org.apache.brooklyn.util.text.Strings;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
     private static final Logger LOG = LoggerFactory.getLogger(TerraformSshDriver.class);
-
-    private ObjectMapper objectMapper = new ObjectMapper();
 
     public TerraformSshDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
@@ -170,7 +167,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     public void launch() {
         boolean deploymentExists = runJsonPlanTask().get("tf.status") == TerraformConfiguration.TerraformStatus.SYNC;
         if(deploymentExists) {
-            LOG.debug("Terraform plan exists!!"); // apparently this is not possible
+            LOG.debug("Terraform plan exists!!"); // apparently this is not possible for the moment
         } else {
             runApplyTask();
         }
@@ -207,7 +204,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         String result;
         try {
             result = planTask.get();
-            LOG.debug("<T> `terraform plan` result: {}", result);
         } catch (InterruptedException | ExecutionException e) {
             throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
         }

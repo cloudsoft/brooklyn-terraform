@@ -203,11 +203,23 @@ public class TerraformSimpleTest {
     }
 
     /**
-     * 6. Manually breaking the configuration
-     * TF plan status = ERROR, TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green), service problems show TF-ERROR, compliance.drift sensor is added.
-     * Action: fix configuration file, in the next 30 AMP refreshes and all is green again. also service problems are gone.
+     * 7. Removing an output ( works the same for adding outputs)
      * @throws IOException
      */
+    @Test // removing or adding outputs is not seen as a infrastructure change by terraform, but we need to be aware of it.
+    public void parseRemoveOutputConfig() throws IOException {
+        final String logs = loadTestData("state/plan-remove-output.json");
+
+        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Assert.assertEquals(3, result.size());
+        Assert.assertEquals(result.get("tf.plan.status"), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+        Assert.assertEquals(result.get("tf.plan.message"), "Outputs configuration was changed.Plan: 0 to add, 0 to change, 0 to destroy.");
+
+        List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
+        Assert.assertEquals( outputs.size(), 1); // output can no longer be populated, since the VM is terminated
+        Assert.assertEquals(outputs.stream().filter(m -> m.containsValue("delete")).count(), 1);
+    }
+
     @Test // a bad configuration is a serious error
     public void parseBlowConfig() throws IOException {
         final String logs = loadTestData("state/plan-bad-config.json");
