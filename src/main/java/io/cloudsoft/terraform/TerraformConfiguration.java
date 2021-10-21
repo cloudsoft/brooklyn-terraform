@@ -15,6 +15,7 @@ import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
+import org.apache.brooklyn.util.time.Duration;
 
 @Catalog(
         name = "TerraformConfiguration",
@@ -35,13 +36,22 @@ public interface TerraformConfiguration extends SoftwareProcess {
     @SetFromFlag("version")
     ConfigKey<String> SUGGESTED_VERSION = ConfigKeys.newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.8");
 
+    @SetFromFlag("tfPollingPeriod")
+    ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
+            .name("tf.polling.period")
+            .description("Contents of the configuration file that will be applied by Terraform.")
+            .defaultValue(Duration.seconds(30))
+            .constraint(input -> !input.isShorterThan(Duration.seconds(30)))
+            .build();
+
+
     @SetFromFlag("downloadUrl")
     AttributeSensorAndConfigKey<String,String> DOWNLOAD_URL = ConfigKeys.newSensorAndConfigKeyWithDefault(SoftwareProcess.DOWNLOAD_URL, TERRAFORM_DOWNLOAD_URL);
 
     @SetFromFlag("tfConfigurationContents")
-    ConfigKey<String> CONFIGURATION_CONTENTS = ConfigKeys.newStringConfigKey(
-            "tf.configuration.contents",
-            "Contents of the configuration file that will be applied by Terraform.");
+    ConfigKey<String> CONFIGURATION_CONTENTS = ConfigKeys.builder(String.class)
+            .name("tf.configuration.contents")
+    .description("Contents of the configuration file that will be applied by Terraform.").build();
 
     @SetFromFlag("tfDeployment")
     ConfigKey<String> CONFIGURATION_URL = ConfigKeys.builder(String.class)

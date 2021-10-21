@@ -80,7 +80,8 @@ services:
 
 Instructions for declaring localhost as a location are given in the Brooklyn documentation for
 [configuring localhost as a location](https://brooklyn.apache.org/v/latest/locations/index.html#localhost). 
-If you want to use a remote location, just make sure it is a Linux or Unix based, because currently the Brooklyn Terraform Drive does not work on Windows systems. 
+
+**Note:** If you want to use a remote location, just make sure it is a Linux or Unix based, because currently the Brooklyn Terraform Drive does not work on Windows systems. 
 
 ### Terraform Outputs
 

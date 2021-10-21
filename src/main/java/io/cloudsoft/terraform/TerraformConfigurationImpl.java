@@ -43,7 +43,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     private static final Logger LOG = LoggerFactory.getLogger(TerraformConfigurationImpl.class);
     private static final String TF_OUTPUT_SENSOR_PREFIX = "tf.output";
-    private static final Duration FEED_UPDATE_PERIOD = Duration.seconds(30);
 
     private Map<String, Object> lastCommandOutputs = Collections.synchronizedMap(Maps.newHashMapWithExpectedSize(3));
     private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
@@ -84,7 +83,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         if (machine.isPresent()) {
             addFeed(FunctionFeed.builder()
                     .entity(this)
-                    .period(FEED_UPDATE_PERIOD)
+                    .period(getConfig(TerraformConfiguration.POLLING_PERIOD))
                     .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(getDriver()))
                             .onResult(new PlanSuccessFunction())
                             .onFailure(new PlanFailureFunction()))
