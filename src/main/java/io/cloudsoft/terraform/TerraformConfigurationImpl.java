@@ -43,7 +43,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     private static final Logger LOG = LoggerFactory.getLogger(TerraformConfigurationImpl.class);
     private static final String TF_OUTPUT_SENSOR_PREFIX = "tf.output";
-    private static final Duration FEED_UPDATE_PERIOD = Duration.seconds(30);
 
     private Map<String, Object> lastCommandOutputs = Collections.synchronizedMap(Maps.newHashMapWithExpectedSize(3));
     private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
@@ -84,7 +83,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         if (machine.isPresent()) {
             addFeed(FunctionFeed.builder()
                     .entity(this)
-                    .period(FEED_UPDATE_PERIOD)
+                    .period(getConfig(TerraformConfiguration.POLLING_PERIOD))
                     .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(getDriver()))
                             .onResult(new PlanSuccessFunction())
                             .onFailure(new PlanFailureFunction()))
@@ -155,21 +154,24 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Nullable
         @Override
         public String apply(@Nullable Map<String, Object> tfPlanStatus) {
-            if(tfPlanStatus.get("tf.plan.status").equals( TerraformConfiguration.TerraformStatus.ERROR)) {
+                if(tfPlanStatus.get("tf.plan.status").equals( TerraformConfiguration.TerraformStatus.ERROR)) {
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                         tfPlanStatus.get("tf.plan.message") + ":" + tfPlanStatus.get("tf.errors"));
             } else if(!tfPlanStatus.get("tf.plan.status").equals(TerraformConfiguration.TerraformStatus.SYNC)) {
                 sensors().set(CONFIGURATION_IS_APPLIED, false);
-                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan.");
-                ((List<Map<String, Object>>)tfPlanStatus.get("tf.resource.changes")).forEach( changeMap -> {
-                    String resourceAddr = changeMap.get("resource.addr").toString();
-                    TerraformConfigurationImpl.this.getChildren().stream().filter(c -> resourceAddr.equals(c.config().get(ManagedResource.ADDRESS)))
-                            .findAny().ifPresent(c ->  {
-                                c.sensors().set(ManagedResource.RESOURCE_STATUS, "changed");
-                                ((ManagedResource)c).updateResourceState();
-                            });
-                });
-                // user is asked to execute 'terraform apply'
+                if (tfPlanStatus.containsKey("tf.resource.changes")) {
+                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
+                   ((List<Map<String, Object>>) tfPlanStatus.get("tf.resource.changes")).forEach(changeMap -> {
+                       String resourceAddr = changeMap.get("resource.addr").toString();
+                       TerraformConfigurationImpl.this.getChildren().stream().filter(c -> resourceAddr.equals(c.config().get(ManagedResource.ADDRESS)))
+                               .findAny().ifPresent(c -> {
+                                   c.sensors().set(ManagedResource.RESOURCE_STATUS, "changed");
+                                   ((ManagedResource) c).updateResourceState();
+                               });
+                   });
+                } else {
+                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Outputs no longer match initial plan.This is not critical as the infrastructure is not affected. However you might want to invoke 'apply'.");
+                }
                 TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
                 TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
             } else {
@@ -230,6 +232,16 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             }
             try {
                 Map<String, Map<String, Object>> result = new ObjectMapper().readValue(output, LinkedTreeMap.class);
+                // remove sensors that were removed in the configuration
+                List<AttributeSensor<?>> toRemove = new ArrayList<>();
+                sensors().getAll().forEach((sK, sV) -> {
+                    final String sensorName = sK.getName();
+                    if(sensorName.startsWith(TF_OUTPUT_SENSOR_PREFIX+".") && !result.containsKey(sensorName.replace(TF_OUTPUT_SENSOR_PREFIX +".", ""))) {
+                        toRemove.add(sK);
+                    }
+                });
+                toRemove.forEach(os -> sensors().remove(os));
+
                 for (String name : result.keySet()) {
                     final String sensorName = String.format("%s.%s", TF_OUTPUT_SENSOR_PREFIX, name);
                     final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);

@@ -173,6 +173,12 @@ public class StateParser {
             );
             result.put("tf.errors",  sb);
         }
+
+        if(result.get("tf.plan.status") == TerraformConfiguration.TerraformStatus.SYNC && result.containsKey("tf.output.changes")) {
+            // infrastructure is ok, only the outputs set has changed
+            result.put("tf.plan.message", "Outputs configuration was changed." + changeSummaryLog.get().message);
+            result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+        }
         return result;
     }
 }

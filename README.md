@@ -80,7 +80,8 @@ services:
 
 Instructions for declaring localhost as a location are given in the Brooklyn documentation for
 [configuring localhost as a location](https://brooklyn.apache.org/v/latest/locations/index.html#localhost). 
-If you want to use a remote location, just make sure it is a Linux or Unix based, because currently the Brooklyn Terraform Drive does not work on Windows systems. 
+
+**Note:** If you want to use a remote location, just make sure it is a Linux or Unix based, because currently the Brooklyn Terraform Drive does not work on Windows systems. 
 
 ### Terraform Outputs
 
@@ -229,7 +230,7 @@ In this situation manual intervention is required, and there are two possible ac
 
 In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 
-#### Resource or Output Declaration is Added to the Configuration File(s)
+#### Resource and Output Declaration is Added to the Configuration File(s)
 
 When a new resource or output declaration is manually added to the configuration file the `tf.plan` sensor displays `{tf.plan.status=DESYNCHRONIZED, <configuration change details>}`.
 The `tf.plan.status=DESYNCHRONIZED` means the plan that was executed (based on the most recent configuration) no longer matches the infrastructure, so the plan and the infrastructure are not in sync.
@@ -238,10 +239,21 @@ In this situation manual intervention is required, and the only possible action 
 
 In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, new entities corresponding the newly created resources are added, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 
-#### Resource or Output Declaration is Removed to the Configuration File(s)
+#### Resource and Output Declaration is Removed to the Configuration File(s)
 
 This situation is 99% to the previous one, with the exception being that at the next Apache Brooklyn inspection, entities matching deleted resources are removed. 
 
+#### Only Output Declarations are Added/Removed to/from the Configuration File(s)
+
+This situation is quite special since output configuration changing is not affecting the infrastructure in any way so Terraform is not that sensitive about it.
+However, Apache Brooklyn is a stricter about this and any output configuration changes cause the `tf.plan` sensor to display `{tf.plan.status=DESYNCHRONIZED, <output change details>}`.
+In this case the `tf.plan.status=DESYNCHRONIZED` means the plan that was executed had different outputs than the ones currently in the configuration, so the plan and configuration are not in sync.
+The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The rest of the entities are not affected in any way. 
+
+In this situation manual intervention is required, and the only possible action is to invoke the `apply` effector of the Terraform Configuration entity. This triggers Terraform to execute the updated plan, create/remove the new  outputs.
+
+In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, new `tf.output.*` sensors are created, the ones that no longer match a Terraform output declaration are removed, 
+and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 
 #### Resource is Destroyed Outside Terraform
 
