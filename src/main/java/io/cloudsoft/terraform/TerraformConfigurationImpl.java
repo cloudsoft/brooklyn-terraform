@@ -1,26 +1,28 @@
 package io.cloudsoft.terraform;
 
-import static com.google.common.collect.Maps.transformEntries;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Function;
+import com.google.common.base.Objects;
+import com.google.common.base.Supplier;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Maps.EntryTransformer;
+import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.parser.StateParser;
+import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.entity.Attributes;
+import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
+import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
-import org.apache.brooklyn.feed.CommandPollConfig;
-import org.apache.brooklyn.feed.ssh.SshFeed;
-import org.apache.brooklyn.feed.ssh.SshPollValue;
+import org.apache.brooklyn.feed.function.FunctionFeed;
+import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.flags.TypeCoercions;
 import org.apache.brooklyn.util.guava.Maybe;
@@ -30,13 +32,11 @@ import org.apache.brooklyn.util.time.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Function;
-import com.google.common.base.Objects;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Maps.EntryTransformer;
-import com.google.gson.internal.LinkedTreeMap;
+import javax.annotation.Nullable;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.fasterxml.jackson.databind.*;
+import static com.google.common.collect.Maps.transformEntries;
 
 
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
@@ -45,7 +45,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private static final String TF_OUTPUT_SENSOR_PREFIX = "tf.output";
     private static final Duration FEED_UPDATE_PERIOD = Duration.seconds(30);
 
-    private SshFeed sshFeed;
     private Map<String, Object> lastCommandOutputs = Collections.synchronizedMap(Maps.newHashMapWithExpectedSize(3));
     private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
 
@@ -83,33 +82,29 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
         Maybe<SshMachineLocation> machine = Locations.findUniqueSshMachineLocation(getLocations());
         if (machine.isPresent()) {
-            Map<String, String> env = shellEnv();
-            addFeed(sshFeed = SshFeed.builder()
+            addFeed(FunctionFeed.builder()
                     .entity(this)
                     .period(FEED_UPDATE_PERIOD)
-                    .machine(machine.get())
-                    .poll(new CommandPollConfig<>(PLAN)
-                            .env(env)
-                            .command(getDriver().planCommand())
-                            .onSuccess(new PlanSuccessFunction())
+                    .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(getDriver()))
+                            .onResult(new PlanSuccessFunction())
                             .onFailure(new PlanFailureFunction()))
-                    .poll(new CommandPollConfig<>(OUTPUT)
-                            .env(env)
-                            .command(getDriver().outputCommand())
-                            .onSuccess(new OutputSuccessFunction())
+                    .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(getDriver()))
+                            .onResult(new OutputSuccessFunction())
                             .onFailure(new OutputFailureFunction()))
                     .build());
+
         }
     }
 
     @Override
     protected void disconnectSensors() {
         disconnectServiceUpIsRunning();
-        if (sshFeed != null) sshFeed.stop();
+        feeds().forEach(feed -> feed.stop());
         super.disconnectSensors();
     }
 
     /**
+     *  This method is called only when TF and AMP are in sync
      *  No need to update state when no changes were detected.
      *  Since `terraform plan` is the only command reacting to changes, it makes sense entities to change according to its results.
      */
@@ -118,14 +113,17 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         Map<String, Object> state = StateParser.parseResources(result);
         sensors().set(TerraformConfiguration.STATE, state);
         Map<String, Object> resources = new HashMap<>(state);
+        List<Entity> childrenToRemove = new ArrayList<>();
         getChildren().forEach(c -> {
+            c.sensors().set(ManagedResource.RESOURCE_STATUS, "running");
             if (resources.containsKey(c.getConfig(ManagedResource.ADDRESS))) { //child in resource set, update sensors
                 ((ManagedResource) c).refreshSensors((Map<String, Object>) resources.get(c.getConfig(ManagedResource.ADDRESS)));
                 resources.remove(c.getConfig(ManagedResource.ADDRESS));
             } else {
-                getChildren().remove(c); // else  child not in resource set (deleted by terraform -> remove child)
+                childrenToRemove.add(c);
             }
         });
+        childrenToRemove.forEach(c -> removeChild(c)); //  child not in resource set (deleted by terraform -> remove child)
         if (!resources.isEmpty()) { // new resource, new child must be created
             resources.forEach((resourceName, resourceContents) -> {
                 Map<String, Object> contentsMap = (Map<String, Object>) resourceContents;
@@ -141,30 +139,73 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
-    private final class PlanSuccessFunction implements Function<SshPollValue, String> {
+    public static class PlanProvider implements Supplier<Map<String,Object>> {
+        TerraformDriver driver;
+        public PlanProvider(TerraformDriver driver) {
+            this.driver = driver;
+        }
+
         @Override
-        public String apply(SshPollValue input) {
-            String output = input.getStdout();
-            if(!output.contains("No changes.")) { // TODO or contains Drift detected - improve this
-                sensors().set(CONFIGURATION_IS_APPLIED, false);
-                getDriver().runRefreshTask();
-                // user is asked to execute 'terraform apply'
-                // also at this point in the UI things should start blinking
-            }
-            updateDeploymentState();
-            lastCommandOutputs.put(PLAN.getName(), output);
-            return output;
+        public Map<String, Object> get() {
+            return driver.runJsonPlanTask();
         }
     }
 
-    private final class PlanFailureFunction implements Function<SshPollValue, String> {
+    private final class PlanSuccessFunction implements Function<Map<String, Object>, String>  {
+        @Nullable
         @Override
-        public String apply(SshPollValue input) {
+        public String apply(@Nullable Map<String, Object> tfPlanStatus) {
+            if(tfPlanStatus.get("tf.plan.status").equals( TerraformConfiguration.TerraformStatus.ERROR)) {
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
+                        tfPlanStatus.get("tf.plan.message") + ":" + tfPlanStatus.get("tf.errors"));
+            } else if(!tfPlanStatus.get("tf.plan.status").equals(TerraformConfiguration.TerraformStatus.SYNC)) {
+                sensors().set(CONFIGURATION_IS_APPLIED, false);
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan.");
+                ((List<Map<String, Object>>)tfPlanStatus.get("tf.resource.changes")).forEach( changeMap -> {
+                    String resourceAddr = changeMap.get("resource.addr").toString();
+                    TerraformConfigurationImpl.this.getChildren().stream().filter(c -> resourceAddr.equals(c.config().get(ManagedResource.ADDRESS)))
+                            .findAny().ifPresent(c ->  {
+                                c.sensors().set(ManagedResource.RESOURCE_STATUS, "changed");
+                                ((ManagedResource)c).updateResourceState();
+                            });
+                });
+                // user is asked to execute 'terraform apply'
+                TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
+                TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
+            } else {
+                // plan status is SYNC so no errors, no ASYNC resources
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
+                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "compliance.drift"));
+                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
+                updateDeploymentState();
+            }
+            lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
+            return tfPlanStatus.toString();
+        }
+    }
+
+    private final class PlanFailureFunction implements Function<Map<String, Object>, String> {
+        @Nullable
+        @Override
+        public String apply(@Nullable Map<String, Object> input) {
             if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(PLAN.getName())) {
                 return (String) lastCommandOutputs.get(PLAN.getName());
             } else {
-                return input.getStderr();
+                return input.toString();
             }
+        }
+    }
+
+    public static class OutputProvider implements Supplier<String> {
+        TerraformDriver driver;
+        public OutputProvider(TerraformDriver driver) {
+            this.driver = driver;
+        }
+
+        @Override
+        public String get() {
+            return driver.runOutputTask();
         }
     }
 
@@ -181,41 +222,38 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
      * }
      * </pre>
      */
-    private final class OutputSuccessFunction implements Function<SshPollValue, String> {
+    private final class OutputSuccessFunction implements Function<String, String> {
         @Override
-        public String apply(SshPollValue input) {
-            String output = input.getStdout();
-            if (output != null) {
-                try {
-                    Map<String, Map<String, Object>> result = new ObjectMapper().readValue(output, LinkedTreeMap.class);
-                    for (String name : result.keySet()) {
-                        final String sensorName = String.format("%s.%s", TF_OUTPUT_SENSOR_PREFIX, name);
-                        final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);
-                        final Object currentValue = sensors().get(sensor);
-                        final Object newValue = result.get(name).get("value");
-                        if (!Objects.equal(currentValue, newValue)) {
-                            sensors().set(sensor, newValue);
-                        }
-                    }
-                } catch (JsonProcessingException e) {
-                    throw new IllegalStateException("Output does not have the expected format!");
-                }
-            }
+        public String apply(String output) {
             if (Strings.isBlank(output)) {
                 return "No output is applied.";
+            }
+            try {
+                Map<String, Map<String, Object>> result = new ObjectMapper().readValue(output, LinkedTreeMap.class);
+                for (String name : result.keySet()) {
+                    final String sensorName = String.format("%s.%s", TF_OUTPUT_SENSOR_PREFIX, name);
+                    final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);
+                    final Object currentValue = sensors().get(sensor);
+                    final Object newValue = result.get(name).get("value");
+                    if (!Objects.equal(currentValue, newValue)) {
+                        sensors().set(sensor, newValue);
+                    }
+                }
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("Output does not have the expected format!");
             }
             lastCommandOutputs.put(OUTPUT.getName(), output);
             return output;
         }
     }
 
-    private final class OutputFailureFunction implements Function<SshPollValue, String> {
+    private final class OutputFailureFunction implements Function<String, String> {
         @Override
-        public String apply(SshPollValue input) {
+        public String apply(String input) {
             if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(OUTPUT.getName())) {
                 return (String) lastCommandOutputs.get(OUTPUT.getName());
             } else {
-                return input.getStderr();
+                return input;
             }
         }
     }
@@ -259,7 +297,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Effector(description = "Destroy the Terraform configuration")
     public void destroy() {
         final boolean configurationApplied = isConfigurationApplied();
-        final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
+        final boolean mayProceed = configurationChangeInProgress.compareAndSet(false, true);
         if (configurationApplied && mayProceed) {
             try {
                 getDriver().runDestroyTask();

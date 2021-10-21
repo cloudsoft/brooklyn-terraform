@@ -45,4 +45,6 @@ public interface ManagedResource extends BasicEntity, Startable {
             "The status of this resource");
 
     boolean refreshSensors(Map<String,Object> resource);
+
+    void updateResourceState();
 }

@@ -2,7 +2,6 @@ package io.cloudsoft.terraform.entity;
 
 import com.google.common.collect.ImmutableList;
 import io.cloudsoft.terraform.TerraformConfiguration;
-import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
@@ -37,13 +36,13 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
         }
         sensors().set(SERVICE_UP, Boolean.TRUE);
         this.setDisplayName(getConfig(ManagedResource.ADDRESS));
-        updateServiceState();
+        updateResourceState();
     }
 
     @Override
     public boolean refreshSensors(Map<String, Object> resource) {
         resource.forEach((k, v) -> sensors().set(Sensors.newStringSensor("tf." + k), v.toString()));
-        updateServiceState();
+        updateResourceState();
         return true;
     }
 
@@ -63,19 +62,20 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
         //Do we even want to allow control from AMP?
     }
 
-    private void updateServiceState(){
+    public void updateResourceState(){
         final String resourceStatus = sensors().get(RESOURCE_STATUS);
         if (ACCEPTED_STATE.contains(resourceStatus)) {
             sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
-        }
-        if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPING.name())) {
+        } else if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPING.name())) {
             sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING);
-        }
-        if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPED.name())) {
+        } else if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPED.name())) {
             sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
+        } else  {
+            sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
+            sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
         }
         // TODO - what do we do if 'shutting-down' or 'terminated'?
     }

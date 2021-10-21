@@ -49,12 +49,13 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         Task<String> destroyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), destroyCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Destroying terraform deployment.")
-                .requiringZeroAndReturningStdout().newTask()
+                .returning(p -> p.getStdout()).newTask()
                 .asTask());
         DynamicTasks.waitForLast();
 
         if (destroyTask.asTask().isError()) {
             throw new IllegalStateException("Error executing `terraform destroy`! ");
+            // TODO decide where we put the output from here, in case of error
         }
         entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, false);
         return 0;
@@ -65,12 +66,13 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         Task<String> destroyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(),target)
                 .environmentVariables(getShellEnvironment())
                 .summary("Destroying terraform resource.")
-                .requiringZeroAndReturningStdout().newTask()
+                .returning(p -> p.getStdout()).newTask()
                 .asTask());
         DynamicTasks.waitForLast();
 
         if (destroyTask.asTask().isError()) {
             throw new IllegalStateException("Error executing `terraform destroy` on resource! ");
+            // TODO decide where we put the output from here, in case of error
         }
         return 0;
     }
@@ -166,13 +168,12 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void launch() {
-        boolean deploymentExists = runPlanTask();
+        boolean deploymentExists = runJsonPlanTask().get("tf.status") == TerraformConfiguration.TerraformStatus.SYNC;
         if(deploymentExists) {
             LOG.debug("Terraform plan exists!!"); // apparently this is not possible
         } else {
             runApplyTask();
         }
-
     }
 
     @Override
@@ -195,37 +196,52 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
      *
      * @return {@code true} if deployment already exists
      */
-    public boolean runPlanTask() {
-        Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), planCommand())
+    public Map<String, Object> runJsonPlanTask() {
+        Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), jsonPlanCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Initializing terraform plan")
-                .requiringZeroAndReturningStdout().newTask()
+                .returning(p -> p.getStdout())
+                .newTask()
                 .asTask());
         DynamicTasks.waitForLast();
-        if (planTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform plan`!");
-        }
         String result;
         try {
             result = planTask.get();
             LOG.debug("<T> `terraform plan` result: {}", result);
         } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
         }
-        return result.contains("No Changes."); // TODO make sure this is more precise(maybe1?).
+        return  StateParser.parsePlanLogEntries(result);
     }
 
     @Override
-    public void runRefreshTask() {
-        Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), refreshCommand())
+    public String runPlanTask() {
+        Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), planCommand())
                 .environmentVariables(getShellEnvironment())
-                .summary("Updating terraform plan with infrastructure configuration applied outside terraform.")
-                .requiringZeroAndReturningStdout().newTask()
+                .summary("Inspecting terraform plan changes")
+                .returning(p -> p.getStdout())
+                .newTask()
                 .asTask());
         DynamicTasks.waitForLast();
+        try {
+            return planTask.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+        }
+    }
 
-        if (applyTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform refresh`!");
+    @Override
+    public String runOutputTask() {
+        Task<String> outputTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), outputCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary("Retrieving terraform outputs")
+                .returning(p -> p.getStdout()).newTask()
+                .asTask());
+        DynamicTasks.waitForLast();
+        try {
+           return outputTask.get(); // TODO Should we allow this task to err ?
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
         }
     }
 
@@ -234,7 +250,8 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), applyCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Applying terraform plan")
-                .requiringZeroAndReturningStdout().newTask()
+                .returning(p -> p.getStdout())
+                .newTask()
                 .asTask());
         DynamicTasks.waitForLast();
 
@@ -253,12 +270,11 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         Task<String> showTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), showCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Retrieve the most recent state snapshot")
-                .requiringZeroAndReturningStdout().newTask()
+                .returning(p -> p.getStdout())
+                .newTask()
                 .asTask());
         DynamicTasks.waitForLast();
-        if (showTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform plan`!");
-        }
+
         try {
             return showTask.get();
         } catch (InterruptedException | ExecutionException e) {
