@@ -9,8 +9,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.zip.ZipFile;
 
 public class ConfigurationParser {
 
