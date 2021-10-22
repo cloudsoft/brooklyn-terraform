@@ -241,14 +241,14 @@ public class TerraformSimpleTest {
                 "        bucket = \"mz-terraform-state-test\"\n" +
                 "        key    = \"tf-test/key-test-1\"\n" +
                 "        region = \"eu-west-1\"\n" +
-                "        access_key = \"AKIAUNWLO4GH32CZYV6F\"\n" +
-                "        secret_key = \"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\"\n" +
+                "        access_key = \"XXX\"\n" +
+                "        secret_key = \"XXX\"\n" +
                 "    }\n" +
                 "}\n" +
                 "provider \"aws\" {\n" +
                 "    # comment 2\n" +
-                "    access_key = \"AKIAUNWLO4GH32CZYV6F\"\n" +
-                "    secret_key = \"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\"\n" +
+                "    access_key = \"XXX\"\n" +
+                "    secret_key = \"XXX\"\n" +
                 "    region = \"eu-west-1\"\n" +
                 "}\n" +
                 "\n" +
