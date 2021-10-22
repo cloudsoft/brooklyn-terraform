@@ -8,6 +8,8 @@ import static java.lang.String.format;
 
 public interface TerraformDriver extends SoftwareProcessDriver {
 
+    String PLAN_STATUS = "tf.plan.status";
+
     int destroy();
 
     Map<String, Object> runJsonPlanTask();
@@ -23,10 +25,10 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return makeTerraformCommand("init -input=false"); // Prepare your working directory for other commands
     }
     default String jsonPlanCommand() {
-        return makeTerraformCommand("plan -out=tfplan -lock=false -no-color -json"); // Show changes required by the current configuration
+        return makeTerraformCommand("plan -out=tfplan -lock=false -input=false -no-color -json"); // Show changes required by the current configuration
     }
     default String planCommand() {
-        return makeTerraformCommand("plan -lock=false -no-color"); // Show changes required by the current in the normal TF style, provides more info than the json version
+        return makeTerraformCommand("plan -lock=false -input=false -no-color"); // Show changes required by the current in the normal TF style, provides more info than the json version
     }
     default String applyCommand() {
         return makeTerraformCommand("apply -no-color -input=false tfplan"); // Create or update infrastructure

@@ -37,6 +37,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.google.common.collect.Maps.transformEntries;
+import static io.cloudsoft.terraform.TerraformDriver.PLAN_STATUS;
 
 
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
@@ -153,10 +154,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Nullable
         @Override
         public String apply(@Nullable Map<String, Object> tfPlanStatus) {
-                if(tfPlanStatus.get("tf.plan.status").equals( TerraformConfiguration.TerraformStatus.ERROR)) {
+                if(tfPlanStatus.get(PLAN_STATUS).equals( TerraformConfiguration.TerraformStatus.ERROR)) {
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                         tfPlanStatus.get("tf.plan.message") + ":" + tfPlanStatus.get("tf.errors"));
-            } else if(!tfPlanStatus.get("tf.plan.status").equals(TerraformConfiguration.TerraformStatus.SYNC)) {
+            } else if(!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
                 sensors().set(CONFIGURATION_IS_APPLIED, false);
                 if (tfPlanStatus.containsKey("tf.resource.changes")) {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");

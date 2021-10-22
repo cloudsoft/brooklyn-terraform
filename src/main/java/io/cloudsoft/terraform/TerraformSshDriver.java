@@ -165,7 +165,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void launch() {
-        boolean deploymentExists = runJsonPlanTask().get("tf.status") == TerraformConfiguration.TerraformStatus.SYNC;
+        boolean deploymentExists = runJsonPlanTask().get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
         if(deploymentExists) {
             LOG.debug("Terraform plan exists!!"); // apparently this is not possible for the moment
         } else {

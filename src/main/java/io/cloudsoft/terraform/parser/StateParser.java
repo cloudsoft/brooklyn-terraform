@@ -12,6 +12,7 @@ import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static io.cloudsoft.terraform.TerraformDriver.PLAN_STATUS;
 import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
 
 /**
@@ -109,10 +110,10 @@ public class StateParser {
         if(changeSummaryLog.isPresent()) {
             if (NO_CHANGES.equals(changeSummaryLog.get().message)) {
                 result.put("tf.plan.message", "No changes. Your infrastructure matches the configuration.");
-                result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.SYNC);
+                result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.SYNC);
             } else {
                 result.put("tf.plan.message", "Configuration and infrastructure do not match." + changeSummaryLog.get().message);
-                result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+                result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
             }
         }
 
@@ -158,14 +159,14 @@ public class StateParser {
             });
             if(!resources.isEmpty()) {
                 result.put("tf.resource.changes", resources);
-                result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.DRIFT);
+                result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DRIFT);
                 result.put("tf.plan.message", "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration." +  changeSummaryLog.get().message);
             }
         }
 
         if (planLogs.stream().anyMatch(errorPredicate)) {
             result.put("tf.plan.message", "Something went wrong. Check your configuration.");
-            result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.ERROR);
+            result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.ERROR);
             StringBuilder sb = new StringBuilder();
             planLogs.stream().filter(ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC).forEach(ple ->
                 sb.append(ple.diagnostic.get("summary")).append(":").append("detail").append("\n")
@@ -173,10 +174,10 @@ public class StateParser {
             result.put("tf.errors",  sb);
         }
 
-        if(result.get("tf.plan.status") == TerraformConfiguration.TerraformStatus.SYNC && result.containsKey("tf.output.changes")) {
+        if(result.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC && result.containsKey("tf.output.changes")) {
             // infrastructure is ok, only the outputs set has changed
             result.put("tf.plan.message", "Outputs configuration was changed." + changeSummaryLog.get().message);
-            result.put("tf.plan.status", TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+            result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         }
         return result;
     }

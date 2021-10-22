@@ -47,7 +47,7 @@ cofiguration keys.
 `tf.configuration.url` has the entity load a remote resource at runtime. The resource must be accessible to the Brooklyn
 server. The resource can be a single `configuration.tf` file or a `*.zip` archive containing multiple `*.tf` files and `terraform.tfvars` file.
 
-When started the entity installs Terraform and applies the configured plan. For example, to run
+When started the entity installs Terraform and applies the configured plan. For example, the following blueprint can be used to run
 Terraform on localhost with a plan that provisions an instance in Amazon EC2 us-east-1 and assigns
 it an elastic IP:
 
