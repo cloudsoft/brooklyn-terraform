@@ -1,5 +1,6 @@
 package io.cloudsoft.terraform;
 
+import io.cloudsoft.terraform.parser.ConfigurationParser;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.util.text.Strings;
 import org.testng.Assert;
@@ -230,6 +231,82 @@ public class TerraformSimpleTest {
         Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.ERROR);
         Assert.assertEquals(result.get("tf.plan.message"), "Something went wrong. Check your configuration.");
         Assert.assertTrue(result.containsKey("tf.errors"));
+    }
+
+    @Test // parsing resources from configuration String
+    public void parseConfigurationResourcesFromString() throws IOException {
+        String tfContent = "terraform {\n" +
+                "    // comment 1\n" +
+                "    backend \"s3\" {\n" +
+                "        bucket = \"mz-terraform-state-test\"\n" +
+                "        key    = \"tf-test/key-test-1\"\n" +
+                "        region = \"eu-west-1\"\n" +
+                "        access_key = \"AKIAUNWLO4GH32CZYV6F\"\n" +
+                "        secret_key = \"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\"\n" +
+                "    }\n" +
+                "}\n" +
+                "provider \"aws\" {\n" +
+                "    # comment 2\n" +
+                "    access_key = \"AKIAUNWLO4GH32CZYV6F\"\n" +
+                "    secret_key = \"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\"\n" +
+                "    region = \"eu-west-1\"\n" +
+                "}\n" +
+                "\n" +
+                "resource \"aws_instance\" \"example\" {\n" +
+                "    /* multi\n" +
+                "    line\n" +
+                "    comment \n" +
+                "    */\n" +
+                "    ami = \"ami-02df9ea15c1778c9c\"\n" +
+                "    instance_type = \"t1.micro\"\n" +
+                "    tags = {\n" +
+                "        Name = \"test-1\"\n" +
+                "    }\n" +
+                "}\n" +
+                "\n" +
+                "resource \"aws_instance\" \"example2\" {\n" +
+                "    /* another\n" +
+                "    multi\n" +
+                "    line\n" +
+                "    comment \n" +
+                "    */\n" +
+                "    ami = \"ami-02df9ea15c1778c9c\"\n" +
+                "    instance_type = \"t1.micro\"\n" +
+                "    tags = {\n" +
+                "        Name = \"test-2\"\n" +
+                "    }\n" +
+                "}";
+        Map<String,String> resources = ConfigurationParser.parseConfigurationResources(tfContent);
+
+        Assert.assertNotNull(resources);
+        Assert.assertTrue(resources.size() == 2);
+        Assert.assertTrue(resources.get("aws_instance.example") != null);
+        Assert.assertTrue(resources.get("aws_instance.example2") != null);
+        // test removing comments
+        Assert.assertTrue(!(ConfigurationParser.removeComments(tfContent).contains("comment")));
+    }
+
+    @Test // parsing resources from configuration File
+    public void parseConfigurationResourcesFromFile() throws IOException {
+        //File tfFile = new File("../resources/vsphere-example/configure-vs.tf");
+        ClassLoader classLoader = getClass().getClassLoader();
+        File tfFile = new File(classLoader.getResource("vsphere-example/configure-vs.tf").getFile());
+        Map<String,String> resources = ConfigurationParser.parseConfigurationResources(tfFile);
+
+        Assert.assertNotNull(resources);
+        Assert.assertTrue(resources.size() == 1);
+        Assert.assertTrue(resources.get("vsphere_virtual_machine.vm01") != null);
+    }
+
+    @Test // parsing resources from configuration Dir
+    public void parseConfigurationResourcesFromDir() throws IOException {
+        ClassLoader classLoader = getClass().getClassLoader();
+        File tfDir = new File(classLoader.getResource("vsphere-example/").getFile());
+        Map<String,String> resources = ConfigurationParser.parseConfigurationResources(tfDir);
+
+        Assert.assertNotNull(resources);
+        Assert.assertTrue(resources.size() == 1);
+        Assert.assertTrue(resources.get("vsphere_virtual_machine.vm01") != null);
     }
 
     private String loadTestData(final String filePathAsStr) throws IOException {
