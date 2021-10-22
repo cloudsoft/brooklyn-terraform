@@ -8,6 +8,22 @@ public class PlanLogEntry {
 
     public final static String NO_CHANGES = "Plan: 0 to add, 0 to change, 0 to destroy.";
 
+    public enum Provider { // TODO add prefixes for other cloud providers
+        NOT_SUPPORTED("?"),
+        AWS("aws_"),
+        VSPHERE("vsphere_");
+
+        private String prefix;
+
+        Provider(String prefix) {
+            this.prefix = prefix;
+        }
+
+        public String getPrefix() {
+            return prefix;
+        }
+    }
+
     public enum LType {
         @JsonProperty("version") VERSION, // not interesred
         @JsonProperty("refresh_start") REFRESH_START,
@@ -40,6 +56,15 @@ public class PlanLogEntry {
     public Map<String,Object> diagnostic;
 
     public LType type;
+
+    public Provider getProvider(){
+       for (Provider p : Provider.values()) {
+           if(message.startsWith(p.prefix)) {
+               return p;
+           }
+       }
+       return Provider.NOT_SUPPORTED;
+    }
 
     @Override
     public String toString() {

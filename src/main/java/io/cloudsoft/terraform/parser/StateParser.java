@@ -12,6 +12,7 @@ import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static io.cloudsoft.terraform.TerraformDriver.PLAN_PROVIDER;
 import static io.cloudsoft.terraform.TerraformDriver.PLAN_STATUS;
 import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
 
@@ -21,6 +22,7 @@ import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
 public class StateParser {
     public static final ImmutableList blankItems = ImmutableList.of("[]", "", "null", "\"\"", "{}", "[{}]");
 
+    private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
     private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.CHANGE_SUMMARY;
     private static  Predicate<? super PlanLogEntry> outputsPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.OUTPUTS;
     private static  Predicate<? super PlanLogEntry> plannedChangedPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.PLANNED_CHANGE;
@@ -105,6 +107,8 @@ public class StateParser {
         }).collect(Collectors.toList());
 
         Map<String, Object> result = new HashMap<>();
+
+        planLogs.stream().filter(providerPredicate).findFirst().ifPresent(p -> result.put(PLAN_PROVIDER, p.getProvider()));
 
         Optional<PlanLogEntry> changeSummaryLog = planLogs.stream().filter(changeSummaryPredicate).findFirst(); // it is not there when the config is broken
         if(changeSummaryLog.isPresent()) {
