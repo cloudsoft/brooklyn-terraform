@@ -288,7 +288,6 @@ public class TerraformSimpleTest {
 
     @Test // parsing resources from configuration File
     public void parseConfigurationResourcesFromFile() throws IOException {
-        //File tfFile = new File("../resources/vsphere-example/configure-vs.tf");
         ClassLoader classLoader = getClass().getClassLoader();
         File tfFile = new File(classLoader.getResource("vsphere-example/configure-vs.tf").getFile());
         Map<String,String> resources = ConfigurationParser.parseConfigurationResources(tfFile);
