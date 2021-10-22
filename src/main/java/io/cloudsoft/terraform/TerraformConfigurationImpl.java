@@ -6,7 +6,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Objects;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Maps.EntryTransformer;
 import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.parser.StateParser;
@@ -326,7 +325,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void destroyTarget(ManagedResource child) {
         final boolean configurationApplied = isConfigurationApplied();
-        final boolean mayProceed = !configurationChangeInProgress.compareAndSet(false, true);
+        final boolean mayProceed = configurationChangeInProgress.compareAndSet(false, true);
         if (configurationApplied && mayProceed) {
             try {
                 child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING);
@@ -354,14 +353,4 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         return getAttribute(CONFIGURATION_IS_APPLIED);
     }
 
-    private Map<String, String> shellEnv() {
-        return transformEntries(config().get(SHELL_ENVIRONMENT), new EnvironmentTransformer());
-    }
-
-    private static class EnvironmentTransformer implements EntryTransformer<String, Object, String> {
-        @Override
-        public String transformEntry(String key, Object value) {
-            return TypeCoercions.coerce(value, String.class);
-        }
-    }
 }

@@ -131,7 +131,7 @@ public class TerraformSimpleTest {
      * Remove a new resource and/or output from the configuration.tf
      * TF plan status = DESYNCHRONIZED, TF configuration is ON FIRE, Application is ON_FIRE , unaffected entities are OK (green)
      * compliance.drift sensor is added.
-     * Action: invoke apply effector on configuration node to create the new reources and outputs
+     * Action: invoke apply effector on configuration node to create the new resources and outputs
      * -> expect TF plan status = SYNC, broken children removed, AMP all  green + compliance.drift sensor is removed - pass
      * @throws IOException
      */
