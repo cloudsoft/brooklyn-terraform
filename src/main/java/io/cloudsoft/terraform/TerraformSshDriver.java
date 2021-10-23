@@ -170,7 +170,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         PlanLogEntry.Provider provider = (PlanLogEntry.Provider) planLog.get(PLAN_PROVIDER);
         boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
         if(deploymentExists) {
-            LOG.debug("Terraform plan exists!!"); // apparently this is not possible for the moment
+            LOG.debug("Terraform plan exists!!");
         } else {
             runApplyTask();
             // workaround for vsphere
@@ -183,8 +183,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void postLaunch() {
-
-
         final String state = runShowTask();
         StateParser.parseResources(state).forEach((resourceName, resourceContents) ->  {
             Map<String,Object> contentsMap = (Map<String,Object>) resourceContents;
