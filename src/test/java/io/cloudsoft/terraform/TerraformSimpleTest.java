@@ -1,5 +1,6 @@
 package io.cloudsoft.terraform;
 
+import io.cloudsoft.terraform.parser.PlanLogEntry;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.util.text.Strings;
 import org.testng.Assert;
@@ -11,6 +12,7 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 
+import static io.cloudsoft.terraform.TerraformDriver.PLAN_PROVIDER;
 import static io.cloudsoft.terraform.TerraformDriver.PLAN_STATUS;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -37,10 +39,22 @@ public class TerraformSimpleTest {
         final String state = loadTestData("state/state.json");
 
         Map<String,Object> resources = StateParser.parseResources(state);
-        Assert.assertTrue(1 == resources.size());
+        Assert.assertEquals(resources.size(), 1);
         Assert.assertTrue(resources.containsKey("aws_instance.example1"));
         Assert.assertTrue(((Map<String,Object>)(resources.get("aws_instance.example1"))).containsKey("resource.status"));
     }
+
+    @Test
+    public void readVSManagedResources() throws IOException {
+        final String state = loadTestData("state/vs-state.json");
+
+        Map<String,Object> resources = StateParser.parseResources(state);
+        Assert.assertEquals(resources.size(), 3);
+        Assert.assertTrue(resources.containsKey("vsphere_tag.tag"));
+        Assert.assertTrue(resources.containsKey("vsphere_tag_category.category"));
+        Assert.assertTrue(resources.containsKey("vsphere_virtual_machine.vm01"));
+    }
+
 
     /**
      * 0. Deploy Terraform config -> TF plan status = SYNC, Resources are created, AMP all green - pass
@@ -51,8 +65,9 @@ public class TerraformSimpleTest {
         final String logs = loadTestData("state/plan-nothing.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(result.size(), 2);
+        Assert.assertEquals(result.size(), 3);
         Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.SYNC);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
         Assert.assertEquals(result.get("tf.plan.message"), "No changes. Your infrastructure matches the configuration.");
     }
 
@@ -66,6 +81,7 @@ public class TerraformSimpleTest {
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
         Assert.assertEquals(result.get("tf.plan.message"), "Configuration and infrastructure do not match.Plan: 2 to add, 0 to change, 0 to destroy.");
         List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
         Assert.assertEquals(outputs.size(), 4);
@@ -92,7 +108,9 @@ public class TerraformSimpleTest {
         final String logs = loadTestData("state/plan-drift-update.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(result.size(), 3);
+        Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DRIFT);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
+        Assert.assertEquals(result.size(), 4);
 
         List<Map<String, Object>> resources = ((List<Map<String, Object>>)result.get("tf.resource.changes"));
         Assert.assertEquals( resources.size(), 2);
@@ -113,8 +131,9 @@ public class TerraformSimpleTest {
         final String logs = loadTestData("state/plan-drift-create.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals( result.size(), 4);
+        Assert.assertEquals( result.size(), 5);
         Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
         Assert.assertEquals(result.get("tf.plan.message"), "Configuration and infrastructure do not match.Plan: 1 to add, 0 to change, 0 to destroy.");
 
         List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
@@ -140,9 +159,10 @@ public class TerraformSimpleTest {
         final String logs = loadTestData("state/plan-drift-remove.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals( result.size(), 4);
+        Assert.assertEquals( result.size(), 5);
         Assert.assertEquals(result.get("tf.plan.message"), "Configuration and infrastructure do not match.Plan: 0 to add, 0 to change, 1 to destroy.");
         Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
 
         List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
         Assert.assertEquals( outputs.size(), 2);
@@ -168,9 +188,10 @@ public class TerraformSimpleTest {
         final String logs = loadTestData("state/plan-drift-shutdown.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals( result.size(), 3);
-        Assert.assertEquals(result.get("tf.plan.message"), "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 0 to add, 0 to change, 0 to destroy.");
+        Assert.assertEquals( result.size(), 4);
         Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DRIFT);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
+        Assert.assertEquals(result.get("tf.plan.message"), "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 0 to add, 0 to change, 0 to destroy.");
 
         List<Map<String, Object>> resources = ((List<Map<String, Object>>)result.get("tf.resource.changes"));
         Assert.assertEquals( resources.size(), 1);
@@ -190,8 +211,9 @@ public class TerraformSimpleTest {
         final String logs = loadTestData("state/plan-drift-terminate.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals( result.size(), 4);
+        Assert.assertEquals( result.size(), 5);
         Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DRIFT);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
         Assert.assertEquals(result.get("tf.plan.message"), "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 1 to add, 0 to change, 0 to destroy.");
 
         List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
@@ -212,8 +234,9 @@ public class TerraformSimpleTest {
         final String logs = loadTestData("state/plan-remove-output.json");
 
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
-        Assert.assertEquals(3, result.size());
+        Assert.assertEquals(result.size(),4);
         Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
         Assert.assertEquals(result.get("tf.plan.message"), "Outputs configuration was changed.Plan: 0 to add, 0 to change, 0 to destroy.");
 
         List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
@@ -228,6 +251,7 @@ public class TerraformSimpleTest {
         Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
         Assert.assertEquals(3, result.size());
         Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.ERROR);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), null);
         Assert.assertEquals(result.get("tf.plan.message"), "Something went wrong. Check your configuration.");
         Assert.assertTrue(result.containsKey("tf.errors"));
     }
@@ -237,5 +261,28 @@ public class TerraformSimpleTest {
         File file = new File(classLoader.getResource(filePathAsStr).getFile());
 
         return new String(Files.readAllBytes(file.toPath()));
+    }
+
+
+    /**
+     * The log processed by this test is returned when 'terraform plan' is executed before 'terraform apply'
+     * @throws IOException
+     */
+    @Test
+    public void parseVsCreate() throws IOException {
+        final String logs = loadTestData("state/vs-plan-create.json");
+
+        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Assert.assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+        Assert.assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.VSPHERE);
+        Assert.assertEquals(result.get("tf.plan.message"), "Configuration and infrastructure do not match.Plan: 3 to add, 0 to change, 0 to destroy.");
+        List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
+        Assert.assertEquals(outputs.size(), 1);
+
+        Assert.assertEquals(outputs.stream().filter(m -> m.containsValue("create")).count(), 1);
+
+        List<Map<String, Object>> resources = ((List<Map<String, Object>>)result.get("tf.resource.changes"));
+        Assert.assertEquals(resources.size(), 3);
+        Assert.assertEquals(resources.stream().filter(m -> m.containsValue("create")).count(), 3);
     }
 }

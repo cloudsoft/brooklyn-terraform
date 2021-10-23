@@ -9,6 +9,7 @@ import static java.lang.String.format;
 public interface TerraformDriver extends SoftwareProcessDriver {
 
     String PLAN_STATUS = "tf.plan.status";
+    String PLAN_PROVIDER = "tf.plan.provider";
 
     int destroy();
 

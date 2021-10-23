@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import io.cloudsoft.terraform.entity.ManagedResource;
+import io.cloudsoft.terraform.parser.PlanLogEntry;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.entity.EntitySpec;
@@ -165,11 +166,18 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void launch() {
-        boolean deploymentExists = runJsonPlanTask().get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
+        Map<String,Object> planLog = runJsonPlanTask();
+        PlanLogEntry.Provider provider = (PlanLogEntry.Provider) planLog.get(PLAN_PROVIDER);
+        boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
         if(deploymentExists) {
-            LOG.debug("Terraform plan exists!!"); // apparently this is not possible for the moment
+            LOG.debug("Terraform plan exists!!");
         } else {
             runApplyTask();
+            // workaround for vsphere
+            if (provider == PlanLogEntry.Provider.VSPHERE) {
+                runJsonPlanTask();
+                runApplyTask();
+            }
         }
     }
 

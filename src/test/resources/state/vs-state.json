@@ -1,0 +1,414 @@
+{
+  "format_version": "0.2",
+  "terraform_version": "1.0.8",
+  "values": {
+    "outputs": {
+      "ip": {
+        "sensitive": false,
+        "value": [
+          "135.181.244.87"
+        ]
+      }
+    },
+    "root_module": {
+      "resources": [
+        {
+          "address": "data.vsphere_compute_cluster.cluster",
+          "mode": "data",
+          "type": "vsphere_compute_cluster",
+          "name": "cluster",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
+          "schema_version": 0,
+          "values": {
+            "datacenter_id": "datacenter-3",
+            "id": "domain-c1003",
+            "name": "ESXi Cluster",
+            "resource_pool_id": "resgroup-1004"
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "data.vsphere_datacenter.dc",
+          "mode": "data",
+          "type": "vsphere_datacenter",
+          "name": "dc",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
+          "schema_version": 0,
+          "values": {
+            "id": "datacenter-3",
+            "name": "Hetzner Environment"
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "data.vsphere_datastore.datastore",
+          "mode": "data",
+          "type": "vsphere_datastore",
+          "name": "datastore",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
+          "schema_version": 0,
+          "values": {
+            "datacenter_id": "datacenter-3",
+            "id": "datastore-6014",
+            "name": "esx41-SSD1"
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "data.vsphere_network.network",
+          "mode": "data",
+          "type": "vsphere_network",
+          "name": "network",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
+          "schema_version": 0,
+          "values": {
+            "datacenter_id": "datacenter-3",
+            "distributed_virtual_switch_uuid": null,
+            "id": "network-6009",
+            "name": "Public 4020 esx41",
+            "type": "Network"
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "data.vsphere_resource_pool.pool",
+          "mode": "data",
+          "type": "vsphere_resource_pool",
+          "name": "pool",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
+          "schema_version": 0,
+          "values": {
+            "datacenter_id": "datacenter-3",
+            "id": "resgroup-1004",
+            "name": "Resources"
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "data.vsphere_virtual_machine.template",
+          "mode": "data",
+          "type": "vsphere_virtual_machine",
+          "name": "template",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
+          "schema_version": 0,
+          "values": {
+            "alternate_guest_name": "",
+            "annotation": "",
+            "boot_delay": 0,
+            "boot_retry_delay": 10000,
+            "boot_retry_enabled": false,
+            "change_version": "2021-08-27T01:38:10.119225Z",
+            "cpu_hot_add_enabled": false,
+            "cpu_hot_remove_enabled": false,
+            "cpu_limit": -1,
+            "cpu_performance_counters_enabled": false,
+            "cpu_reservation": 500,
+            "cpu_share_count": 4000,
+            "cpu_share_level": "normal",
+            "datacenter_id": "datacenter-3",
+            "disks": [
+              {
+                "eagerly_scrub": false,
+                "label": "Hard disk 1",
+                "size": 6,
+                "thin_provisioned": true,
+                "unit_number": 0
+              }
+            ],
+            "efi_secure_boot_enabled": false,
+            "enable_disk_uuid": false,
+            "enable_logging": true,
+            "ept_rvi_mode": "automatic",
+            "extra_config": {},
+            "firmware": "bios",
+            "guest_id": "ubuntu64Guest",
+            "guest_ip_addresses": [],
+            "hardware_version": 17,
+            "hv_mode": "hvAuto",
+            "id": "4221b05b-ae9c-fa9b-8ff3-0e5531b3b69b",
+            "ide_controller_scan_count": 2,
+            "latency_sensitivity": "normal",
+            "memory": 956,
+            "memory_hot_add_enabled": false,
+            "memory_limit": -1,
+            "memory_reservation": 0,
+            "memory_share_count": 9560,
+            "memory_share_level": "normal",
+            "name": "cloudsoft-ubuntu-20.04-with-deps-template",
+            "nested_hv_enabled": false,
+            "network_interface_types": [
+              "vmxnet3"
+            ],
+            "network_interfaces": [
+              {
+                "adapter_type": "vmxnet3",
+                "bandwidth_limit": -1,
+                "bandwidth_reservation": 0,
+                "bandwidth_share_count": 50,
+                "bandwidth_share_level": "normal",
+                "mac_address": "00:50:56:a1:c5:69",
+                "network_id": "network-6009"
+              }
+            ],
+            "num_cores_per_socket": 1,
+            "num_cpus": 4,
+            "replace_trigger": null,
+            "run_tools_scripts_after_power_on": true,
+            "run_tools_scripts_after_resume": true,
+            "run_tools_scripts_before_guest_reboot": false,
+            "run_tools_scripts_before_guest_shutdown": true,
+            "run_tools_scripts_before_guest_standby": true,
+            "sata_controller_scan_count": 0,
+            "scsi_bus_sharing": "noSharing",
+            "scsi_controller_scan_count": 1,
+            "scsi_type": "lsilogic",
+            "storage_policy_id": null,
+            "swap_placement_policy": "inherit",
+            "sync_time_with_host": false,
+            "sync_time_with_host_periodically": false,
+            "uuid": "4221b05b-ae9c-fa9b-8ff3-0e5531b3b69b",
+            "vapp": null,
+            "vapp_transport": [],
+            "vbs_enabled": false,
+            "vvtd_enabled": false
+          },
+          "sensitive_values": {
+            "disks": [
+              {}
+            ],
+            "extra_config": {},
+            "guest_ip_addresses": [],
+            "network_interface_types": [
+              false
+            ],
+            "network_interfaces": [
+              {}
+            ],
+            "vapp_transport": []
+          }
+        },
+        {
+          "address": "vsphere_tag.tag",
+          "mode": "managed",
+          "type": "vsphere_tag",
+          "name": "tag",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
+          "schema_version": 0,
+          "values": {
+            "category_id": "urn:vmomi:InventoryServiceCategory:c7072a60-ca0c-40d3-a913-3ee87bb2e5ab:GLOBAL",
+            "description": "Managed by Terraform",
+            "id": "urn:vmomi:InventoryServiceTag:20c2de98-b21e-4024-ba95-aa7de2f5a723:GLOBAL",
+            "name": "terraform-test-tag"
+          },
+          "sensitive_values": {},
+          "depends_on": [
+            "vsphere_tag_category.category"
+          ]
+        },
+        {
+          "address": "vsphere_tag_category.category",
+          "mode": "managed",
+          "type": "vsphere_tag_category",
+          "name": "category",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
+          "schema_version": 0,
+          "values": {
+            "associable_types": [
+              "Datastore",
+              "VirtualMachine"
+            ],
+            "cardinality": "SINGLE",
+            "description": "Managed by Terraform",
+            "id": "urn:vmomi:InventoryServiceCategory:c7072a60-ca0c-40d3-a913-3ee87bb2e5ab:GLOBAL",
+            "name": "terraform-test-category"
+          },
+          "sensitive_values": {
+            "associable_types": [
+              false,
+              false
+            ]
+          }
+        },
+        {
+          "address": "vsphere_virtual_machine.vm01",
+          "mode": "managed",
+          "type": "vsphere_virtual_machine",
+          "name": "vm01",
+          "provider_name": "registry.terraform.io/hashicorp/vsphere",
+          "schema_version": 3,
+          "values": {
+            "alternate_guest_name": "",
+            "annotation": "",
+            "boot_delay": 0,
+            "boot_retry_delay": 10000,
+            "boot_retry_enabled": false,
+            "cdrom": [],
+            "change_version": "2021-10-22T15:40:22.637227Z",
+            "clone": [
+              {
+                "customize": [],
+                "linked_clone": false,
+                "ovf_network_map": null,
+                "ovf_storage_map": null,
+                "template_uuid": "4221b05b-ae9c-fa9b-8ff3-0e5531b3b69b",
+                "timeout": 30
+              }
+            ],
+            "cpu_hot_add_enabled": false,
+            "cpu_hot_remove_enabled": false,
+            "cpu_limit": -1,
+            "cpu_performance_counters_enabled": false,
+            "cpu_reservation": 0,
+            "cpu_share_count": 2000,
+            "cpu_share_level": "normal",
+            "custom_attributes": null,
+            "datacenter_id": null,
+            "datastore_cluster_id": null,
+            "datastore_id": "datastore-6014",
+            "default_ip_address": "135.181.244.87",
+            "disk": [
+              {
+                "attach": false,
+                "controller_type": "scsi",
+                "datastore_id": "datastore-6014",
+                "device_address": "scsi:0:0",
+                "disk_mode": "persistent",
+                "disk_sharing": "sharingNone",
+                "eagerly_scrub": false,
+                "io_limit": -1,
+                "io_reservation": 0,
+                "io_share_count": 1000,
+                "io_share_level": "normal",
+                "keep_on_remove": false,
+                "key": 2000,
+                "label": "vm-one.vmdk",
+                "path": "01-jules-terraform-test-vm/01-jules-terraform-test-vm.vmdk",
+                "size": 30,
+                "storage_policy_id": "",
+                "thin_provisioned": true,
+                "unit_number": 0,
+                "uuid": "6000C293-3b18-bb24-9cc5-91e735d661c4",
+                "write_through": false
+              }
+            ],
+            "efi_secure_boot_enabled": false,
+            "enable_disk_uuid": false,
+            "enable_logging": false,
+            "ept_rvi_mode": "automatic",
+            "extra_config": null,
+            "firmware": "bios",
+            "folder": "",
+            "force_power_off": true,
+            "guest_id": "ubuntu64Guest",
+            "guest_ip_addresses": [
+              "135.181.244.87",
+              "2a01:4f9:4a:13d6:250:56ff:fea1:37fb",
+              "fe80::250:56ff:fea1:37fb"
+            ],
+            "hardware_version": 17,
+            "host_system_id": "host-10",
+            "hv_mode": "hvAuto",
+            "id": "42211b95-b5f0-db4e-afb2-ae9855d730f0",
+            "ide_controller_count": 2,
+            "ignored_guest_ips": null,
+            "imported": null,
+            "latency_sensitivity": "normal",
+            "memory": 4096,
+            "memory_hot_add_enabled": false,
+            "memory_limit": -1,
+            "memory_reservation": 0,
+            "memory_share_count": 40960,
+            "memory_share_level": "normal",
+            "migrate_wait_timeout": 30,
+            "moid": "vm-8173",
+            "name": "01-jules-terraform-test-vm",
+            "nested_hv_enabled": false,
+            "network_interface": [
+              {
+                "adapter_type": "vmxnet3",
+                "bandwidth_limit": -1,
+                "bandwidth_reservation": 0,
+                "bandwidth_share_count": 50,
+                "bandwidth_share_level": "normal",
+                "device_address": "pci:0:7",
+                "key": 4000,
+                "mac_address": "00:50:56:a1:37:fb",
+                "network_id": "network-6009",
+                "ovf_mapping": "",
+                "use_static_mac": false
+              }
+            ],
+            "num_cores_per_socket": 1,
+            "num_cpus": 2,
+            "ovf_deploy": [],
+            "pci_device_id": null,
+            "poweron_timeout": 300,
+            "reboot_required": false,
+            "replace_trigger": null,
+            "resource_pool_id": "resgroup-1004",
+            "run_tools_scripts_after_power_on": true,
+            "run_tools_scripts_after_resume": true,
+            "run_tools_scripts_before_guest_reboot": false,
+            "run_tools_scripts_before_guest_shutdown": true,
+            "run_tools_scripts_before_guest_standby": true,
+            "sata_controller_count": 0,
+            "scsi_bus_sharing": "noSharing",
+            "scsi_controller_count": 1,
+            "scsi_type": "lsilogic",
+            "shutdown_wait_timeout": 3,
+            "storage_policy_id": "",
+            "swap_placement_policy": "inherit",
+            "sync_time_with_host": false,
+            "sync_time_with_host_periodically": false,
+            "tags": [
+              "urn:vmomi:InventoryServiceTag:20c2de98-b21e-4024-ba95-aa7de2f5a723:GLOBAL"
+            ],
+            "uuid": "42211b95-b5f0-db4e-afb2-ae9855d730f0",
+            "vapp": [],
+            "vapp_transport": [],
+            "vbs_enabled": false,
+            "vmware_tools_status": "guestToolsRunning",
+            "vmx_path": "01-jules-terraform-test-vm/01-jules-terraform-test-vm.vmx",
+            "vvtd_enabled": false,
+            "wait_for_guest_ip_timeout": 0,
+            "wait_for_guest_net_routable": true,
+            "wait_for_guest_net_timeout": 5
+          },
+          "sensitive_values": {
+            "cdrom": [],
+            "clone": [
+              {
+                "customize": []
+              }
+            ],
+            "disk": [
+              {}
+            ],
+            "guest_ip_addresses": [
+              false,
+              false,
+              false
+            ],
+            "network_interface": [
+              {}
+            ],
+            "ovf_deploy": [],
+            "tags": [
+              false
+            ],
+            "vapp": [],
+            "vapp_transport": []
+          },
+          "depends_on": [
+            "data.vsphere_datastore.datastore",
+            "data.vsphere_network.network",
+            "data.vsphere_resource_pool.pool",
+            "data.vsphere_virtual_machine.template",
+            "vsphere_tag.tag",
+            "vsphere_tag_category.category"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -74,6 +74,7 @@ resource "vsphere_virtual_machine" "vm01" {
     ]
 
     connection {
+      agent    = false
       type     = "ssh"
       user     = var.vm_user
       password = var.vm_password
