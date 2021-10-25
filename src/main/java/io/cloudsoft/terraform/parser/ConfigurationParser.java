@@ -102,7 +102,6 @@ public class ConfigurationParser {
     }
 
     public static String removeComments(String configurationString) {
-        String configWithCommentsRemoved = "";
         ArrayList<String> configLinesWithoutComments = new ArrayList<>();
         AtomicBoolean isInsideMultilineComment = new AtomicBoolean(false);
         Arrays.asList(StringUtils.split(configurationString, "\n")).forEach(line -> {
@@ -135,7 +134,6 @@ public class ConfigurationParser {
                 }
             }
         });
-        configWithCommentsRemoved = String.join("\n", configLinesWithoutComments);
-        return configWithCommentsRemoved;
+        return String.join("\n", configLinesWithoutComments);
     }
 }
