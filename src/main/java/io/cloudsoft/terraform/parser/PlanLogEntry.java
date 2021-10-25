@@ -8,10 +8,14 @@ public class PlanLogEntry {
 
     public final static String NO_CHANGES = "Plan: 0 to add, 0 to change, 0 to destroy.";
 
-    public enum Provider { // TODO add prefixes for other cloud providers
+    public enum Provider {
         NOT_SUPPORTED("?"),
         AWS("aws_"),
-        VSPHERE("vsphere_");
+        VSPHERE("vsphere_"),
+        ALIBABA("alicloud_"),
+        AZURE("azurerm_"),
+        GOOGLE("google_"),
+        ORACLE("oci_");
 
         private String prefix;
 
