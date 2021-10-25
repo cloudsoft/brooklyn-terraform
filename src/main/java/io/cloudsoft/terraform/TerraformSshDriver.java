@@ -215,7 +215,12 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         } catch (InterruptedException | ExecutionException e) {
             throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
         }
-        return  StateParser.parsePlanLogEntries(result);
+        Map<String,Object> planLog = StateParser.parsePlanLogEntries(result);
+        boolean isBadPlan = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR;
+        if(isBadPlan) {
+            throw new IllegalArgumentException("Something went wrong. Check your configuration." + planLog.get("tf.errors"));
+        }
+        return  planLog;
     }
 
     @Override

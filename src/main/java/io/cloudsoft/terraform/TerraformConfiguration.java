@@ -8,6 +8,7 @@ import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
+import org.apache.brooklyn.core.annotation.EffectorParam;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.sensor.AttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
@@ -15,6 +16,8 @@ import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
 import org.apache.brooklyn.util.time.Duration;
+
+import javax.annotation.Nullable;
 
 @Catalog(
         name = "TerraformConfiguration",
@@ -82,6 +85,10 @@ public interface TerraformConfiguration extends SoftwareProcess {
 
     @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
     void destroy();
+
+    @Effector(description="Performs Terraform apply again with the configuration provided via the provided URL. If an URL is not provided the original URL provided when this blueprint was deployed will be used." +
+            "This is useful when the URL points to a GitHub or Artifactory release.")
+    void reinstallConfig(@EffectorParam(name = "configURL", description = "URL pointing to the terraform configuration") @Nullable String configURL);
 
     void destroyTarget(ManagedResource child);
 

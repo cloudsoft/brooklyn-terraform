@@ -28,6 +28,7 @@ import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.brooklyn.util.time.Time;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -320,6 +321,18 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         } else {
             throw new IllegalStateException("Cannot destroy configuration: another operation is in progress.");
         }
+    }
+
+    @Override
+    @Effector(description = "Re-install the Terraform configuration")
+    public void reinstallConfig(@Nullable String configURL) {
+        final String currentCfgUrl;
+        if(StringUtils.isNotBlank(configURL)) {
+            currentCfgUrl =  configURL;
+        } else {
+            currentCfgUrl = config().get(CONFIGURATION_URL);
+        }
+        // TODO add logic here
     }
 
     @Override
