@@ -304,17 +304,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         final boolean mayProceed = configurationChangeInProgress.compareAndSet(false, true);
         if (mayProceed) {
             try {
-                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING); // TODO the node appears as ON_FIRE here. Is this normal?
-                sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
                 preStop();
-                getDriver().runDestroyTask();
-
+                super.stop();
+                postStop();
             } finally {
                 configurationChangeInProgress.set(false);
-                postStop();
-                sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
-                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
-                disconnectSensors();
             }
         } else {
             throw new IllegalStateException("Cannot destroy configuration: another operation is in progress.");
