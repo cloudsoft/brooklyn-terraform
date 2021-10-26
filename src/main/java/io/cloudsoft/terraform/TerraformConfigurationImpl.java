@@ -20,11 +20,11 @@ import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
+import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
-import org.apache.brooklyn.util.core.flags.TypeCoercions;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.CountdownTimer;
@@ -65,6 +65,13 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         super.preStop();
         getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING));
     }
+
+    @Override
+    protected void postStop() {
+        getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED));
+        getChildren().forEach(child -> removeChild(child));
+    }
+
 
     @Override
     protected void connectSensors() {
@@ -297,9 +304,17 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         final boolean mayProceed = configurationChangeInProgress.compareAndSet(false, true);
         if (mayProceed) {
             try {
+                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING); // TODO the node appears as ON_FIRE here. Is this normal?
+                sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
+                preStop();
                 getDriver().runDestroyTask();
+
             } finally {
                 configurationChangeInProgress.set(false);
+                postStop();
+                sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
+                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
+                disconnectSensors();
             }
         } else {
             throw new IllegalStateException("Cannot destroy configuration: another operation is in progress.");
@@ -315,10 +330,15 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
         CountdownTimer timer = Duration.ONE_MINUTE.countdownTimer();
         while(true) {
+            sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STARTING);
             if (configurationChangeInProgress.compareAndSet(false, true)) {
                 try {
                     getDriver().customize();
                     getDriver().launch();
+                    if(getChildren() == null || getChildren().isEmpty()) { // after a destroy
+                        getDriver().postLaunch();
+                        connectSensors();
+                    }
                     return;
                 } finally {
                     configurationChangeInProgress.set(false);
@@ -343,7 +363,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 int result = getDriver().runDestroyTargetTask(destroyTargetCommand);
                 if (result == 0 ) {
                     child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
-                    getParent().removeChild(child);
+                    removeChild(child);
                 } else {
                     child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
                 }

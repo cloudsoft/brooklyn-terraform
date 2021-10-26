@@ -13,6 +13,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     void customize();
     void launch();
+    void postLaunch();
     int destroy();
 
     Map<String, Object> runJsonPlanTask();
@@ -35,6 +36,9 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     }
     default String applyCommand() {
         return makeTerraformCommand("apply -no-color -input=false tfplan"); // Create or update infrastructure
+    }
+    default String lightApplyCommand() {
+        return makeTerraformCommand(" apply -refresh-only -auto-approve -no-color -input=false tfplan"); // Create or update infrastructure
     }
     default String showCommand() {
         return makeTerraformCommand("show -no-color -json"); // Show the current state or a saved plan

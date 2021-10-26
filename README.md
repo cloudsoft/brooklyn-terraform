@@ -202,6 +202,26 @@ And configure the `terraform` provider in `brooklyn.properties`:
     brooklyn.external.terraform.aws.credential=...
 ```
 
+### Updating an Existing Deployment
+
+The Terraform Configuration entity provides an effector named `reinstallConfig`. Invoking this effector causes the Terraform configuration files to be moved to the `/tmp/backup` directory and a set of configuration files to be downloaded from the URL provided as a parameter and copied in the Terraform workspace.
+If the `/tmp/backup` directory exists, it is deleted. The URL is expected to point to a `*.zip` archive containing the new configuration files.
+If no URL is provided, the effector uses the URL provided as a value for the `tf.configuration.url` when the blueprint was deployed.
+
+This effector this useful when the `tf.configuration.url` points to a dynamic URL, such as a GitHub release(e.g. https://github.com/<REPO>/<PROJECT>/releases/latest/download/tf-config.zip) because it allows updating the Terraform configuration from a remote dynamic source.
+
+**Note** Invoking the `reinstallConfig` effector will not affect the `*.tfvars` file that was provided using the `tf.tfvars.url` configuration key.
+
+### Destroy Operations
+
+A `destroy` effector is provided for each entity matching a Terraform managed resource. Under the bonnet this effector executes`terraform destroy -auto-approve -target=<resource address>`.
+Although it can be invoked from AMP, this will leave your deployment in an unpredictable state, depending on the dependencies between the resources. According to the official documentation,
+The `-target option` is not for routine use, and is provided only for exceptional situations such as recovering from errors or mistakes, or when Terraform specifically suggests to use it as part of an error message. Applied changes may be incomplete.
+The recommended way to discard your resources safely is to update the Terraform configuration and invoke the `reinstallConfig`. 
+
+Invoking the `destroy` effector of a Terraform Configuration entity destroys the resources, but keeps the configuration accesible via the stopped entity. 
+Undoing the effect of a `destroy` effector invocation on the Terraform Configuration entity is possible by invoking `reinstallConfig` effector of the Terraform Configuration entity. This recreates the managed resources and the entities matching them.
+
 ### Terraform Drift Managing
 
 One challenge when managing infrastructure as code is drift. Drift is the term for when the real-world state of your infrastructure differs from the state defined in your configuration.

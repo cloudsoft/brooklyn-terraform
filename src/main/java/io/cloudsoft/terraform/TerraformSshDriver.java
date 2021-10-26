@@ -135,6 +135,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     private void clean() {
         final String runPath = getRunDir();
+
         Task<Object> initTask = DynamicTasks.queue(Tasks.builder()
                 .displayName("Clean terraform workspace")
                 .add(SshTasks.newSshExecTaskFactory(getMachine(),
@@ -198,7 +199,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             // workaround for vsphere
             if (provider == PlanLogEntry.Provider.VSPHERE) {
                 runJsonPlanTask();
-                runApplyTask();
+                runLightApplyTask();
             }
         }
     }
@@ -290,6 +291,20 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             throw new IllegalStateException("Error executing `terraform apply`!");
         }
         entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
+    }
+
+    private void runLightApplyTask() {
+        Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), lightApplyCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary("Applying `terraform apply -refresh-only`")
+                .returning(p -> p.getStdout())
+                .newTask()
+                .asTask());
+        DynamicTasks.waitForLast();
+
+        if (applyTask.asTask().isError()) {
+            throw new IllegalStateException("Error executing `terraform apply -refresh-only`!");
+        }
     }
 
     /**
