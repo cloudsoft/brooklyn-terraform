@@ -5,6 +5,9 @@ import static java.lang.String.format;
 import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
 
 import java.io.InputStream;
+import java.sql.Date;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +58,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             throw new IllegalStateException("Error executing `terraform destroy`! ");
             // TODO decide where we put the output from here, in case of error
         }
-        entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, false);
         return 0;
     }
 
@@ -267,7 +269,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         if (applyTask.asTask().isError()) {
             throw new IllegalStateException("Error executing `terraform apply`!");
         }
-        entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, true);
+        entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
     }
 
     /**

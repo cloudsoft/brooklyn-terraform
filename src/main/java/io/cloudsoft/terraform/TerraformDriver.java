@@ -11,6 +11,8 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     String PLAN_STATUS = "tf.plan.status";
     String PLAN_PROVIDER = "tf.plan.provider";
 
+    void customize();
+    void launch();
     int destroy();
 
     Map<String, Object> runJsonPlanTask();
