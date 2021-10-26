@@ -307,12 +307,29 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     }
 
     @Override
-    @Effector(description = "Re-install the Terraform configuration")
+    @Effector(description = "Performs Terraform apply again with the configuration provided via the provided URL. If an URL is not provided the original URL provided when this blueprint was deployed will be used." +
+            "This is useful when the URL points to a GitHub or Artifactory release.")
     public void reinstallConfig(@EffectorParam(name = "configUrl", description = "URL pointing to the terraform configuration") @Nullable String configUrl) {
         if(StringUtils.isNotBlank(configUrl)) {
             config().set(CONFIGURATION_URL, configUrl);
         }
-       // TODO add logic here
+        CountdownTimer timer = Duration.ONE_MINUTE.countdownTimer();
+        while(true) {
+            if (configurationChangeInProgress.compareAndSet(false, true)) {
+                try {
+                    getDriver().customize();
+                    getDriver().launch();
+                    return;
+                } finally {
+                    configurationChangeInProgress.set(false);
+                }
+            } else {
+                if(timer.isExpired()) {
+                    throw new IllegalStateException("Cannot re-apply configuration: operation timed out.");
+                }
+                Time.sleep(Duration.FIVE_SECONDS);
+            }
+        }
     }
 
     @Override

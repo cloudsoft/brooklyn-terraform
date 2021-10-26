@@ -133,9 +133,29 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         newScript(INSTALLING).body.append(commands).execute();
     }
 
+    private void clean() {
+        final String runPath = getRunDir();
+        Task<Object> initTask = DynamicTasks.queue(Tasks.builder()
+                .displayName("Clean terraform workspace")
+                .add(SshTasks.newSshExecTaskFactory(getMachine(),
+                                "rm -rf /tmp/backup; mkdir /tmp/backup; cd " +runPath +";" +
+                                        " mv * /tmp/backup; mv /tmp/backup/*.tfstate .")
+                        .environmentVariables(getShellEnvironment())
+                        .summary("Moves existing configuration files to /tmp/backup.")
+                        .returning(p -> p.getStdout())
+                        .newTask()
+                        .asTask())
+                .build());
+        DynamicTasks.waitForLast();
+        if (initTask.asTask().isError()) {
+            throw new IllegalStateException("Error cleaning the terraform workspace. ");
+        }
+    }
+
     @Override
     public void customize() {
         newScript(CUSTOMIZING).execute();
+        clean();
         InputStream configuration = getConfiguration();
         // copy terraform configuration file(s)
         getMachine().copyTo(configuration, getConfigurationFilePath());
