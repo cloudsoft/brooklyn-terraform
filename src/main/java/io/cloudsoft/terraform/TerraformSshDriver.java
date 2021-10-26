@@ -282,7 +282,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), applyCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Applying terraform plan")
-                .returning(p -> p.getStdout())
+                .requiringZeroAndReturningStdout()
                 .newTask()
                 .asTask());
         DynamicTasks.waitForLast();

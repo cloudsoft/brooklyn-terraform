@@ -18,6 +18,7 @@ import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
+import org.apache.brooklyn.core.entity.trait.Startable;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
@@ -324,9 +325,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
         CountdownTimer timer = Duration.ONE_MINUTE.countdownTimer();
         while(true) {
-            sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STARTING);
             if (configurationChangeInProgress.compareAndSet(false, true)) {
                 try {
+                    sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STARTING);
+                    ServiceStateLogic.setExpectedState(this, Lifecycle.STARTING);
                     getDriver().customize();
                     getDriver().launch();
                     if(getChildren() == null || getChildren().isEmpty()) { // after a destroy
@@ -336,6 +338,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     return;
                 } finally {
                     configurationChangeInProgress.set(false);
+                    sensors().set(Startable.SERVICE_UP, Boolean.TRUE);
+                    sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
+                    sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
+                    ServiceStateLogic.setExpectedState(this, Lifecycle.RUNNING);
                 }
             } else {
                 if(timer.isExpired()) {
