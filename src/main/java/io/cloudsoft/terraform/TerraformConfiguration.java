@@ -9,6 +9,7 @@ import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
+import org.apache.brooklyn.core.config.ConfigConstraints;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.sensor.AttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
@@ -36,7 +37,8 @@ public interface TerraformConfiguration extends SoftwareProcess {
 
     // Update reference.json when changing this value.
     @SetFromFlag("version")
-    ConfigKey<String> SUGGESTED_VERSION = ConfigKeys.newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.8");
+    ConfigKey<String> SUGGESTED_VERSION = ConfigKeys
+            .newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.8");
 
     @SetFromFlag("tfPollingPeriod")
     ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
@@ -53,12 +55,14 @@ public interface TerraformConfiguration extends SoftwareProcess {
     ConfigKey<String> CONFIGURATION_CONTENTS = ConfigKeys.builder(String.class)
             .name("tf.configuration.contents")
             .description("Contents of the configuration file that will be applied by Terraform.")
+            .constraint(ConfigConstraints.forbiddenUnless("tf.configuration.url"))
             .build();
 
     @SetFromFlag("tfDeployment")
     ConfigKey<String> CONFIGURATION_URL = ConfigKeys.builder(String.class)
             .name("tf.configuration.url")
             .description("URL of the configuration file that will be applied by Terraform.")
+            .constraint(ConfigConstraints.forbiddenUnless("tf.configuration.contents"))
             .build();
 
     @SetFromFlag("tfVars")

@@ -1,8 +1,10 @@
 package io.cloudsoft.terraform.entity;
 
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import io.cloudsoft.terraform.TerraformConfiguration;
 import org.apache.brooklyn.api.location.Location;
+import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.sensor.Sensors;
@@ -20,6 +22,13 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
     public void init() {
         super.init();
         connectSensors();
+        config().set(ConfigKeys.builder(String.class)
+                .name("destination")
+                .description("Where to POST the messages.")
+                .constraint(Predicates.notNull())
+                .defaultValue("http://ness_ip:8181")
+                .reconfigurable(true)
+                .build() , "");
     }
 
     @Override

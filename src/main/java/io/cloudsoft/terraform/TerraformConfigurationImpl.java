@@ -51,15 +51,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void init() {
         super.init();
-        // Exactly one of the two must have a value
-        if (Strings.isNonBlank(getConfig(CONFIGURATION_URL)) ^ Strings.isNonBlank(getConfig(CONFIGURATION_CONTENTS))) {
-            if (getAttribute(CONFIGURATION_IS_APPLIED) == null) {
-                sensors().set(CONFIGURATION_IS_APPLIED, false);
-            }
-        } else {
-            throw new IllegalArgumentException("Exactly one of " +
-                    CONFIGURATION_URL.getName() + " or " + CONFIGURATION_CONTENTS.getName() + " must be provided");
-        }
     }
 
     @Override
