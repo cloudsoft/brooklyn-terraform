@@ -9,6 +9,7 @@ import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
+import org.apache.brooklyn.core.config.ConfigConstraints;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.sensor.AttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
@@ -36,7 +37,8 @@ public interface TerraformConfiguration extends SoftwareProcess {
 
     // Update reference.json when changing this value.
     @SetFromFlag("version")
-    ConfigKey<String> SUGGESTED_VERSION = ConfigKeys.newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.8");
+    ConfigKey<String> SUGGESTED_VERSION = ConfigKeys
+            .newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.8");
 
     @SetFromFlag("tfPollingPeriod")
     ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
@@ -53,12 +55,14 @@ public interface TerraformConfiguration extends SoftwareProcess {
     ConfigKey<String> CONFIGURATION_CONTENTS = ConfigKeys.builder(String.class)
             .name("tf.configuration.contents")
             .description("Contents of the configuration file that will be applied by Terraform.")
+            .constraint(ConfigConstraints.forbiddenIf("tf.configuration.url"))
             .build();
 
     @SetFromFlag("tfDeployment")
     ConfigKey<String> CONFIGURATION_URL = ConfigKeys.builder(String.class)
             .name("tf.configuration.url")
             .description("URL of the configuration file that will be applied by Terraform.")
+            .constraint(ConfigConstraints.forbiddenIf("tf.configuration.contents"))
             .build();
 
     @SetFromFlag("tfVars")
@@ -67,8 +71,8 @@ public interface TerraformConfiguration extends SoftwareProcess {
             .description("URL of the file containing values for the Terraform variables.")
             .build();
 
-    AttributeSensor<Boolean> CONFIGURATION_IS_APPLIED = Sensors.newBooleanSensor("tf.configuration.isApplied",
-            "Whether the supplied Terraform configuration has been successfully applied.");
+    AttributeSensor<String> CONFIGURATION_APPLIED = Sensors.newStringSensor("tf.configuration.applied",
+            "The most recent time a Terraform configuration has been successfully applied.");
 
     AttributeSensor<String> PLAN = Sensors.newStringSensor("tf.plan",
             "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.");
@@ -88,11 +92,9 @@ public interface TerraformConfiguration extends SoftwareProcess {
 
     @Effector(description="Performs Terraform apply again with the configuration provided via the provided URL. If an URL is not provided the original URL provided when this blueprint was deployed will be used." +
             "This is useful when the URL points to a GitHub or Artifactory release.")
-    void reinstallConfig(@EffectorParam(name = "configURL", description = "URL pointing to the terraform configuration") @Nullable String configURL);
+    void reinstallConfig(@EffectorParam(name = "configUrl", description = "URL pointing to the terraform configuration") @Nullable String configUrl);
 
     void destroyTarget(ManagedResource child);
-
-    boolean isConfigurationApplied();
 
     TerraformDriver getDriver();
 }

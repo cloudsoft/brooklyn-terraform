@@ -5,6 +5,9 @@ import static java.lang.String.format;
 import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
 
 import java.io.InputStream;
+import java.sql.Date;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +58,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             throw new IllegalStateException("Error executing `terraform destroy`! ");
             // TODO decide where we put the output from here, in case of error
         }
-        entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, false);
         return 0;
     }
 
@@ -131,9 +133,30 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         newScript(INSTALLING).body.append(commands).execute();
     }
 
+    private void clean() {
+        final String runPath = getRunDir();
+
+        Task<Object> initTask = DynamicTasks.queue(Tasks.builder()
+                .displayName("Clean terraform workspace")
+                .add(SshTasks.newSshExecTaskFactory(getMachine(),
+                                "rm -rf /tmp/backup; mkdir /tmp/backup; cd " +runPath +";" +
+                                        " mv * /tmp/backup; mv /tmp/backup/*.tfstate .")
+                        .environmentVariables(getShellEnvironment())
+                        .summary("Moves existing configuration files to /tmp/backup.")
+                        .returning(p -> p.getStdout())
+                        .newTask()
+                        .asTask())
+                .build());
+        DynamicTasks.waitForLast();
+        if (initTask.asTask().isError()) {
+            throw new IllegalStateException("Error cleaning the terraform workspace. ");
+        }
+    }
+
     @Override
     public void customize() {
         newScript(CUSTOMIZING).execute();
+        clean();
         InputStream configuration = getConfiguration();
         // copy terraform configuration file(s)
         getMachine().copyTo(configuration, getConfigurationFilePath());
@@ -176,7 +199,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             // workaround for vsphere
             if (provider == PlanLogEntry.Provider.VSPHERE) {
                 runJsonPlanTask();
-                runApplyTask();
+                runLightApplyTask();
             }
         }
     }
@@ -259,7 +282,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), applyCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Applying terraform plan")
-                .returning(p -> p.getStdout())
+                .requiringZeroAndReturningStdout()
                 .newTask()
                 .asTask());
         DynamicTasks.waitForLast();
@@ -267,7 +290,21 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         if (applyTask.asTask().isError()) {
             throw new IllegalStateException("Error executing `terraform apply`!");
         }
-        entity.sensors().set(TerraformConfiguration.CONFIGURATION_IS_APPLIED, true);
+        entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
+    }
+
+    private void runLightApplyTask() {
+        Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), lightApplyCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary("Applying `terraform apply -refresh-only`")
+                .returning(p -> p.getStdout())
+                .newTask()
+                .asTask());
+        DynamicTasks.waitForLast();
+
+        if (applyTask.asTask().isError()) {
+            throw new IllegalStateException("Error executing `terraform apply -refresh-only`!");
+        }
     }
 
     /**

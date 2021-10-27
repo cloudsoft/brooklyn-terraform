@@ -13,19 +13,22 @@ import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
+import org.apache.brooklyn.core.annotation.EffectorParam;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
+import org.apache.brooklyn.core.entity.trait.Startable;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
+import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
-import org.apache.brooklyn.util.core.flags.TypeCoercions;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
+import org.apache.brooklyn.util.time.CountdownTimer;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.brooklyn.util.time.Time;
 import org.apache.commons.lang3.StringUtils;
@@ -36,9 +39,7 @@ import javax.annotation.Nullable;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.google.common.collect.Maps.transformEntries;
 import static io.cloudsoft.terraform.TerraformDriver.PLAN_STATUS;
-
 
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
 
@@ -51,15 +52,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void init() {
         super.init();
-        // Exactly one of the two must have a value
-        if (Strings.isNonBlank(getConfig(CONFIGURATION_URL)) ^ Strings.isNonBlank(getConfig(CONFIGURATION_CONTENTS))) {
-            if (getAttribute(CONFIGURATION_IS_APPLIED) == null) {
-                sensors().set(CONFIGURATION_IS_APPLIED, false);
-            }
-        } else {
-            throw new IllegalArgumentException("Exactly one of " +
-                    CONFIGURATION_URL.getName() + " or " + CONFIGURATION_CONTENTS.getName() + " must be provided");
-        }
     }
 
     @Override
@@ -74,6 +66,13 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         super.preStop();
         getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING));
     }
+
+    @Override
+    protected void postStop() {
+        getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED));
+        getChildren().forEach(child -> removeChild(child));
+    }
+
 
     @Override
     protected void connectSensors() {
@@ -158,7 +157,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                         tfPlanStatus.get("tf.plan.message") + ":" + tfPlanStatus.get("tf.errors"));
             } else if(!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
-                sensors().set(CONFIGURATION_IS_APPLIED, false);
                 if (tfPlanStatus.containsKey("tf.resource.changes")) {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
                    ((List<Map<String, Object>>) tfPlanStatus.get("tf.resource.changes")).forEach(changeMap -> {
@@ -283,63 +281,81 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
     public void apply() {
-        final boolean configurationApplied = isConfigurationApplied();
-        if(!configurationApplied) {
-            int timeout = 60;
-            while(timeout > 0) {
-                if (configurationChangeInProgress.compareAndSet(false, true)) {
-                    try {
-                        getDriver().runApplyTask();
-                        return;
-                    } finally {
-                        configurationChangeInProgress.set(false);
-                    }
-                } else {
-                    Time.sleep(Duration.FIVE_SECONDS);
-                    timeout -= 5;
+        CountdownTimer timer = Duration.ONE_MINUTE.countdownTimer();
+        while(true) {
+            if (configurationChangeInProgress.compareAndSet(false, true)) {
+                try {
+                    getDriver().runApplyTask();
+                    return;
+                } finally {
+                    configurationChangeInProgress.set(false);
                 }
+            } else {
+                if(timer.isExpired()) {
+                    throw new IllegalStateException("Cannot apply configuration: operation timed out.");
+                }
+                Time.sleep(Duration.FIVE_SECONDS);
             }
-            throw new IllegalStateException("Cannot apply configuration: operation timed out.");
-        } else {
-            throw new IllegalStateException("Cannot apply terraform plan: the configuration has already been applied.");
         }
     }
 
     @Override
     @Effector(description = "Destroy the Terraform configuration")
     public void destroy() {
-        final boolean configurationApplied = isConfigurationApplied();
         final boolean mayProceed = configurationChangeInProgress.compareAndSet(false, true);
-        if (configurationApplied && mayProceed) {
+        if (mayProceed) {
             try {
-                getDriver().runDestroyTask();
+                preStop();
+                super.stop();
+                postStop();
             } finally {
                 configurationChangeInProgress.set(false);
             }
-        } else if (!configurationApplied) {
-            throw new IllegalStateException("Cannot destroy configuration: the configuration has not been applied.");
         } else {
             throw new IllegalStateException("Cannot destroy configuration: another operation is in progress.");
         }
     }
 
     @Override
-    @Effector(description = "Re-install the Terraform configuration")
-    public void reinstallConfig(@Nullable String configURL) {
-        final String currentCfgUrl;
-        if(StringUtils.isNotBlank(configURL)) {
-            currentCfgUrl =  configURL;
-        } else {
-            currentCfgUrl = config().get(CONFIGURATION_URL);
+    @Effector(description = "Performs Terraform apply again with the configuration provided via the provided URL. If an URL is not provided the original URL provided when this blueprint was deployed will be used." +
+            "This is useful when the URL points to a GitHub or Artifactory release.")
+    public void reinstallConfig(@EffectorParam(name = "configUrl", description = "URL pointing to the terraform configuration") @Nullable String configUrl) {
+        if(StringUtils.isNotBlank(configUrl)) {
+            config().set(CONFIGURATION_URL, configUrl);
         }
-        // TODO add logic here
+        CountdownTimer timer = Duration.ONE_MINUTE.countdownTimer();
+        while(true) {
+            if (configurationChangeInProgress.compareAndSet(false, true)) {
+                try {
+                    sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STARTING);
+                    ServiceStateLogic.setExpectedState(this, Lifecycle.STARTING);
+                    getDriver().customize();
+                    getDriver().launch();
+                    if(getChildren() == null || getChildren().isEmpty()) { // after a destroy
+                        getDriver().postLaunch();
+                        connectSensors();
+                    }
+                    return;
+                } finally {
+                    configurationChangeInProgress.set(false);
+                    sensors().set(Startable.SERVICE_UP, Boolean.TRUE);
+                    sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
+                    sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
+                    ServiceStateLogic.setExpectedState(this, Lifecycle.RUNNING);
+                }
+            } else {
+                if(timer.isExpired()) {
+                    throw new IllegalStateException("Cannot re-apply configuration: operation timed out.");
+                }
+                Time.sleep(Duration.FIVE_SECONDS);
+            }
+        }
     }
 
     @Override
     public void destroyTarget(ManagedResource child) {
-        final boolean configurationApplied = isConfigurationApplied();
         final boolean mayProceed = configurationChangeInProgress.compareAndSet(false, true);
-        if (configurationApplied && mayProceed) {
+        if (mayProceed) {
             try {
                 child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING);
                 final String destroyTargetCommand = getDriver().destroyCommand().concat(" -target=")
@@ -347,23 +363,15 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 int result = getDriver().runDestroyTargetTask(destroyTargetCommand);
                 if (result == 0 ) {
                     child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
-                    getParent().removeChild(child);
+                    removeChild(child);
                 } else {
                     child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
                 }
             } finally {
                 configurationChangeInProgress.set(false);
             }
-        } else if (!configurationApplied) {
-            throw new IllegalStateException("Cannot destroy target: the configuration has not been applied.");
         } else {
             throw new IllegalStateException("Cannot destroy target: another operation is in progress.");
         }
     }
-
-    @Override
-    public synchronized boolean isConfigurationApplied() {
-        return getAttribute(CONFIGURATION_IS_APPLIED);
-    }
-
 }
