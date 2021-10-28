@@ -204,13 +204,60 @@ And configure the `terraform` provider in `brooklyn.properties`:
 
 ### Updating an Existing Deployment
 
+#### Using a reinstall effector
 The Terraform Configuration entity provides an effector named `reinstallConfig`. Invoking this effector causes the Terraform configuration files to be moved to the `/tmp/backup` directory and a set of configuration files to be downloaded from the URL provided as a parameter and copied in the Terraform workspace.
 If the `/tmp/backup` directory exists, it is deleted. The URL is expected to point to a `*.zip` archive containing the new configuration files.
 If no URL is provided, the effector uses the URL provided as a value for the `tf.configuration.url` when the blueprint was deployed.
 
-This effector this useful when the `tf.configuration.url` points to a dynamic URL, such as a GitHub release(e.g. https://github.com/<REPO>/<PROJECT>/releases/latest/download/tf-config.zip) because it allows updating the Terraform configuration from a remote dynamic source.
+This effector is useful when the `tf.configuration.url` points to a dynamic URL, such as a GitHub release(e.g. https://github.com/<REPO>/<PROJECT>/releases/latest/download/tf-config.zip) because it allows updating the Terraform configuration from a remote dynamic source.
 
 **Note** Invoking the `reinstallConfig` effector will not affect the `*.tfvars` file that was provided using the `tf.tfvars.url` configuration key.
+
+#### Using environmental variables along with brooklyn.properties
+Brooklyn allows to specify its own variables that can be mapped to the environmental variables with a prefix `TF_VAR` that are recognisable by Terraform.
+This allows us to modify the Terraform Configuration by reconfiguring the defined Brooklyn properties, as follows:
+
+```yaml
+name: Brooklyn Terraform Deployment
+location: localhost
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      resourceName: overriddenResourceName
+      tf.configuration.contents: |
+        variable resource_name {
+        }
+
+        provider "aws" {
+            ...
+        }
+
+        resource "aws_instance" "resource1" {
+            ami = "ami-02df9ea15c1778c9c"
+            instance_type = "t1.micro"
+            tags = {
+                Name = "${var.resource_name}"
+            }
+        }  
+      shell.env:
+        TF_VAR_resource_name: '$brooklyn:config("resourceName")'
+    brooklyn.parameters:
+      - name: resourceName
+        type: string
+        reconfigurable: true
+        default: defaultResourceName
+```
+
+In the template above, we have a Brooklyn parameter `resourceName` defined (note that it has a property `reconfigurable` set to `true`, which allows us to modify it).
+The parameter above is then mapped to an environmental variable `TF_VAR_resource_name`, which Terraform can make use of by defining it as a variable `resource_name` in the configuration.
+In the example above, it is used as a Name tag for the created `aws_instance`.
+
+The variable `resourceName` can be modified via the App Inspector UI in the `Terraform Configuration` entity's Config Summary Table.
+Once the variable is modified, user is notified of success/failure. 
+Modifying the variable causes a change in Terraform configuration, which is recognised as drift and Brooklyn sets the application `ON_FIRE`. 
+The user needs to invoke the `apply` effector for Terraform to apply the changes of the updated configuration and bring the application back to a good state.
+More information about drift management is available in the relevant section below.
 
 ### Destroy Operations
 
