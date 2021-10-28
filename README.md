@@ -257,7 +257,7 @@ services:
         default: defaultResourceName
 ```
 
-The `resourceName` parameter value can be easily modified via the App Inspector UI in the Terraform Configuration entity's Config Summary Table.(Its value can also be changed using the `br` CLI, or via the REST API)
+The `resourceName` parameter value can be easily modified via the App Inspector UI in the Terraform Configuration entity's Config Summary Table(its value can also be changed using the `br` CLI, or via the REST API).
 Once the variable is modified, a notification of the success/failure of the operation is displayed.
 If the new value was accepted, the `tf.plan` sensor displays `{tf.plan.status=DESYNCHRONIZED, <resource change details>}` and Apache Brooklyn and Brooklyn sets the application `ON_FIRE`.
 The `tf.plan.status=DESYNCHRONIZED` means the plan that was executed (based on the most recent configuration, that includes the new variable value) no longer matches the infrastructure, so the plan and the infrastructure are not in sync.
@@ -265,8 +265,6 @@ The `tf.plan.status=DESYNCHRONIZED` means the plan that was executed (based on t
 The user needs to invoke the `apply` effector for the Terraform Configuration entity to apply the changes of the updated configuration.
 
 In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
-
-More information about drift management is available in the relevant section below.
 
 ### Destroy Operations
 
