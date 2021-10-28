@@ -210,17 +210,17 @@ Apache Brooklyn facilitates modifying an existing Terraform deployment through e
 
 The Terraform Configuration entity provides an effector named `reinstallConfig`. Invoking this effector causes the Terraform configuration files to be moved to the `/tmp/backup` directory and a set of configuration files to be downloaded from the URL provided as a parameter and copied in the Terraform workspace.
 If the `/tmp/backup` directory exists, it is deleted. The URL is expected to point to a `*.zip` archive containing the new configuration files.
-If no URL is provided, the effector uses the URL provided as a value for the `tf.configuration.url` when the blueprint was deployed.
+If no URL is provided, the effector uses the URL provided as a value for the `tf.configuration.url` when the blueprint is deployed.
 
 This effector is useful when the `tf.configuration.url` points to a dynamic URL, such as a GitHub release(e.g. https://github.com/<REPO>/<PROJECT>/releases/latest/download/tf-config.zip) because it allows updating the Terraform configuration from a remote dynamic source.
 
-**Note** Invoking the `reinstallConfig` effector will not affect the `*.tfvars` file that was provided using the `tf.tfvars.url` configuration key.
+**Note** Invoking the `reinstallConfig` effector will not affect the `*.tfvars` file that is provided using the `tf.tfvars.url` configuration key.
 
 #### Customizing Terraform Variables Values Using Brooklyn Configurations
 
 Apache Brooklyn allows injection of values for Terraform Variables using `brooklyn.config` and modifying those values after a Terraform configuration has been applied. 
 
-In the following blueprint, a Brooklyn parameter named `resourceName` is declared having a property `reconfigurable` set to `true`. This means the value of this parameter can be edited after an application was deployed. 
+In the following blueprint, a Brooklyn parameter named `resourceName` is declared having a property `reconfigurable` set to `true`. This means the value of this parameter can be edited after an application is deployed. 
 The `resourceName` parameter is configured to have the value `overriddenResourceName`  in the `brooklyn.config` section of the Terraform Configuration service.
 The value of this parameter is injected into the `TF_VAR_resource_name` environment variable using Brooklyn DSL. Terraform takes this value and uses it for the `resource_name` variable in the configuration.
 In this blueprint, it is used as a `Name` tag for the created `aws_instance`.
