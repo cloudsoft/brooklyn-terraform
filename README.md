@@ -204,13 +204,67 @@ And configure the `terraform` provider in `brooklyn.properties`:
 
 ### Updating an Existing Deployment
 
+Apache Brooklyn facilitates modifying an existing Terraform deployment through effectors and mutable config keys. 
+
+#### Using the `reinstallConfig` Effector
+
 The Terraform Configuration entity provides an effector named `reinstallConfig`. Invoking this effector causes the Terraform configuration files to be moved to the `/tmp/backup` directory and a set of configuration files to be downloaded from the URL provided as a parameter and copied in the Terraform workspace.
 If the `/tmp/backup` directory exists, it is deleted. The URL is expected to point to a `*.zip` archive containing the new configuration files.
-If no URL is provided, the effector uses the URL provided as a value for the `tf.configuration.url` when the blueprint was deployed.
+If no URL is provided, the effector uses the URL provided as a value for the `tf.configuration.url` when the blueprint is deployed.
 
-This effector this useful when the `tf.configuration.url` points to a dynamic URL, such as a GitHub release(e.g. https://github.com/<REPO>/<PROJECT>/releases/latest/download/tf-config.zip) because it allows updating the Terraform configuration from a remote dynamic source.
+This effector is useful when the `tf.configuration.url` points to a dynamic URL, such as a GitHub release(e.g. https://github.com/<REPO>/<PROJECT>/releases/latest/download/tf-config.zip) because it allows updating the Terraform configuration from a remote dynamic source.
 
-**Note** Invoking the `reinstallConfig` effector will not affect the `*.tfvars` file that was provided using the `tf.tfvars.url` configuration key.
+**Note** Invoking the `reinstallConfig` effector will not affect the `*.tfvars` file that is provided using the `tf.tfvars.url` configuration key.
+
+#### Customizing Terraform Variables Values Using Brooklyn Configurations
+
+Apache Brooklyn allows injection of values for Terraform Variables using `brooklyn.config` and modifying those values after a Terraform configuration has been applied. 
+
+In the following blueprint, a Brooklyn parameter named `resourceName` is declared having a property `reconfigurable` set to `true`. This means the value of this parameter can be edited after an application is deployed. 
+The `resourceName` parameter is configured to have the value `overriddenResourceName` in the `brooklyn.config` section of the Terraform Configuration service.
+The value of this parameter is injected into the `TF_VAR_resource_name` environment variable using Brooklyn DSL. Terraform takes this value and uses it for the `resource_name` variable in the configuration.
+In this blueprint, it is used as a `Name` tag for the created `aws_instance`.
+
+```yaml
+name: Brooklyn Terraform Deployment
+location: localhost
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      resourceName: overriddenResourceName
+      tf.configuration.contents: |
+        variable resource_name {
+        }
+
+        provider "aws" {
+            ...
+        }
+
+        resource "aws_instance" "resource1" {
+            ami = "ami-02df9ea15c1778c9c"
+            instance_type = "t1.micro"
+            tags = {
+                Name = "${var.resource_name}"
+            }
+        }  
+      shell.env:
+        TF_VAR_resource_name: '$brooklyn:config("resourceName")'
+    brooklyn.parameters:
+      - name: resourceName
+        type: string
+        reconfigurable: true
+        default: defaultResourceName
+```
+
+The `resourceName` parameter value can be easily modified via the App Inspector UI in the Terraform Configuration entity's Config Summary Table(its value can also be changed using the `br` CLI, or via the REST API).
+Once the variable is modified, a notification of the success/failure of the operation is displayed.
+If the new value was accepted, the `tf.plan` sensor displays `{tf.plan.status=DESYNCHRONIZED, <resource change details>}` and Apache Brooklyn and Brooklyn sets the application `ON_FIRE`.
+The `tf.plan.status=DESYNCHRONIZED` means the plan that was executed (based on the most recent configuration, that includes the new variable value) no longer matches the infrastructure, so the plan and the infrastructure are not in sync.
+
+The user needs to invoke the `apply` effector for the Terraform Configuration entity to apply the changes of the updated configuration.
+
+In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 
 ### Destroy Operations
 
@@ -219,7 +273,7 @@ Although it can be invoked from AMP, this will leave your deployment in an unpre
 The `-target option` is not for routine use, and is provided only for exceptional situations such as recovering from errors or mistakes, or when Terraform specifically suggests to use it as part of an error message. Applied changes may be incomplete.
 The recommended way to discard your resources safely is to update the Terraform configuration and invoke the `reinstallConfig`. 
 
-Invoking the `destroy` effector of a Terraform Configuration entity destroys the resources, but keeps the configuration accesible via the stopped entity. 
+Invoking the `destroy` effector of a Terraform Configuration entity destroys the resources, but keeps the configuration accessible via the stopped entity. 
 Undoing the effect of a `destroy` effector invocation on the Terraform Configuration entity is possible by invoking `reinstallConfig` effector of the Terraform Configuration entity. This recreates the managed resources and the entities matching them.
 
 ### Terraform Drift Managing
@@ -298,6 +352,7 @@ The plan is executed and the resource is created. What happens if the AWS instan
 This resource state change is reported as an `update drift` by Terraform.
 Based on the information provided by the `tf.plan` sensor the affected entity are shown as being `ON_FIRE`. 
 The `tf.plan` sensor displays:
+
 ```
 {
   tf.plan.message=Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 0 to add, 0 to change, 0 to destroy., 
