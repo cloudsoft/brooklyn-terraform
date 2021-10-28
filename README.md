@@ -258,7 +258,9 @@ services:
 ```
 
 The `resourceName` parameter value can be easily modified via the App Inspector UI in the Terraform Configuration entity's Config Summary Table.(Its value can also be changed using the `br` CLI, or via the REST API)
-Once the value is modified, the deployment enters a drift state, the `tf.plan` sensor displays `{tf.plan.status=DRIFT, <resource change details>}` and Apache Brooklyn and Brooklyn sets the application `ON_FIRE`.
+Once the variable is modified, a notification of the success/failure of the operation is displayed.
+If the new value was accepted, the `tf.plan` sensor displays `{tf.plan.status=DESYNCHRONIZED, <resource change details>}` and Apache Brooklyn and Brooklyn sets the application `ON_FIRE`.
+The `tf.plan.status=DESYNCHRONIZED` means the plan that was executed (based on the most recent configuration, that includes the new variable value) no longer matches the infrastructure, so the plan and the infrastructure are not in sync.
 
 The user needs to invoke the `apply` effector for the Terraform Configuration entity to apply the changes of the updated configuration.
 
