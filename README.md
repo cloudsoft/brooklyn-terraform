@@ -221,7 +221,7 @@ This effector is useful when the `tf.configuration.url` points to a dynamic URL,
 Apache Brooklyn allows injection of values for Terraform Variables using `brooklyn.config` and modifying those values after a Terraform configuration has been applied. 
 
 In the following blueprint, a Brooklyn parameter named `resourceName` is declared having a property `reconfigurable` set to `true`. This means the value of this parameter can be edited after an application is deployed. 
-The `resourceName` parameter is configured to have the value `overriddenResourceName`  in the `brooklyn.config` section of the Terraform Configuration service.
+The `resourceName` parameter is configured to have the value `overriddenResourceName` in the `brooklyn.config` section of the Terraform Configuration service.
 The value of this parameter is injected into the `TF_VAR_resource_name` environment variable using Brooklyn DSL. Terraform takes this value and uses it for the `resource_name` variable in the configuration.
 In this blueprint, it is used as a `Name` tag for the created `aws_instance`.
 
