@@ -38,7 +38,7 @@ public interface TerraformConfiguration extends SoftwareProcess {
     // Update reference.json when changing this value.
     @SetFromFlag("version")
     ConfigKey<String> SUGGESTED_VERSION = ConfigKeys
-            .newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.8");
+            .newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.10");
 
     @SetFromFlag("tfPollingPeriod")
     ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
