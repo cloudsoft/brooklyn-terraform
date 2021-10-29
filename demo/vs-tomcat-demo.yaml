@@ -7,7 +7,7 @@ services:
     tf.configuration.url: https://github.com/iuliana/vs-tomcat/releases/latest/download/vs-tomcat.zip
     # populate with the proper credentials
     tf.tfvars.url: https://XXX:XXX@artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/amp/vs-terraform.tfvars
-- type: 'org.apache.brooklyn.entity.group.DynamicGroup:1.1.0-SNAPSHOT'
+- type: org.apache.brooklyn.entity.group.DynamicGroup
   name: VSphere VMs
   brooklyn.config:
     dynamicgroup.entityfilter:
