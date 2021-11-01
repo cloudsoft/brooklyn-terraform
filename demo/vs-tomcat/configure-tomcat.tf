@@ -12,6 +12,7 @@ resource "vsphere_virtual_machine" "tomcatVM" {
   datastore_id     = data.vsphere_datastore.datastore.id
   guest_id = data.vsphere_virtual_machine.template.guest_id
   scsi_type = data.vsphere_virtual_machine.template.scsi_type
+  folder = vsphere_folder.tf_folder.path
   num_cpus = 2
   memory   = 4096
   tags = [vsphere_tag.server_tag.id]
@@ -63,6 +64,6 @@ resource "vsphere_virtual_machine" "tomcatVM" {
   }
 
   depends_on = [
-    vsphere_virtual_machine.mysqlVM
+    vsphere_folder.tf_folder, vsphere_virtual_machine.mysqlVM
   ]
 }

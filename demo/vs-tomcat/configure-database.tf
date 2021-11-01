@@ -7,11 +7,12 @@ resource "vsphere_tag" "db_tag" {
 ##vSphere VMs - This is the section where we actually do the cloning of the virtual machine
 
 resource "vsphere_virtual_machine" "mysqlVM" {
-  name             = "terraform-db-vm"
+  name             = var.db_vm_name
   resource_pool_id = data.vsphere_resource_pool.pool.id
   datastore_id     = data.vsphere_datastore.datastore.id
   guest_id = data.vsphere_virtual_machine.template.guest_id
   scsi_type = data.vsphere_virtual_machine.template.scsi_type
+  folder = vsphere_folder.tf_folder.path
   num_cpus = 2
   memory   = 4096
   tags = [vsphere_tag.db_tag.id]
@@ -61,4 +62,8 @@ resource "vsphere_virtual_machine" "mysqlVM" {
       host     = vsphere_virtual_machine.mysqlVM.default_ip_address
     }
   }
+
+  depends_on = [
+    vsphere_folder.tf_folder
+  ]
 }

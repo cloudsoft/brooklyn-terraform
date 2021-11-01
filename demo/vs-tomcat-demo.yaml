@@ -8,12 +8,17 @@ services:
     # populate with the proper credentials
     tf.tfvars.url: https://XXX:XXX@artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/amp/vs-terraform.tfvars
     shell.env:
-      TF_VAR_tomcat_vm_name: '$brooklyn:config("tomcatVmName")'
+      TF_VAR_tomcat_vm_name: '$brooklyn:config("tomcat.vm.name")'
+      TF_VAR_db_vm_name: '$brooklyn:config("db.vm.name")'
   brooklyn.parameters:
-    - name: tomcatVmName
+    - name: tomcat.vm.name
       type: string
       reconfigurable: true
       default: terraform-tomcat-vm
+    - name: db.vm.name
+      type: string
+      reconfigurable: true
+      default: terraform-mysql-vm
 - type: org.apache.brooklyn.entity.group.DynamicGroup
   name: VSphere VMs
   brooklyn.config:
