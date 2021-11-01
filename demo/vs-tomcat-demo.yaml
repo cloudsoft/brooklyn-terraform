@@ -7,6 +7,13 @@ services:
     tf.configuration.url: https://github.com/iuliana/vs-tomcat/releases/latest/download/vs-tomcat.zip
     # populate with the proper credentials
     tf.tfvars.url: https://XXX:XXX@artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/amp/vs-terraform.tfvars
+    shell.env:
+      TF_VAR_tomcat_vm_name: '$brooklyn:config("tomcatVmName")'
+  brooklyn.parameters:
+    - name: tomcatVmName
+      type: string
+      reconfigurable: true
+      default: terraform-tomcat-vm
 - type: org.apache.brooklyn.entity.group.DynamicGroup
   name: VSphere VMs
   brooklyn.config:
