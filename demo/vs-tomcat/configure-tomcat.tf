@@ -7,7 +7,7 @@ resource "vsphere_tag" "server_tag" {
 ##vSphere VMs - This is the section where we actually do the cloning of the virtual machine
 
 resource "vsphere_virtual_machine" "tomcatVM" {
-  name             = "terraform-tomcat-vm"
+  name             = var.tomcat_vm_name
   resource_pool_id = data.vsphere_resource_pool.pool.id
   datastore_id     = data.vsphere_datastore.datastore.id
   guest_id = data.vsphere_virtual_machine.template.guest_id
