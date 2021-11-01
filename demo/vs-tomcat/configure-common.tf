@@ -40,6 +40,12 @@ data "vsphere_virtual_machine" "template" {
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
+resource "vsphere_folder" "tf_folder" {
+  path          = var.vsphere_demo
+  type          = "vm"
+  datacenter_id = data.vsphere_datacenter.dc.id
+}
+
 resource "vsphere_tag_category" "category" {
   name        = "terraform-test-category"
   cardinality = "SINGLE"
@@ -50,3 +56,4 @@ resource "vsphere_tag_category" "category" {
     "Datastore",
   ]
 }
+
