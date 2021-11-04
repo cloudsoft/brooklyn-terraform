@@ -67,11 +67,7 @@ public class StateParser {
                         while(it.hasNext()) {
                             Map.Entry<String,JsonNode> value =  it.next();
                             if(value.getValue() != null && !blankItems.contains(value.getValue().toString())) {
-                                if (value.getValue() instanceof TextNode){
-                                    resourceBody.put("value." + value.getKey(), value.getValue().asText());
-                                } else {
-                                    resourceBody.put("value." + value.getKey(), value.getValue());
-                                }
+                                resourceBody.put("value." + value.getKey(), sanitiseValue(value.getValue()));
 
                                 if (value.getKey().equalsIgnoreCase("instance_state")) {
                                     resourceBody.put("resource.status", value.getValue().asText());
@@ -85,11 +81,7 @@ public class StateParser {
                         while(it.hasNext()) {
                             Map.Entry<String,JsonNode> value =  it.next();
                             if(value.getValue() != null && !blankItems.contains(value.getValue().toString())) {
-                                if (value.getValue() instanceof TextNode){
-                                    resourceBody.put("sensitive.value." + value.getKey(), value.getValue().asText() + "\n");
-                                } else {
-                                    resourceBody.put("sensitive.value." + value.getKey(), value.getValue() + "\n");
-                                }
+                                resourceBody.put("sensitive.value." + value.getKey(), sanitiseValue(value.getValue()));
                             }
                         }
                     }
@@ -194,5 +186,9 @@ public class StateParser {
             result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         }
         return result;
+    }
+
+    private static Object sanitiseValue(Object obj){
+        return (obj instanceof TextNode) ? ((TextNode)obj).asText() : obj;
     }
 }
