@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.cloudsoft.terraform.TerraformConfiguration;
@@ -28,6 +29,8 @@ public class StateParser {
     private static  Predicate<? super PlanLogEntry> plannedChangedPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.PLANNED_CHANGE;
     private static  Predicate<? super PlanLogEntry> driftPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.RESOURCE_DRIFT;
     private static  Predicate<? super PlanLogEntry> errorPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC;
+    private static Predicate<? super JsonNode> isNotBlankPredicate = node -> node != null && !blankItems.contains((node instanceof TextNode) ? node.asText() : node.toString());
+
 
     public static Map<String, Object> parseResources(final String state){
         Map<String, Object> result  = new HashMap<>();
@@ -65,8 +68,9 @@ public class StateParser {
                         Iterator<Map.Entry<String, JsonNode>>  it = resource.get("values").fields();
                         while(it.hasNext()) {
                             Map.Entry<String,JsonNode> value =  it.next();
-                            if(value.getValue() != null && !blankItems.contains(value.getValue().toString())) {
-                                resourceBody.put("value." + value.getKey(), value.getValue());
+                            if(isNotBlankPredicate.test(value.getValue())) {
+                                resourceBody.put("value." + value.getKey(), value.getValue().asText());
+
                                 if (value.getKey().equalsIgnoreCase("instance_state")) {
                                     resourceBody.put("resource.status", value.getValue().asText());
                                 }
@@ -78,8 +82,8 @@ public class StateParser {
                         Iterator<Map.Entry<String, JsonNode>>  it = resource.get("sensitive_values").fields();
                         while(it.hasNext()) {
                             Map.Entry<String,JsonNode> value =  it.next();
-                            if(value.getValue() != null && !blankItems.contains(value.getValue().toString())) {
-                                resourceBody.put("sensitive.value." + value.getKey(), value.getValue() + "\n");
+                            if(isNotBlankPredicate.test(value.getValue())) {
+                                resourceBody.put("sensitive.value." + value.getKey(), value.getValue().asText());
                             }
                         }
                     }
@@ -185,4 +189,5 @@ public class StateParser {
         }
         return result;
     }
+
 }
