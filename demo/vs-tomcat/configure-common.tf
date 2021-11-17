@@ -47,7 +47,7 @@ resource "vsphere_folder" "tf_folder" {
 }
 
 resource "vsphere_tag_category" "category" {
-  name        = "terraform-test-category"
+  name        = var.category_name
   cardinality = "SINGLE"
   description = "Managed by Terraform"
 

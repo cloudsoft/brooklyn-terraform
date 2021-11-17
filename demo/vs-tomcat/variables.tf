@@ -27,3 +27,7 @@ variable "db_vm_name" {
 variable "vsphere_demo" {
   default = "Brooklyn Terraform Demo Vms"
 }
+
+variable "category_name" {
+  default = "terraform-test-category"
+}

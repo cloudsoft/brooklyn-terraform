@@ -1,5 +1,5 @@
 resource "vsphere_tag" "db_tag" {
-  name        = "terraform-test-database-server"
+  name        = var.db_vm_name
   category_id = vsphere_tag_category.category.id
   description = "DB managed by Terraform"
 }

@@ -1,5 +1,5 @@
 resource "vsphere_tag" "server_tag" {
-  name        = "terraform-test-app-server"
+  name        = var.tomcat_vm_name
   category_id = vsphere_tag_category.category.id
   description = "App Server managed by Terraform"
 }
