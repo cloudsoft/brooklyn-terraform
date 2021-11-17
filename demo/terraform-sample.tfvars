@@ -8,7 +8,7 @@ vsphere_virtual_machine = "cloudsoft-ubuntu-20.04-for-terraform"
 vm_user = "XXX" # replace with actual value
 vm_password = "XXX" # replace with actual value
 # the next set of values should be customized by every user deploying the  vs-tomcat-demo.yaml
-vsphere_demo = "Brooklyn Terraform Demo Vms" # customize this
-category_name = "terraform-test-category"  #customize this
-db_vm_name = "tf-db-vm" # customize this
-tomcat_vm_name = "tf-tomcat-vm" # customize this
+vsphere_demo = "Brooklyn Terraform Demo Vms"
+category_name = "terraform-test-category"
+db_vm_name = "tf-db-vm"
+tomcat_vm_name = "tf-tomcat-vm"
