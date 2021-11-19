@@ -387,3 +387,29 @@ This sensor causes the Terraform Configuration entity and the application to be 
 
 The only action possible in this situation is to repair the broken configuration file(s).  In about 30 seconds, at the next Apache Brooklyn inspection, all will be well with the world again. 
 If valid changes were added to the configuration, invoking the `apply` effector is required.
+
+## Grouping Resources
+
+AMP only shows resources being created and managed by Terraform, but when deployments consist of a big number of resources, it might be practical to group them together based on various criteria. For example, the next blueprint,a predicate is declared for the Terraform Configuration entity, to group resources based on the output of the `tf.resource.type` sensor. This results  in an additional child entity being created under the Terraform Configuration entity that groups all the VMs together.
+
+```yaml
+location: localhost
+name: Hetzner Deploying a single VM
+services:
+- type: terraform
+  name: Terraform Configuration
+  brooklyn.config:
+    tf.configuration.url: https://.../vs-tomcat.zip
+    # populate with the proper credentials
+    tf.tfvars.url: https://.../vs-terraform.tfvars
+- type: org.apache.brooklyn.entity.group.DynamicGroup
+  name: VSphere VMs
+  brooklyn.config:
+    dynamicgroup.entityfilter:
+      '$brooklyn:object':
+        type: io.cloudsoft.terraform.predicates.TerraformDiscoveryPredicates
+        factoryMethod.name: sensorMatches
+        factoryMethod.args:
+        - tf.resource.type
+        - vsphere_virtual_machine
+```
