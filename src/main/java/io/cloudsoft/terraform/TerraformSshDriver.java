@@ -196,11 +196,8 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             LOG.debug("Terraform plan exists!!");
         } else {
             runApplyTask();
-            // workaround for vsphere
-            if (provider == PlanLogEntry.Provider.VSPHERE) {
-                runJsonPlanTask();
-                runLightApplyTask();
-            }
+            runJsonPlanTask();
+            runLightApplyTask();
         }
     }
 
