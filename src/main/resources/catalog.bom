@@ -13,3 +13,8 @@ brooklyn.catalog:
     name: Terraform Configuration
     item:
         type: io.cloudsoft.terraform.TerraformConfiguration
+
+  - id: terraform-predicates
+    name: Terraform Predicates
+    item:
+        type: io.cloudsoft.terraform.predicates.TerraformDiscoveryPredicates
