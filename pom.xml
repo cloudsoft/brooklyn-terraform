@@ -212,6 +212,7 @@
                     </instructions>
                 </configuration>
             </plugin>
+
         </plugins>
     </build>
 
