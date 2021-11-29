@@ -206,6 +206,43 @@ And configure the `terraform` provider in `brooklyn.properties`:
 
 Apache Brooklyn facilitates modifying an existing Terraform deployment through effectors and mutable config keys. 
 
+### Terraform Backends
+
+Terraform allows the user to store the state file in a centralised location, commonly referred to as Terraform Backend. Setting up a remote
+Terraform Backed allows multiple users to access the same state of the architecture and this is a recommended approach when using Terraform.
+An example of a blueprint which uses an AWS S3 bucket to store the state file is presented below:
+
+```yaml
+name: Brooklyn Terraform Deployment
+location: localhost
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      tf.configuration.contents: |
+        terraform {
+            backend "s3" {
+                bucket = "..."
+                key    = "..."
+                region = "eu-west-1"
+                access_key = "..."
+                secret_key = "..."
+            }
+        }
+        provider "aws" {
+            ...
+        }
+
+        resource "aws_instance" "demo-vm" {
+            ami = "ami-02df9ea15c1778c9c"
+            instance_type = "t1.micro"
+        }
+```
+
+Additionally, having the state file stored remotely, AMP is capable of connecting to an already existing infrastructure. If a backend is specified in the blueprint,
+but the infrastructure does not exist or is different from the supplied configuration, Terraform will create the required resources.
+However, if the infrastructure has already been provisioned, `terraform plan` command will determine there are no changes to be done and connect the AMP application to allow management of the Terraform architecture.
+
 #### Using the `reinstallConfig` Effector
 
 The Terraform Configuration entity provides an effector named `reinstallConfig`. Invoking this effector causes the Terraform configuration files to be moved to the `/tmp/backup` directory and a set of configuration files to be downloaded from the URL provided as a parameter and copied in the Terraform workspace.
