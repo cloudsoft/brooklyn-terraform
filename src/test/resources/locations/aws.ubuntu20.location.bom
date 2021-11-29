@@ -1,6 +1,6 @@
 brooklyn.catalog:
   id: aws_ubuntu20_location
-  version: 1.0.0-SNAPSHOT  # BROOKLYN_TOSCA13_VERSION
+  version: 1.0.0-20211129.1255  # BROOKLYN_TOSCA13_VERSION
   items:
 
 # note: requires in .brooklyn/brooklyn.properties:
