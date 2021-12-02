@@ -1,5 +1,5 @@
 location: localhost
-name: Apache Tomcat + MySQL on VSPhere
+name: Apache Tomcat + MySQL on VSphere Demo
 services:
 - type: terraform
   name: Terraform Configuration

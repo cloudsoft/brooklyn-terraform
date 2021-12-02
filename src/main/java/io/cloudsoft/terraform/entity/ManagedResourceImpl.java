@@ -4,6 +4,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import io.cloudsoft.terraform.TerraformConfiguration;
 import org.apache.brooklyn.api.location.Location;
+import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
@@ -31,9 +32,12 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
                 .build() , "");
     }
 
+    @Effector(description = "[TBD]Start the resource based on the type.")
     @Override
     public void start(Collection<? extends Location> locations) {
-        // terraform started this, nothing to be done here
+        // TODO Do we even want to allow control from AMP?
+        // start means different things for different resource types.
+        // TODO consider executing an operation based on the resource type
         connectSensors();
     }
 
@@ -55,13 +59,15 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
         return true;
     }
 
+    @Effector(description = "[TBD]Stop the resource based on the type.")
     @Override
     public void stop() {
+        // TODO Do we even want to allow control from AMP?
         // stop means different things for different resource types.
         // TODO consider executing an operation based on the resource type
     }
 
-
+    @Effector(description = "[TBD]Restart the resource based on the type.")
     @Override
     public void restart() {
         // figure out how to do this - get the location from Resource !? Use terrraform ?
