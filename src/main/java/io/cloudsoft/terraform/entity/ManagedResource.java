@@ -38,9 +38,6 @@ public interface ManagedResource extends BasicEntity, Startable {
     ConfigKey<String> ADDRESS =  ConfigKeys.newStringConfigKey("tf.resource.address",
             "Terraform resource address.", null);
 
-    @Effector(description="Performs the Terraform destroy command which will destroy this resource.")
-    void destroy();
-
     AttributeSensor<String> RESOURCE_STATUS = Sensors.newStringSensor("tf.resource.status",
             "The status of this resource");
 

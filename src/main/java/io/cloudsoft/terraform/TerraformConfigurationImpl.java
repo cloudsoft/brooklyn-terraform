@@ -351,27 +351,4 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             }
         }
     }
-
-    @Override
-    public void destroyTarget(ManagedResource child) {
-        final boolean mayProceed = configurationChangeInProgress.compareAndSet(false, true);
-        if (mayProceed) {
-            try {
-                child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING);
-                final String destroyTargetCommand = getDriver().destroyCommand().concat(" -target=")
-                    .concat(child.getConfig(ManagedResource.TYPE)).concat(".").concat(child.getConfig(ManagedResource.NAME));
-                int result = getDriver().runDestroyTargetTask(destroyTargetCommand);
-                if (result == 0 ) {
-                    child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
-                    removeChild(child);
-                } else {
-                    child.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
-                }
-            } finally {
-                configurationChangeInProgress.set(false);
-            }
-        } else {
-            throw new IllegalStateException("Cannot destroy target: another operation is in progress.");
-        }
-    }
 }

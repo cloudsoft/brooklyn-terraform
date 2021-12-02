@@ -305,9 +305,9 @@ In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effe
 
 ### Destroy Operations
 
-A `destroy` effector is provided for each entity matching a Terraform managed resource. Under the bonnet this effector executes`terraform destroy -auto-approve -target=<resource address>`.
-Although it can be invoked from AMP, this will leave your deployment in an unpredictable state, depending on the dependencies between the resources. According to the official documentation,
-The `-target option` is not for routine use, and is provided only for exceptional situations such as recovering from errors or mistakes, or when Terraform specifically suggests to use it as part of an error message. Applied changes may be incomplete.
+A `stop` effector is provided for each entity matching a Terraform managed resource. Under the bonnet this effector has no effect, because its action should be based on the resource type.
+Even if implemented, when invoked from AMP, it would leave your deployment in an unpredictable state, depending on the dependencies between the resources. 
+
 The recommended way to discard your resources safely is to update the Terraform configuration and invoke the `reinstallConfig`. 
 
 Invoking the `destroy` effector of a Terraform Configuration entity destroys the resources, but keeps the configuration accessible via the stopped entity. 

@@ -57,18 +57,16 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
 
     @Override
     public void stop() {
-        destroy();
+        // stop means different things for different resource types.
+        // TODO consider executing an operation based on the resource type
     }
 
-    @Override
-    public void destroy() {
-        ((TerraformConfiguration)getParent()).destroyTarget(this);
-    }
 
     @Override
     public void restart() {
         // figure out how to do this - get the location from Resource !? Use terrraform ?
-        //Do we even want to allow control from AMP?
+        // check comments on stop as well
+        // TODO Do we even want to allow control from AMP?
     }
 
     public void updateResourceState(){

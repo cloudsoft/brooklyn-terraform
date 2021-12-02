@@ -94,7 +94,5 @@ public interface TerraformConfiguration extends SoftwareProcess {
             "This is useful when the URL points to a GitHub or Artifactory release.")
     void reinstallConfig(@EffectorParam(name = "configUrl", description = "URL pointing to the terraform configuration") @Nullable String configUrl);
 
-    void destroyTarget(ManagedResource child);
-
     TerraformDriver getDriver();
 }
