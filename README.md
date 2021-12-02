@@ -143,7 +143,28 @@ services:
 
 ### Terraform Managed Resources
 
-Each resource that Terraform manages corresponds to an entity represented in Apache Brooklyn as a child of the Terraform Configuration entity. **(TODO add more information here after the discovery work is done)**
+Each resource that Terraform manages corresponds to an entity represented in Apache Brooklyn as a child of the Terraform Configuration entity. 
+
+Resources can be grouped in AMP configuring a`org.apache.brooklyn.entity.group.DynamicGroup`  with a `io.cloudsoft.terraform.predicates.TerraformDiscoveryPredicates` that provided a criteria based on which resources should be grouped(e.g. resource type).
+
+```yaml
+name: Apache Tomcat + MySQL on VSphere Demo
+services:
+- type: terraform
+  name: Terraform Configuration
+  brooklyn.config:
+    ...
+- type: org.apache.brooklyn.entity.group.DynamicGroup
+  name: VSphere Tags
+  brooklyn.config:
+    dynamicgroup.entityfilter:
+      '$brooklyn:object':
+        type: io.cloudsoft.terraform.predicates.TerraformDiscoveryPredicates
+        factoryMethod.name: sensorMatches
+        factoryMethod.args:
+        - tf.resource.type
+        - vsphere_tag
+```
 
 ### Terraform Variables Support
 

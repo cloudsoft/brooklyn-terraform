@@ -2,7 +2,6 @@ package io.cloudsoft.terraform;
 
 import java.util.Map;
 
-import io.cloudsoft.terraform.entity.ManagedResource;
 import org.apache.brooklyn.api.catalog.Catalog;
 import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;

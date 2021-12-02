@@ -2,7 +2,6 @@ package io.cloudsoft.terraform.entity;
 
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
-import io.cloudsoft.terraform.TerraformConfiguration;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.config.ConfigKeys;
