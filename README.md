@@ -141,7 +141,7 @@ services:
         }
 ```
 
-### Terraform Managed Resources
+### Terraform Resources
 
 Each resource that Terraform manages corresponds to an entity represented in Apache Brooklyn as a child of the Terraform Configuration entity. 
 
@@ -165,6 +165,10 @@ services:
         - tf.resource.type
         - vsphere_tag
 ```
+
+**Note:** The entities corresponding grouping nodes created based on predicates do not update their state in tandem with the Terraform Configuration entity, so if the Terraform deployment is modified and resources are added or removed, 
+
+Resources not managed by Terraform, but represent the support on which Terraform creates its own, also called `data resources`, are discovered and grouped under an entity named `Data Resources`. 
 
 ### Terraform Variables Support
 

@@ -7,10 +7,11 @@ import com.google.common.base.Objects;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
+import io.cloudsoft.terraform.entity.DataResource;
 import io.cloudsoft.terraform.entity.ManagedResource;
+import io.cloudsoft.terraform.entity.TerraformResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
-import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
@@ -21,6 +22,7 @@ import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.core.entity.trait.Startable;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
+import org.apache.brooklyn.entity.group.BasicGroup;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
@@ -40,6 +42,8 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.cloudsoft.terraform.TerraformDriver.PLAN_STATUS;
+import static io.cloudsoft.terraform.entity.ManagedResource.RESOURCE_STATUS;
+import static io.cloudsoft.terraform.parser.EntityParser.processResources;
 
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
 
@@ -111,30 +115,33 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         Map<String, Object> state = StateParser.parseResources(result);
         sensors().set(TerraformConfiguration.STATE, state);
         Map<String, Object> resources = new HashMap<>(state);
+        updateResources(resources, this, ManagedResource.class);
+        updateDataResources(resources, DataResource.class);
+        if (!resources.isEmpty()) { // new resource, new child must be created
+            processResources(resources,this);
+        }
+    }
+
+    private void updateResources(Map<String, Object> resources, Entity parent, Class<? extends TerraformResource> clazz) {
         List<Entity> childrenToRemove = new ArrayList<>();
-        getChildren().forEach(c -> {
-            c.sensors().set(ManagedResource.RESOURCE_STATUS, "running");
-            if (resources.containsKey(c.getConfig(ManagedResource.ADDRESS))) { //child in resource set, update sensors
-                ((ManagedResource) c).refreshSensors((Map<String, Object>) resources.get(c.getConfig(ManagedResource.ADDRESS)));
-                resources.remove(c.getConfig(ManagedResource.ADDRESS));
+        parent.getChildren().stream().filter(c -> clazz.isAssignableFrom(c.getClass())).forEach(c -> {
+            c.sensors().set(RESOURCE_STATUS, "running");
+            if (resources.containsKey(c.getConfig(TerraformResource.ADDRESS))) { //child in resource set, update sensors
+                ((TerraformResource) c).refreshSensors((Map<String, Object>) resources.get(c.getConfig(TerraformResource.ADDRESS)));
+                resources.remove(c.getConfig(TerraformResource.ADDRESS));
             } else {
                 childrenToRemove.add(c);
             }
         });
-        childrenToRemove.forEach(c -> removeChild(c)); //  child not in resource set (deleted by terraform -> remove child)
-        if (!resources.isEmpty()) { // new resource, new child must be created
-            resources.forEach((resourceName, resourceContents) -> {
-                Map<String, Object> contentsMap = (Map<String, Object>) resourceContents;
-                addChild(
-                        EntitySpec.create(ManagedResource.class)
-                                .configure(ManagedResource.STATE_CONTENTS, contentsMap)
-                                .configure(ManagedResource.TYPE, contentsMap.get("resource.type").toString())
-                                .configure(ManagedResource.PROVIDER, contentsMap.get("resource.provider").toString())
-                                .configure(ManagedResource.ADDRESS, contentsMap.get("resource.address").toString())
-                                .configure(ManagedResource.NAME, contentsMap.get("resource.name").toString())
-                );
-            });
-        }
+        childrenToRemove.forEach(c -> parent.removeChild(c)); //  child not in resource set (deleted by terraform -> remove child)
+    }
+
+    /**
+     * Updates Data resources
+     */
+    private void updateDataResources(Map<String, Object> resources, Class<? extends TerraformResource> clazz) {
+        getChildren().stream().filter(c-> c instanceof BasicGroup)
+                .findAny().ifPresent(c -> updateResources(resources, c, clazz));
     }
 
     public static class PlanProvider implements Supplier<Map<String,Object>> {
@@ -161,9 +168,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
                    ((List<Map<String, Object>>) tfPlanStatus.get("tf.resource.changes")).forEach(changeMap -> {
                        String resourceAddr = changeMap.get("resource.addr").toString();
-                       TerraformConfigurationImpl.this.getChildren().stream().filter(c -> resourceAddr.equals(c.config().get(ManagedResource.ADDRESS)))
+                       TerraformConfigurationImpl.this.getChildren().stream()
+                               .filter(c -> c instanceof ManagedResource )
+                               .filter(c -> resourceAddr.equals(c.config().get(TerraformResource.ADDRESS)))
                                .findAny().ifPresent(c -> {
-                                   c.sensors().set(ManagedResource.RESOURCE_STATUS, "changed");
+                                   c.sensors().set(RESOURCE_STATUS, "changed");
                                    ((ManagedResource) c).updateResourceState();
                                });
                    });

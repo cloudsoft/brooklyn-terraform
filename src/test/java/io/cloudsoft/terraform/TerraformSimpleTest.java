@@ -34,7 +34,9 @@ public class TerraformSimpleTest {
         final String state = loadTestData("state/vs-state.json");
 
         Map<String,Object> resources = StateParser.parseResources(state);
-        assertEquals(resources.size(), 3);
+        assertEquals(resources.size(), 9);
+        long dataCount = resources.entrySet().stream().filter(e -> e.getKey().startsWith("data")).count();
+        assertEquals(dataCount,6);
         assertTrue(resources.containsKey("vsphere_tag.tag"));
         assertTrue(resources.containsKey("vsphere_tag_category.category"));
         assertTrue(resources.containsKey("vsphere_virtual_machine.vm01"));

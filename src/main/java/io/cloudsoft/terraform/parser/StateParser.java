@@ -20,7 +20,7 @@ import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
 /**
  * Naive version. To be improved further.
  */
-public class StateParser {
+public final class StateParser {
     public static final ImmutableList blankItems = ImmutableList.of("[]", "", "null", "\"\"", "{}", "[{}]");
 
     private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
@@ -56,7 +56,7 @@ public class StateParser {
             resourceNode.forEach(resource ->  {
                 Map<String, Object>  resourceBody = new LinkedHashMap<>();
 
-                if (resource.has("mode") && "managed".equals(resource.get("mode").asText())) {
+                //if (resource.has("mode") && "managed".equals(resource.get("mode").asText())) {
                     result.put(resource.get("address").asText(), resourceBody);
 
                     resourceBody.put("resource.address", resource.get("address").asText());
@@ -87,7 +87,7 @@ public class StateParser {
                             }
                         }
                     }
-                }
+                //}
 
             });
         } catch (JsonProcessingException e) {

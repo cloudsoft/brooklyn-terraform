@@ -1,23 +1,8 @@
 package io.cloudsoft.terraform;
 
-import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_URL;
-import static java.lang.String.format;
-import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
-
-import java.io.InputStream;
-import java.sql.Date;
-import java.text.SimpleDateFormat;
-import java.time.Instant;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-
-import io.cloudsoft.terraform.entity.ManagedResource;
-import io.cloudsoft.terraform.parser.PlanLogEntry;
+import com.google.common.collect.ImmutableMap;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;
-import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.core.entity.Attributes;
@@ -32,10 +17,21 @@ import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
 import org.apache.brooklyn.util.text.Strings;
-
-import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.InputStream;
+import java.sql.Date;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+
+import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_URL;
+import static java.lang.String.format;
+import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
 
 public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
     private static final Logger LOG = LoggerFactory.getLogger(TerraformSshDriver.class);
@@ -190,7 +186,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     @Override
     public void launch() {
         Map<String,Object> planLog = runJsonPlanTask();
-        PlanLogEntry.Provider provider = (PlanLogEntry.Provider) planLog.get(PLAN_PROVIDER);
         boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
         if(deploymentExists) {
             LOG.debug("Terraform plan exists!!");
@@ -199,22 +194,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             runJsonPlanTask();
             runLightApplyTask();
         }
-    }
-
-    @Override
-    public void postLaunch() {
-        final String state = runShowTask();
-        StateParser.parseResources(state).forEach((resourceName, resourceContents) ->  {
-            Map<String,Object> contentsMap = (Map<String,Object>) resourceContents;
-            this.entity.addChild(
-                    EntitySpec.create(ManagedResource.class)
-                            .configure(ManagedResource.STATE_CONTENTS, contentsMap)
-                            .configure(ManagedResource.TYPE, contentsMap.get("resource.type").toString())
-                            .configure(ManagedResource.PROVIDER, contentsMap.get("resource.provider").toString())
-                            .configure(ManagedResource.ADDRESS, contentsMap.get("resource.address").toString())
-                            .configure(ManagedResource.NAME, contentsMap.get("resource.name").toString())
-            );
-        });
     }
 
     /**
