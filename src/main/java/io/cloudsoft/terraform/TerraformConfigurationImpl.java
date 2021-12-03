@@ -301,7 +301,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         while(true) {
             if (configurationChangeInProgress.compareAndSet(false, true)) {
                 try {
-                    getDriver().jsonPlanCommand();
+                    getDriver().jsonPlanCommand(); // avoid stale plan terraform issue
                     getDriver().runApplyTask();
                     return;
                 } finally {
