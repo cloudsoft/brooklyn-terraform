@@ -10,6 +10,8 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     String PLAN_STATUS = "tf.plan.status";
     String PLAN_PROVIDER = "tf.plan.provider";
+    String RESOURCE_CHANGES = "tf.resource.changes";
+    String PLAN_MESSAGE = "tf.plan.message";
 
     void customize();
     void launch();
@@ -22,7 +24,6 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     String runOutputTask();
     String runShowTask();
     int runDestroyTask();
-    int runDestroyTargetTask(String target);
 
     // added these methods to underline the terraform possible commands
     default String initCommand() {
@@ -47,7 +48,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return makeTerraformCommand("output -no-color -json"); // Show output values from your root module
     }
     default String destroyCommand() {
-        return makeTerraformCommand("destroy -auto-approve -no-color");
+        return makeTerraformCommand("apply -destroy -auto-approve -no-color");
     }
 
     default String makeTerraformCommand(String argument) {

@@ -41,7 +41,7 @@ import javax.annotation.Nullable;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static io.cloudsoft.terraform.TerraformDriver.PLAN_STATUS;
+import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.entity.ManagedResource.RESOURCE_STATUS;
 import static io.cloudsoft.terraform.parser.EntityParser.processResources;
 
@@ -162,20 +162,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         public String apply(@Nullable Map<String, Object> tfPlanStatus) {
                 if(tfPlanStatus.get(PLAN_STATUS).equals( TerraformConfiguration.TerraformStatus.ERROR)) {
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
-                        tfPlanStatus.get("tf.plan.message") + ":" + tfPlanStatus.get("tf.errors"));
+                        tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
+                    updateResourceStates(tfPlanStatus);
             } else if(!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
-                if (tfPlanStatus.containsKey("tf.resource.changes")) {
+                if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
-                   ((List<Map<String, Object>>) tfPlanStatus.get("tf.resource.changes")).forEach(changeMap -> {
-                       String resourceAddr = changeMap.get("resource.addr").toString();
-                       TerraformConfigurationImpl.this.getChildren().stream()
-                               .filter(c -> c instanceof ManagedResource )
-                               .filter(c -> resourceAddr.equals(c.config().get(TerraformResource.ADDRESS)))
-                               .findAny().ifPresent(c -> {
-                                   c.sensors().set(RESOURCE_STATUS, "changed");
-                                   ((ManagedResource) c).updateResourceState();
-                               });
-                   });
+                    updateResourceStates(tfPlanStatus);
                 } else {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Outputs no longer match initial plan.This is not critical as the infrastructure is not affected. However you might want to invoke 'apply'.");
                 }
@@ -191,6 +183,21 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             }
             lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
             return tfPlanStatus.toString();
+        }
+
+        private void updateResourceStates(Map<String, Object> tfPlanStatus) {
+            if(tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
+                ((List<Map<String, Object>>) tfPlanStatus.get(RESOURCE_CHANGES)).forEach(changeMap -> {
+                    String resourceAddr = changeMap.get("resource.addr").toString();
+                    TerraformConfigurationImpl.this.getChildren().stream()
+                            .filter(c -> c instanceof ManagedResource)
+                            .filter(c -> resourceAddr.equals(c.config().get(TerraformResource.ADDRESS)))
+                            .findAny().ifPresent(c -> {
+                                c.sensors().set(RESOURCE_STATUS, "changed");
+                                ((ManagedResource) c).updateResourceState();
+                            });
+                });
+            }
         }
     }
 
@@ -294,6 +301,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         while(true) {
             if (configurationChangeInProgress.compareAndSet(false, true)) {
                 try {
+                    getDriver().jsonPlanCommand();
                     getDriver().runApplyTask();
                     return;
                 } finally {

@@ -440,15 +440,25 @@ In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effe
 If the instance was not started manually, the matching entity is shown as stopped (grey bubble). If the instance was started the matching entity is shown as running(green bubble). 
 The Terraform Configuration entity managing and unaffected entities are shown as `RUNNING`.
 
-#### Editing the Configuration File(s) Goes Wrong
+### Recovering from an Error state
+
+**Editing Configuration File(s) Goes Wrong**
 
 Manually editing the Terraform configuration file(s) is a risky business(we are only humans, after all) and in case there are errors Apache Brooklyn reflects this situation as well.
 In case of duplicate resources, or syntax errors, the `tf.plan` sensor displays `{tf.plan.status=ERROR, <hints about what is wrong>}`. There is also a special Apache Brooklyn sensor named `service.problems` 
 that is populated with the details of the error and a very helpful message: `{"TF-ERROR":"Something went wrong. Check your configuration.<hints about what is wrong>"}`. 
-This sensor causes the Terraform Configuration entity and the application to be reported as being `ON_FIRE`, but the entities matching resouces are shown as `RUNNING` since they are not affected by the configuration errors.
+This sensor causes the Terraform Configuration entity and the application to be reported as being `ON_FIRE`, but the entities matching resources are shown as `RUNNING` since they are not affected by the configuration errors.
 
-The only action possible in this situation is to repair the broken configuration file(s).  In about 30 seconds, at the next Apache Brooklyn inspection, all will be well with the world again. 
-If valid changes were added to the configuration, invoking the `apply` effector is required.
+The only action possible in this situation is to repair the broken configuration file(s).  In about 30 seconds, at the next Apache Brooklyn inspection, all will be well with the world again. If valid changes were added to the configuration, invoking the `apply` effector is required.
+
+**Manually Modifying Infrastructure**
+
+Depending on the cloud provider used and dependencies between resources declared in the Terraform configuration file(s), manually modifying or deleting infrastructure resources has a big change to put the Terraform deployment in an UNRECOVERABLE error state. 
+
+E.g: Terraform configuration declares a tag resource used to tag a VM and the provider is VSphere. If the tag is manually deleted, the Terraform deployment goes into an UNRECOVERABLE error state that is reflected in AMP using the `tf.plan` sensor that shows `{tf.plan.message=Terraform in UNRECOVERABLE error state., tf.errors=<...>, tf.plan.status=ERROR, tf.resource.changes=[{resource.addr=.., resource.action=No action. Unrecoverable state.}]}`. 
+
+**Note:** Unfortunately, Terraform cannot recover from this state, and neither does AMP. Once in this state, effectors become useless, and destroying the resources doesn't work either. Clean-up has to be done manually.
+
 
 ## Grouping Resources
 

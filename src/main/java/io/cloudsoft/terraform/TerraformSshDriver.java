@@ -13,6 +13,7 @@ import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
+import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
@@ -52,22 +53,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
         if (destroyTask.asTask().isError()) {
             throw new IllegalStateException("Error executing `terraform destroy`! ");
-            // TODO decide where we put the output from here, in case of error
-        }
-        return 0;
-    }
-
-    @Override
-    public int runDestroyTargetTask(String target) {
-        Task<String> destroyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(),target)
-                .environmentVariables(getShellEnvironment())
-                .summary("Destroying terraform resource.")
-                .returning(p -> p.getStdout()).newTask()
-                .asTask());
-        DynamicTasks.waitForLast();
-
-        if (destroyTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform destroy` on resource! ");
             // TODO decide where we put the output from here, in case of error
         }
         return 0;
@@ -215,10 +200,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
         }
         Map<String,Object> planLog = StateParser.parsePlanLogEntries(result);
-        boolean isBadPlan = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR;
-        if(isBadPlan) {
-            throw new IllegalArgumentException("Something went wrong. Check your configuration." + planLog.get("tf.errors"));
-        }
         return  planLog;
     }
 

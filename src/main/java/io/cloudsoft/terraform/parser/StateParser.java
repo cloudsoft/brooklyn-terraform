@@ -8,13 +8,13 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.cloudsoft.terraform.TerraformConfiguration;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static io.cloudsoft.terraform.TerraformDriver.PLAN_PROVIDER;
-import static io.cloudsoft.terraform.TerraformDriver.PLAN_STATUS;
+import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
 
 /**
@@ -117,10 +117,10 @@ public final class StateParser {
         Optional<PlanLogEntry> changeSummaryLog = planLogs.stream().filter(changeSummaryPredicate).findFirst(); // it is not there when the config is broken
         if(changeSummaryLog.isPresent()) {
             if (NO_CHANGES.equals(changeSummaryLog.get().message)) {
-                result.put("tf.plan.message", "No changes. Your infrastructure matches the configuration.");
+                result.put(PLAN_MESSAGE, "No changes. Your infrastructure matches the configuration.");
                 result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.SYNC);
             } else {
-                result.put("tf.plan.message", "Configuration and infrastructure do not match." + changeSummaryLog.get().message);
+                result.put(PLAN_MESSAGE, "Configuration and infrastructure do not match." + changeSummaryLog.get().message);
                 result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
             }
         }
@@ -151,7 +151,7 @@ public final class StateParser {
                 }
             });
             if(!resources.isEmpty()) {
-                result.put("tf.resource.changes", resources);
+                result.put(RESOURCE_CHANGES, resources);
             }
         }
 
@@ -166,25 +166,38 @@ public final class StateParser {
                 }
             });
             if(!resources.isEmpty()) {
-                result.put("tf.resource.changes", resources);
+                result.put(RESOURCE_CHANGES, resources);
                 result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DRIFT);
-                result.put("tf.plan.message", "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration." +  changeSummaryLog.get().message);
+                result.put(PLAN_MESSAGE, "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration." +  changeSummaryLog.get().message);
             }
         }
 
         if (planLogs.stream().anyMatch(errorPredicate)) {
-            result.put("tf.plan.message", "Something went wrong. Check your configuration.");
-            result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.ERROR);
+            List<Map<String,Object>> resources = new ArrayList<>();
+            result.put(PLAN_MESSAGE, "Something went wrong. Check your configuration.");
             StringBuilder sb = new StringBuilder();
-            planLogs.stream().filter(ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC).forEach(ple ->
-                sb.append(ple.diagnostic.get("summary")).append(":").append("detail").append("\n")
-            );
+            planLogs.stream().filter(ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC).forEach(ple -> {
+                if(StringUtils.isNotBlank(ple.diagnostic.address)) {
+                    resources.add(ImmutableMap.of(
+                            "resource.addr", ple.diagnostic.address,
+                            "resource.action", "No action. Unrecoverable state."
+                    ));
+                }
+                sb.append(ple.message).append("\n");
+            });
             result.put("tf.errors",  sb);
+            result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.ERROR);
+            if(!resources.isEmpty()) {
+                result.put(RESOURCE_CHANGES, resources);
+                result.put(PLAN_MESSAGE, "Terraform in UNRECOVERABLE error state.");
+            } else {
+                result.put(PLAN_MESSAGE, "Terraform in RECOVERABLE error state. Check configuration syntax.");
+            }
         }
 
         if(result.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC && result.containsKey("tf.output.changes")) {
             // infrastructure is ok, only the outputs set has changed
-            result.put("tf.plan.message", "Outputs configuration was changed." + changeSummaryLog.get().message);
+            result.put(PLAN_MESSAGE, "Outputs configuration was changed." + changeSummaryLog.get().message);
             result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         }
         return result;

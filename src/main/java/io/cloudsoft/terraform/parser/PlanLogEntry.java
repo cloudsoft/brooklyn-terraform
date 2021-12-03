@@ -57,7 +57,7 @@ public class PlanLogEntry {
     public Map<String, Map<String,Object>> outputs;
 
     // interested in config error for type = DIAGNOSTIC
-    public Map<String,Object> diagnostic;
+    public DiagnosticLogEntry diagnostic;
 
     public LType type;
 
