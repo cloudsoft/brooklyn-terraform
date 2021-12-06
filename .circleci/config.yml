@@ -112,13 +112,13 @@ workflows:
         - cloudsoft-artifactory
         - cloudsoft-sonatype
 
-  terraform-publish: # this builds everytime something changes on the master branch and user has manually approved deployment, this could be a different workflow if needed
+  terraform-publish: # this builds everytime something changes on the main branch and user has manually approved deployment, this could be a different workflow if needed
     triggers:
     - schedule:
         cron: "0 0 28 * *" # Fire at 00:00 on day-of-month 28.
         filters:
           branches:
-            only: [ master ] # trigger only on master
+            only: [ main ] # trigger only on main
     jobs:
     - build-and-deploy:
         context:
