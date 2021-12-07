@@ -280,8 +280,8 @@ This effector is useful when the `tf.configuration.url` points to a dynamic URL,
 
 #### Using the Managed Resource effectors
 
-The Managed Resources entities (children of the `TerraformConfiguration`) have the default effectors for a Startable type entity, i.e. `start`, `stop` and `restart`. 
-Currently (as of AMP 6.1), these effectors have no functionality for the Managed Resources and are reserved for future use. Invoking these effectors currently has no effect on the entity, which the effector is invoked for.
+The Managed Resources entities (children of the `TerraformConfiguration`) have the default effectors for a `Startable` type entity, i.e. `start`, `stop` and `restart`. 
+Currently, these effectors have no functionality for the Managed Resources and are reserved for future use. Invoking any of these effectors will have no effect on the entity.
 
 #### Customizing Terraform Variables Values Using Brooklyn Configurations
 
