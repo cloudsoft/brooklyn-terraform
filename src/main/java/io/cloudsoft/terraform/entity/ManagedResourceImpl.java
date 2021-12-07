@@ -31,15 +31,6 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
                 .build() , "");
     }
 
-    @Effector(description = "[TBD]Start the resource based on the type.")
-    @Override
-    public void start(Collection<? extends Location> locations) {
-        // TODO Do we even want to allow control from AMP?
-        // start means different things for different resource types.
-        // TODO consider executing an operation based on the resource type
-        connectSensors();
-    }
-
     protected void connectSensors() {
         Map<String, Object> resourceDetails = this.getConfig(ManagedResource.STATE_CONTENTS);
         resourceDetails.forEach((k,v) -> sensors().set(Sensors.newStringSensor("tf." + k), v.toString()));
@@ -56,22 +47,6 @@ public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResou
         resource.forEach((k, v) -> sensors().set(Sensors.newStringSensor("tf." + k), v.toString()));
         updateResourceState();
         return true;
-    }
-
-    @Effector(description = "[TBD]Stop the resource based on the type.")
-    @Override
-    public void stop() {
-        // TODO Do we even want to allow control from AMP?
-        // stop means different things for different resource types.
-        // TODO consider executing an operation based on the resource type
-    }
-
-    @Effector(description = "[TBD]Restart the resource based on the type.")
-    @Override
-    public void restart() {
-        // figure out how to do this - get the location from Resource !? Use terrraform ?
-        // check comments on stop as well
-        // TODO Do we even want to allow control from AMP?
     }
 
     public void updateResourceState(){
