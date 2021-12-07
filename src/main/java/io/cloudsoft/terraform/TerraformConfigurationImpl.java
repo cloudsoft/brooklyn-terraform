@@ -7,9 +7,7 @@ import com.google.common.base.Objects;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
-import io.cloudsoft.terraform.entity.DataResource;
-import io.cloudsoft.terraform.entity.ManagedResource;
-import io.cloudsoft.terraform.entity.TerraformResource;
+import io.cloudsoft.terraform.entity.*;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
@@ -74,7 +72,22 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     protected void postStop() {
         getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED));
-        getChildren().forEach(child -> removeChild(child));
+        getChildren().forEach(child -> {
+            if (child instanceof BasicGroup){
+                child.getChildren().forEach(grandChild -> {
+                    if (grandChild instanceof ManagedResource || grandChild instanceof DataResource){
+                        removeChild(grandChild);
+                        Entities.unmanage(grandChild);
+                    }
+                } );
+                removeChild(child);
+            }
+            if (child instanceof ManagedResource || child instanceof DataResource){
+                removeChild(child);
+                Entities.unmanage(child);
+            }
+        });
+
     }
 
 
