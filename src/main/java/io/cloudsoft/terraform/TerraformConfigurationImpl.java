@@ -210,7 +210,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                             .filter(c -> resourceAddr.equals(c.config().get(TerraformResource.ADDRESS)))
                             .findAny().ifPresent(c -> {
                                 c.sensors().set(RESOURCE_STATUS, "changed");
-                                ((StartableManagedResource) c).updateResourceState();
+                                ((ManagedResource) c).updateResourceState();
                             });
                 });
             }
