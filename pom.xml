@@ -205,7 +205,18 @@
                     </supportedProjectTypes>
                     <instructions>
                         <!-- OSGi specific instruction -->
-                        <Import-Package>!io.airlift.command,!com.maxmind.geoip2,!com.google.api.client,*</Import-Package>
+                        <Import-Package>
+                            !io.airlift.command,
+                            !com.maxmind.geoip2,
+                            !com.google.api.client,
+                            *
+                        </Import-Package>
+                        <Export-Package>
+                            io.cloudsoft.terraform,
+                            io.cloudsoft.terraform.entity,
+                            io.cloudsoft.terraform.parser,
+                            io.cloudsoft.terraform.predicates
+                        </Export-Package>
                     </instructions>
                 </configuration>
             </plugin>
