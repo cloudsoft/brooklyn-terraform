@@ -4,14 +4,14 @@ import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEqual
 import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEventuallyNonNull;
 import static org.testng.Assert.assertNotNull;
 
-import io.cloudsoft.terraform.predicates.TerraformDiscoveryPredicates;
+import com.google.common.collect.ImmutableList;
+
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
-
 import org.apache.brooklyn.entity.group.DynamicGroup;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.test.Asserts;
@@ -19,7 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 
-import com.google.common.collect.ImmutableList;
+import io.cloudsoft.terraform.predicates.ResourceType;
 
 public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTestFixture {
 
@@ -72,7 +72,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
                 terraformConfiguration
                         .addChild(EntitySpec.create(DynamicGroup.class)
                                 .configure(DynamicGroup.ENTITY_FILTER,
-                                        TerraformDiscoveryPredicates.sensorMatches("tf.resource.type", "aws_instance")));
+                                        ResourceType.resourceType("aws_instance")));
         app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
 
         assertNotNull(terraformConfiguration.getAttribute(TerraformConfiguration.HOSTNAME));
