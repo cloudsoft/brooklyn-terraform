@@ -1,15 +1,12 @@
 package io.cloudsoft.terraform.entity;
 
-import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.core.annotation.Effector;
-import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
-import org.apache.brooklyn.entity.stock.BasicEntityImpl;
 import org.apache.brooklyn.util.net.UserAndHostAndPort;
 
 import java.util.Collection;
@@ -36,7 +33,7 @@ public class StartableManagedResourceImpl extends ManagedResourceImpl implements
         resource.forEach((k, v) -> sensors().set(Sensors.newStringSensor("tf." + k), v.toString()));
         if (resource.containsKey(IP_SENSOR_NAME)) {
             String ip = resource.get(IP_SENSOR_NAME).toString();
-            sensors().set(Attributes.SSH_ADDRESS, UserAndHostAndPort.fromParts("", ip, 22));
+            sensors().set(Attributes.SSH_ADDRESS, UserAndHostAndPort.fromParts("tbd", ip, 22));
         }
         updateResourceState();
         return true;

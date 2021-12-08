@@ -22,7 +22,7 @@ public class ManagedResourceImpl extends BasicEntityImpl implements  ManagedReso
             sensors().set(RESOURCE_STATUS, "ok"); // the provider doesn't provide any property to let us know the state of the resource
         }
         this.setDisplayName(getConfig(StartableManagedResource.ADDRESS));
-        sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.CREATED);
+        updateResourceState();
     }
 
     @Override
@@ -30,5 +30,10 @@ public class ManagedResourceImpl extends BasicEntityImpl implements  ManagedReso
         resource.forEach((k, v) -> sensors().set(Sensors.newStringSensor("tf." + k), v.toString()));
         sensors().set(RESOURCE_STATUS, "ok");
         return true;
+    }
+
+    @Override
+    public void updateResourceState() {
+        sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.CREATED);
     }
 }
