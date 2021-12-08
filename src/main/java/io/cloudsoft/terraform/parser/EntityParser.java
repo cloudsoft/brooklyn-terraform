@@ -2,6 +2,7 @@ package io.cloudsoft.terraform.parser;
 
 import io.cloudsoft.terraform.entity.DataResource;
 import io.cloudsoft.terraform.entity.ManagedResource;
+import io.cloudsoft.terraform.entity.StartableManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
@@ -33,7 +34,13 @@ public  final class EntityParser {
             }
         }
         if(!managedResources.isEmpty()) {
-            managedResources.forEach(resource -> entity.addChild(basicSpec(ManagedResource.class, resource)));
+            managedResources.forEach(resource -> {
+                if (resource.get("resource.type").toString().endsWith("_instance") || resource.get("resource.type").toString().endsWith("_virtual_machine")){
+                    entity.addChild(basicSpec(StartableManagedResource.class, resource));
+                } else
+                    entity.addChild(basicSpec(ManagedResource.class, resource));
+                }
+            );
         }
     }
 

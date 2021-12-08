@@ -9,6 +9,7 @@ import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.DataResource;
 import io.cloudsoft.terraform.entity.ManagedResource;
+import io.cloudsoft.terraform.entity.StartableManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
@@ -42,7 +43,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.cloudsoft.terraform.TerraformDriver.*;
-import static io.cloudsoft.terraform.entity.ManagedResource.RESOURCE_STATUS;
+import static io.cloudsoft.terraform.entity.StartableManagedResource.RESOURCE_STATUS;
 import static io.cloudsoft.terraform.parser.EntityParser.processResources;
 
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
@@ -194,7 +195,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                             .filter(c -> resourceAddr.equals(c.config().get(TerraformResource.ADDRESS)))
                             .findAny().ifPresent(c -> {
                                 c.sensors().set(RESOURCE_STATUS, "changed");
-                                ((ManagedResource) c).updateResourceState();
+                                ((StartableManagedResource) c).updateResourceState();
                             });
                 });
             }
