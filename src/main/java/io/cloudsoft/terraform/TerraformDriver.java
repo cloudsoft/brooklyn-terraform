@@ -39,7 +39,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return makeTerraformCommand("apply -no-color -input=false tfplan"); // Create or update infrastructure
     }
     default String lightApplyCommand() {
-        return makeTerraformCommand(" apply -refresh-only -auto-approve -no-color -input=false tfplan"); // Create or update infrastructure
+        return makeTerraformCommand(" apply -refresh-only -auto-approve -no-color -input=false tfplan"); // Create or update infrastructurecd
     }
     default String showCommand() {
         return makeTerraformCommand("show -no-color -json"); // Show the current state or a saved plan

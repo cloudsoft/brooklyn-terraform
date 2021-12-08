@@ -278,6 +278,11 @@ This effector is useful when the `tf.configuration.url` points to a dynamic URL,
 
 **Note** Invoking the `reinstallConfig` effector will not affect the `*.tfvars` file that is provided using the `tf.tfvars.url` configuration key.
 
+#### Using the Managed Resource effectors
+
+The Managed Resources entities (children of the `TerraformConfiguration`) have the default effectors for a `Startable` type entity, i.e. `start`, `stop` and `restart`. 
+Currently, these effectors have no functionality for the Managed Resources and are reserved for future use. Invoking any of these effectors will have no effect on the entity.
+
 #### Customizing Terraform Variables Values Using Brooklyn Configurations
 
 Apache Brooklyn allows injection of values for Terraform Variables using `brooklyn.config` and modifying those values after a Terraform configuration has been applied. 

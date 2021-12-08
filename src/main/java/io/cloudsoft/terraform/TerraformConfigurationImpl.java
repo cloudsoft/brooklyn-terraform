@@ -75,7 +75,22 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     protected void postStop() {
         getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED));
-        getChildren().forEach(child -> removeChild(child));
+        getChildren().forEach(child -> {
+            if (child instanceof BasicGroup){
+                child.getChildren().forEach(grandChild -> {
+                    if (grandChild instanceof TerraformResource){
+                        removeChild(grandChild);
+                        Entities.unmanage(grandChild);
+                    }
+                } );
+                removeChild(child);
+            }
+            if (child instanceof TerraformResource){
+                removeChild(child);
+                Entities.unmanage(child);
+            }
+        });
+
     }
 
 
