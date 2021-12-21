@@ -1,7 +1,7 @@
 brooklyn.catalog:
   bundle: io.cloudsoft.terraform.brooklyn-terraform
   id: terraform
-  version: 1.1.0-SNAPSHOT # BROOKLYN_TERRAFORM_VERSION
+  version: 1.1.0-20211221.1327 # BROOKLYN_TERRAFORM_VERSION
   iconUrl: classpath://io/cloudsoft/terraform/logo.png
 
   publish:
