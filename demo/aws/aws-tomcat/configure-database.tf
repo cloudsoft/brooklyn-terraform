@@ -1,5 +1,5 @@
 resource "aws_security_group" "ubuntu-mysql" {
-  name        = "ubuntu-mysql-security-group"
+  name        = "test-ubuntu-mysql-security-group"
   description = "Allow HTTP, HTTPS and SSH traffic"
 
   ingress {
