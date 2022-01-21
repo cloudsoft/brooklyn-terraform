@@ -26,4 +26,4 @@ services:
       $brooklyn:object:
         type: terraform-predicate-resource-type
         constructor.args:
-          - "vsphere_virtual_machine"
+         - "vsphere_virtual_machine"

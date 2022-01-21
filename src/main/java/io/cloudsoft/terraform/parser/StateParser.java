@@ -193,6 +193,7 @@ public final class StateParser {
             } else {
                 result.put(PLAN_MESSAGE, "Terraform in RECOVERABLE error state. Check configuration syntax.");
             }
+            return result;
         }
 
         if(result.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC && result.containsKey("tf.output.changes")) {
