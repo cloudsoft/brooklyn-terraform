@@ -10,6 +10,6 @@ resource "aws_key_pair" "ubuntu" {
   public_key = file("key.pub")
 
   tags = {
-    Name = "failover/tf-ubuntu-key"
+    Name = "test/tf-ubuntu-key"
   }
 }

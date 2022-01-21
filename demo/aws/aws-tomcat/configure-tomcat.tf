@@ -1,5 +1,5 @@
 resource "aws_security_group" "ubuntu-tomcat" {
-  name        = "ubuntu-tomcat-security-group"
+  name        = "test-ubuntu-tomcat-security-group"
   description = "Allow HTTP, HTTPS and SSH traffic"
 
   ingress {
