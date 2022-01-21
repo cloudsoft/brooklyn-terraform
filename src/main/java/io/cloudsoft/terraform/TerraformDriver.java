@@ -12,6 +12,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     String PLAN_PROVIDER = "tf.plan.provider";
     String RESOURCE_CHANGES = "tf.resource.changes";
     String PLAN_MESSAGE = "tf.plan.message";
+    String PLAN_ERRORS = "tf.errors";
 
     void customize();
     void launch();

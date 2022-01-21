@@ -183,6 +183,9 @@ public final class StateParser {
                             "resource.action", "No action. Unrecoverable state."
                     ));
                 }
+                if(ple.diagnostic.detail != null) {
+                    sb.append(ple.message + ple.diagnostic.detail).append("\n");
+                }
                 sb.append(ple.message).append("\n");
             });
             result.put("tf.errors",  sb);

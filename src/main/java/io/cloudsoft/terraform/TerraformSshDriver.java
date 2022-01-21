@@ -139,8 +139,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         copyTfVars();
 
         final String cfgPath= getConfigurationFilePath();
-
-        Task unzipTask = SshTasks.newSshExecTaskFactory(getMachine(),
+        Task<Integer> unzipTask = SshTasks.newSshExecTaskFactory(getMachine(),
                         "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
                                 + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getRunDir() + " &&"
                                 + "unzip " + cfgPath + ".zip ; fi")
@@ -149,16 +148,16 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .summary("Preparing configuration (unzip of necessary)...")
                 .newTask()
                 .asTask();
-        Task initTask = SshTasks.newSshExecTaskFactory(getMachine(), initCommand())
+        Task<String> initTask = SshTasks.newSshExecTaskFactory(getMachine(), initCommand())
                 .requiringZeroAndReturningStdout()
                 .environmentVariables(getShellEnvironment())
                 .summary("Initializing terraform infrastructure")
                 .newTask()
                 .asTask();
 
-        Task verifyTask =  Tasks.create("Verifying Terraform Workspace", () -> {
+        Task<Object> verifyTask =  Tasks.create("Verifying Terraform Workspace", () -> {
             try {
-                String result =  (String) initTask.get();
+                String result =  initTask.get();
                 if(result.contains(EMPTY_TF_CFG_WARN)) {
                     throw new IllegalStateException("Invalid or missing Terraform configuration." + result);
                 }
@@ -178,39 +177,72 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void launch() {
-        Map<String,Object> planLog = runJsonPlanTask();
-        boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
-        if(deploymentExists) {
-            LOG.debug("Terraform plan exists!!");
-        } else {
-            runApplyTask();
-            runJsonPlanTask();
-            runLightApplyTask();
-        }
+        final Map<String,Object> planLog = runInitialJsonPlanTask();
+        Task<Object> verifyPlanTask = Tasks.create("Verify Plan", () -> {
+            if(planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
+                throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
+            }
+        }).asTask();
+        Task<Object> applyAndRefresh =Tasks.create("Apply (if no existing deployment is found)", () -> {
+            boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
+            if (deploymentExists) {
+                LOG.debug("Terraform plan exists!!");
+            } else {
+                runApplyTask();
+            }
+        }).asTask();
+
+        DynamicTasks.queue(Tasks.builder()
+                .displayName("Initializing terraform workspace")
+                .add(verifyPlanTask)
+                .add(applyAndRefresh)
+                .build());
+        DynamicTasks.waitForLast();
     }
 
-    /**
-     *
-     * @return {@code true} if deployment already exists
-     */
-    public Map<String, Object> runJsonPlanTask() {
-        Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), jsonPlanCommand())
-                .environmentVariables(getShellEnvironment())
-                .summary("Initializing terraform plan")
-                .returning(ProcessTaskWrapper::getStdout)
-                .newTask()
-                .asTask());
+    public Map<String, Object> runInitialJsonPlanTask() {
+        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Initializing terraform plan"));
         DynamicTasks.waitForLast();
         String result;
         try {
             result = planTask.get();
+            return StateParser.parsePlanLogEntries(result);
         } catch (InterruptedException | ExecutionException e) {
             throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
         }
-        Map<String,Object> planLog = StateParser.parsePlanLogEntries(result);
-        return  planLog;
     }
 
+    @Override
+    // needed for polling
+    public Map<String, Object> runJsonPlanTask() {
+        Task<Integer> refreshTask = SshTasks.newSshExecTaskFactory(getMachine(), lightApplyCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary("Applying `terraform apply -refresh-only`")
+                .newTask()
+                .asTask();
+        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Re-Initializing terraform plan"));
+        Task<Object> refreshAndPlanTask =  DynamicTasks.queue(Tasks.builder()
+                .displayName("Refreshing terraform plan")
+                .add(refreshTask)
+                .add(planTask)
+                .build());
+        DynamicTasks.waitForLast();
+        List<Object> result;
+        try {
+            result = (List<Object>) refreshAndPlanTask.get();
+            String planJsonOutput = null;
+            for (Object o: result) {
+                if (!(o instanceof Integer)) {
+                    planJsonOutput = (String) o;
+                }
+            }
+            return StateParser.parsePlanLogEntries(planJsonOutput);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
+        }
+    }
+
+    // Needed for extracting pure Terraform output for the tf.plan sensor
     @Override
     public String runPlanTask() {
         Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), planCommand())
@@ -244,24 +276,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void runApplyTask() {
-        Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), applyCommand())
-                .environmentVariables(getShellEnvironment())
-                .summary("Applying terraform plan")
-                .requiringZeroAndReturningStdout()
-                .newTask()
-                .asTask());
-        DynamicTasks.waitForLast();
-        entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
-    }
-
-    private void runLightApplyTask() {
-        DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), lightApplyCommand())
-                .environmentVariables(getShellEnvironment())
-                .summary("Applying `terraform apply -refresh-only`")
-                .returning(p -> p.getStdout())
-                .newTask()
-                .asTask());
-        DynamicTasks.waitForLast();
+       DynamicTasks.queue(applyTaskWithName("Applying terraform plan"));
+       DynamicTasks.waitForLast();
+       entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
     }
 
     /**
@@ -312,5 +329,23 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             InputStream tfStream =  new ResourceUtils(entity).getResourceFromUrl(varsURL);
             getMachine().copyTo(tfStream, getTfVarsFilePath());
         }
+    }
+
+    private Task jsonPlanTaskWithName(final String name){
+        return SshTasks.newSshExecTaskFactory(getMachine(), jsonPlanCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary(name)
+                .returning(ProcessTaskWrapper::getStdout)
+                .newTask()
+                .asTask();
+    }
+
+    private Task applyTaskWithName(final String name) {
+        return SshTasks.newSshExecTaskFactory(getMachine(), applyCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary(name)
+                .requiringZeroAndReturningStdout()
+                .newTask()
+                .asTask();
     }
 }
