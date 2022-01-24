@@ -183,13 +183,13 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             } else if(!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
                 if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
+                    updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
                     updateResourceStates(tfPlanStatus);
                 } else {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Outputs no longer match initial plan.This is not critical as the infrastructure is not affected. However you might want to invoke 'apply'.");
                 }
                 TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
                 TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
-                updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
             } else {
                 // plan status is SYNC so no errors, no ASYNC resources
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
