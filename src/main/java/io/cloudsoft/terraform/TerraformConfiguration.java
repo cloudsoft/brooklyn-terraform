@@ -73,7 +73,8 @@ public interface TerraformConfiguration extends SoftwareProcess {
     AttributeSensor<String> CONFIGURATION_APPLIED = Sensors.newStringSensor("tf.configuration.applied",
             "The most recent time a Terraform configuration has been successfully applied.");
 
-    AttributeSensor<String> PLAN = Sensors.newStringSensor("tf.plan",
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    AttributeSensor<Map<String, Object>> PLAN = new BasicAttributeSensor(Map.class, "tf.plan",
             "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.");
 
     AttributeSensor<String> OUTPUT = Sensors.newStringSensor("tf.output",

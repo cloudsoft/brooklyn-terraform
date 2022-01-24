@@ -10,6 +10,7 @@ import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.DataResource;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
+import io.cloudsoft.terraform.parser.PlanLogEntry;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
@@ -171,10 +172,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
-    private final class PlanSuccessFunction implements Function<Map<String, Object>, String>  {
+    private final class PlanSuccessFunction implements Function<Map<String, Object>, Map<String, Object>>  {
         @Nullable
         @Override
-        public String apply(@Nullable Map<String, Object> tfPlanStatus) {
+        public Map<String, Object> apply(@Nullable Map<String, Object> tfPlanStatus) {
                 if(tfPlanStatus.get(PLAN_STATUS).equals( TerraformConfiguration.TerraformStatus.ERROR)) {
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                         tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
@@ -188,6 +189,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 }
                 TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
                 TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
+                updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
             } else {
                 // plan status is SYNC so no errors, no ASYNC resources
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
@@ -197,7 +199,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 updateDeploymentState();
             }
             lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
-            return tfPlanStatus.toString();
+            return tfPlanStatus;
         }
 
         private void updateResourceStates(Map<String, Object> tfPlanStatus) {
@@ -216,14 +218,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
-    private final class PlanFailureFunction implements Function<Map<String, Object>, String> {
+    private final class PlanFailureFunction implements Function<Map<String, Object>, Map<String, Object>> {
         @Nullable
         @Override
-        public String apply(@Nullable Map<String, Object> input) {
+        public Map<String, Object> apply(@Nullable Map<String, Object> input) {
             if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(PLAN.getName())) {
-                return (String) lastCommandOutputs.get(PLAN.getName());
+                return (Map<String, Object>) lastCommandOutputs.get(PLAN.getName());
             } else {
-                return input.toString();
+                return input;
             }
         }
     }
