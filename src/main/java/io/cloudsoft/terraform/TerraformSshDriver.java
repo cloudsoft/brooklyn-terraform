@@ -177,13 +177,13 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void launch() {
-        final Map<String,Object> planLog = runInitialJsonPlanTask();
+        final Map<String,Object> planLog = runJsonPlanTask();
         Task<Object> verifyPlanTask = Tasks.create("Verify Plan", () -> {
             if(planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
                 throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
             }
         }).asTask();
-        Task<Object> applyAndRefresh =Tasks.create("Apply (if no existing deployment is found)", () -> {
+        Task<Object> checkAndApply =Tasks.create("Apply (if no existing deployment is found)", () -> {
             boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
             if (deploymentExists) {
                 LOG.debug("Terraform plan exists!!");
@@ -193,50 +193,25 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         }).asTask();
 
         DynamicTasks.queue(Tasks.builder()
-                .displayName("Initializing terraform workspace")
+                .displayName("Creating the planned infrastructure")
                 .add(verifyPlanTask)
-                .add(applyAndRefresh)
+                .add(checkAndApply)
+                .add(refreshTaskWithName("Refreshing Terraform state"))  // Refreshing terraform state file to make sure the plan is compared to the most recent state of the infrastructure.
+                // This task is needed to avoid thd drift with 'Plan: 0 to add, 0 to change, 0 to destroy.' reported by terraform after the initial apply of the plan.
                 .build());
         DynamicTasks.waitForLast();
     }
 
-    public Map<String, Object> runInitialJsonPlanTask() {
-        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Initializing terraform plan"));
+    // WARN: AWS resources have dynamic properties that will always report a drift, the state will never be 'equal' to the plan.
+    // TODO a software solution is necessary
+    @Override // used for polling as well
+    public Map<String, Object> runJsonPlanTask() {
+        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Creating the plan => 'tfplan'"));
         DynamicTasks.waitForLast();
         String result;
         try {
             result = planTask.get();
             return StateParser.parsePlanLogEntries(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
-        }
-    }
-
-    @Override
-    // needed for polling
-    public Map<String, Object> runJsonPlanTask() {
-        Task<Integer> refreshTask = SshTasks.newSshExecTaskFactory(getMachine(), lightApplyCommand())
-                .environmentVariables(getShellEnvironment())
-                .summary("Applying `terraform apply -refresh-only`")
-                .newTask()
-                .asTask();
-        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Re-Initializing terraform plan"));
-        Task<Object> refreshAndPlanTask =  DynamicTasks.queue(Tasks.builder()
-                .displayName("Refreshing terraform plan")
-                .add(refreshTask)
-                .add(planTask)
-                .build());
-        DynamicTasks.waitForLast();
-        List<Object> result;
-        try {
-            result = (List<Object>) refreshAndPlanTask.get();
-            String planJsonOutput = null;
-            for (Object o: result) {
-                if (!(o instanceof Integer)) {
-                    planJsonOutput = (String) o;
-                }
-            }
-            return StateParser.parsePlanLogEntries(planJsonOutput);
         } catch (InterruptedException | ExecutionException e) {
             throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
         }
@@ -342,6 +317,15 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     private Task applyTaskWithName(final String name) {
         return SshTasks.newSshExecTaskFactory(getMachine(), applyCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary(name)
+                .requiringZeroAndReturningStdout()
+                .newTask()
+                .asTask();
+    }
+
+    private Task refreshTaskWithName(final String name) {
+        return SshTasks.newSshExecTaskFactory(getMachine(), refreshCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary(name)
                 .requiringZeroAndReturningStdout()
