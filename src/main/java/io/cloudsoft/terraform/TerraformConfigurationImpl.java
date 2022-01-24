@@ -9,8 +9,8 @@ import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.DataResource;
 import io.cloudsoft.terraform.entity.ManagedResource;
-import io.cloudsoft.terraform.entity.StartableManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
+import io.cloudsoft.terraform.parser.PlanLogEntry;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
@@ -172,10 +172,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
-    private final class PlanSuccessFunction implements Function<Map<String, Object>, String>  {
+    private final class PlanSuccessFunction implements Function<Map<String, Object>, Map<String, Object>>  {
         @Nullable
         @Override
-        public String apply(@Nullable Map<String, Object> tfPlanStatus) {
+        public Map<String, Object> apply(@Nullable Map<String, Object> tfPlanStatus) {
                 if(tfPlanStatus.get(PLAN_STATUS).equals( TerraformConfiguration.TerraformStatus.ERROR)) {
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                         tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
@@ -183,6 +183,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             } else if(!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
                 if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
+                    updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
                     updateResourceStates(tfPlanStatus);
                 } else {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Outputs no longer match initial plan.This is not critical as the infrastructure is not affected. However you might want to invoke 'apply'.");
@@ -198,7 +199,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 updateDeploymentState();
             }
             lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
-            return tfPlanStatus.toString();
+            return tfPlanStatus;
         }
 
         private void updateResourceStates(Map<String, Object> tfPlanStatus) {
@@ -217,14 +218,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
-    private final class PlanFailureFunction implements Function<Map<String, Object>, String> {
+    private final class PlanFailureFunction implements Function<Map<String, Object>, Map<String, Object>> {
         @Nullable
         @Override
-        public String apply(@Nullable Map<String, Object> input) {
+        public Map<String, Object> apply(@Nullable Map<String, Object> input) {
             if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(PLAN.getName())) {
-                return (String) lastCommandOutputs.get(PLAN.getName());
+                return (Map<String, Object>) lastCommandOutputs.get(PLAN.getName());
             } else {
-                return input.toString();
+                return input;
             }
         }
     }
