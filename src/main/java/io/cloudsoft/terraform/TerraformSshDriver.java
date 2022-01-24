@@ -13,7 +13,7 @@ import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
-import org.apache.brooklyn.util.exceptions.Exceptions;
+import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
@@ -36,6 +36,7 @@ import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAs
 
 public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
     private static final Logger LOG = LoggerFactory.getLogger(TerraformSshDriver.class);
+    private final String EMPTY_TF_CFG_WARN ="Terraform initialized in an empty directory!";
 
     public TerraformSshDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
@@ -44,17 +45,12 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public int runDestroyTask() {
-        Task<String> destroyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), destroyCommand())
+        DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), destroyCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Destroying terraform deployment.")
                 .returning(p -> p.getStdout()).newTask()
                 .asTask());
         DynamicTasks.waitForLast();
-
-        if (destroyTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform destroy`! ");
-            // TODO decide where we put the output from here, in case of error
-        }
         return 0;
     }
 
@@ -88,6 +84,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return osType + "_" + archType;
     }
 
+    // Order of execution during AMP deploy: step 1 - set properties from the configuration on the entity and create terraform install directory
     @Override
     public void preInstall() {
         final String installFileName = format("terraform_%s_%s.zip", getVersion(), getOsTag());
@@ -98,6 +95,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .replace("${driver.osTag}", getOsTag()));
     }
 
+    // Order of execution during AMP deploy: step 2 - download and install (unzip) the terraform executable
     @Override
     public void install() {
         List<String> urls = resolver.getTargets();
@@ -116,8 +114,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     private void clean() {
         final String runPath = getRunDir();
-
-        Task<Object> initTask = DynamicTasks.queue(Tasks.builder()
+        DynamicTasks.queue(Tasks.builder()
                 .displayName("Clean terraform workspace")
                 .add(SshTasks.newSshExecTaskFactory(getMachine(),
                                 "rm -rf /tmp/backup; mkdir /tmp/backup; cd " +runPath +";" +
@@ -129,43 +126,54 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                         .asTask())
                 .build());
         DynamicTasks.waitForLast();
-        if (initTask.asTask().isError()) {
-            throw new IllegalStateException("Error cleaning the terraform workspace. ");
-        }
     }
 
+    // Order of execution during AMP deploy: step 3 - zip up the current configuration files if any, unzip the new configuration files, run `terraform init -input=false`
     @Override
     public void customize() {
         newScript(CUSTOMIZING).execute();
         clean();
         InputStream configuration = getConfiguration();
-        // copy terraform configuration file(s)
+        // copy terraform configuration file or zip
         getMachine().copyTo(configuration, getConfigurationFilePath());
         copyTfVars();
 
         final String cfgPath= getConfigurationFilePath();
 
-        Task<Object> initTask = DynamicTasks.queue(Tasks.builder()
+        Task unzipTask = SshTasks.newSshExecTaskFactory(getMachine(),
+                        "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
+                                + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getRunDir() + " &&"
+                                + "unzip " + cfgPath + ".zip ; fi")
+                .requiringExitCodeZero()
+                .environmentVariables(getShellEnvironment())
+                .summary("Preparing configuration (unzip of necessary)...")
+                .newTask()
+                .asTask();
+        Task initTask = SshTasks.newSshExecTaskFactory(getMachine(), initCommand())
+                .requiringZeroAndReturningStdout()
+                .environmentVariables(getShellEnvironment())
+                .summary("Initializing terraform infrastructure")
+                .newTask()
+                .asTask();
+
+        Task verifyTask =  Tasks.create("Verifying Terraform Workspace", () -> {
+            try {
+                String result =  (String) initTask.get();
+                if(result.contains(EMPTY_TF_CFG_WARN)) {
+                    throw new IllegalStateException("Invalid or missing Terraform configuration." + result);
+                }
+
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException("Cannot retrieve result of command `terraform init -input=false`!", e);
+            }
+        }).asTask();
+        DynamicTasks.queue(Tasks.builder()
                         .displayName("Initializing terraform workspace")
-                .add(SshTasks.newSshExecTaskFactory(getMachine(),
-                                "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
-                                        + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getRunDir() + " &&"
-                                         + "unzip " + cfgPath + ".zip ; fi")
-                        .environmentVariables(getShellEnvironment())
-                        .summary("Preparing configuration (unzip of necessary)...")
-                        .requiringExitCodeZero().newTask()
-                        .asTask())
-                .add(SshTasks.newSshExecTaskFactory(getMachine(), initCommand())
-                        .environmentVariables(getShellEnvironment())
-                        .summary("Initializing terraform infrastructure")
-                        .requiringZeroAndReturningStdout().newTask()
-                        .asTask())
+                .add(unzipTask)
+                .add(initTask)
+                .add(verifyTask)
                 .build());
         DynamicTasks.waitForLast();
-
-        if (initTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform init`! ");
-        }
     }
 
     @Override
@@ -189,7 +197,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), jsonPlanCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Initializing terraform plan")
-                .returning(p -> p.getStdout())
+                .returning(ProcessTaskWrapper::getStdout)
                 .newTask()
                 .asTask());
         DynamicTasks.waitForLast();
@@ -243,25 +251,17 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .newTask()
                 .asTask());
         DynamicTasks.waitForLast();
-
-        if (applyTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform apply`!");
-        }
         entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
     }
 
     private void runLightApplyTask() {
-        Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), lightApplyCommand())
+        DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), lightApplyCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Applying `terraform apply -refresh-only`")
                 .returning(p -> p.getStdout())
                 .newTask()
                 .asTask());
         DynamicTasks.waitForLast();
-
-        if (applyTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform apply -refresh-only`!");
-        }
     }
 
     /**
