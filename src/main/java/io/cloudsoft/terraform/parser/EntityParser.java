@@ -1,10 +1,13 @@
 package io.cloudsoft.terraform.parser;
 
+import io.cloudsoft.terraform.TerraformConfiguration;
+import io.cloudsoft.terraform.compliance.DriftCheck;
 import io.cloudsoft.terraform.entity.DataResource;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.entity.StartableManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
 import org.apache.brooklyn.api.entity.Entity;
+import org.apache.brooklyn.api.entity.EntityInitializer;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.core.entity.AbstractEntity;
 import org.apache.brooklyn.core.entity.Attributes;
@@ -13,6 +16,7 @@ import org.apache.brooklyn.entity.group.BasicGroup;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -24,6 +28,7 @@ public  final class EntityParser {
     public static void processResources(Map<String, Object> resources, Entity entity) {
         List<Map<String, Object>> dataResources = getDataResources(resources);
         List<Map<String, Object>> managedResources = getManagedResources(resources);
+        int managedResourceNumber = managedResources.size();
 
         if(!dataResources.isEmpty()) {
             Optional<Entity> groupOpt =  entity.getChildren().stream().filter(c -> c instanceof BasicGroup).findAny();
@@ -35,6 +40,8 @@ public  final class EntityParser {
         }
         if(!managedResources.isEmpty()) {
             managedResources.forEach(resource -> {
+                resource.put("drift-compliance", ((TerraformConfiguration) entity).isApplyDriftComplianceToResources());
+                resource.put("total-resource-number", managedResourceNumber);
                 if (resource.get("resource.type").toString().endsWith("_instance") || resource.get("resource.type").toString().endsWith("_virtual_machine")){
                     entity.addChild(basicSpec(StartableManagedResource.class, resource));
                 } else
@@ -69,6 +76,8 @@ public  final class EntityParser {
                 .configure(PROVIDER, contentsMap.get("resource.provider").toString())
                 .configure(ADDRESS, contentsMap.get("resource.address").toString())
                 .configure(NAME, contentsMap.get("resource.name").toString());
+        EntityInitializer labels = (!Objects.isNull(contentsMap.get("drift-compliance")) && !Objects.isNull(contentsMap.get("total-resource-number"))) ? new DriftCheck((Boolean) contentsMap.get("drift-compliance"), (int) contentsMap.get("total-resource-number")) : new DriftCheck();
+        spec.addInitializer(labels);
         return spec;
     }
 }

@@ -54,6 +54,8 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private Map<String, Object> lastCommandOutputs = Collections.synchronizedMap(Maps.newHashMapWithExpectedSize(3));
     private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
 
+    private Boolean applyDriftComplianceCheckToResources = false;
+
     @Override
     public void init() {
         super.init();
@@ -141,7 +143,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private void updateResources(Map<String, Object> resources, Entity parent, Class<? extends TerraformResource> clazz) {
         List<Entity> childrenToRemove = new ArrayList<>();
         parent.getChildren().stream().filter(c -> clazz.isAssignableFrom(c.getClass())).forEach(c -> {
-            c.sensors().set(RESOURCE_STATUS, "running");
+            if (!c.sensors().get(RESOURCE_STATUS).equals("running")) c.sensors().set(RESOURCE_STATUS, "running");
             if (resources.containsKey(c.getConfig(TerraformResource.ADDRESS))) { //child in resource set, update sensors
                 ((TerraformResource) c).refreshSensors((Map<String, Object>) resources.get(c.getConfig(TerraformResource.ADDRESS)));
                 resources.remove(c.getConfig(TerraformResource.ADDRESS));
@@ -383,5 +385,15 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 Time.sleep(Duration.FIVE_SECONDS);
             }
         }
+    }
+
+    @Override
+    public Boolean isApplyDriftComplianceToResources(){
+        return applyDriftComplianceCheckToResources;
+    }
+
+    @Override
+    public void setApplyDriftComplianceToResources(Boolean doApply){
+        applyDriftComplianceCheckToResources = doApply;
     }
 }

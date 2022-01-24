@@ -94,4 +94,7 @@ public interface TerraformConfiguration extends SoftwareProcess {
     void reinstallConfig(@EffectorParam(name = "configUrl", description = "URL pointing to the terraform configuration") @Nullable String configUrl);
 
     TerraformDriver getDriver();
+
+    Boolean isApplyDriftComplianceToResources();
+    void setApplyDriftComplianceToResources(Boolean doApply);
 }

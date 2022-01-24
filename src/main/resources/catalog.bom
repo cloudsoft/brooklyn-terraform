@@ -15,6 +15,11 @@ brooklyn.catalog:
     item:
       type: io.cloudsoft.terraform.TerraformConfiguration
 
+  - id: terraform-drift-compliance-check
+    name: "Terraform Drift Compliance Check"
+    item:
+      type: io.cloudsoft.terraform.compliance.DriftCheck
+
   - id: terraform-predicate-sensor-matches
     name: "Terraform Sensor Matches Predicate"
     item:
