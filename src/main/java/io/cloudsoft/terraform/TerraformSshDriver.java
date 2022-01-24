@@ -1,6 +1,7 @@
 package io.cloudsoft.terraform;
 
 import com.google.common.collect.ImmutableMap;
+import io.cloudsoft.terraform.parser.PlanLogEntry;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
@@ -11,6 +12,7 @@ import org.apache.brooklyn.entity.software.base.AbstractSoftwareProcessSshDriver
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
+import org.apache.brooklyn.util.core.task.TaskBuilder;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
 import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
@@ -192,18 +194,24 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             }
         }).asTask();
 
-        DynamicTasks.queue(Tasks.builder()
+        TaskBuilder<Object> taskBuilder = Tasks.builder()
                 .displayName("Creating the planned infrastructure")
                 .add(verifyPlanTask)
-                .add(checkAndApply)
-                .add(refreshTaskWithName("Refreshing Terraform state"))  // Refreshing terraform state file to make sure the plan is compared to the most recent state of the infrastructure.
-                // This task is needed to avoid thd drift with 'Plan: 0 to add, 0 to change, 0 to destroy.' reported by terraform after the initial apply of the plan.
-                .build());
+                .add(checkAndApply);
+
+        if (planLog.get(PLAN_PROVIDER) == PlanLogEntry.Provider.AWS) {
+            LOG.debug(" ---> AWS resources found. No need to refresh state because terraform will re-create resources from scratch!");
+            // TODO check if other cloud providers might be affected by this
+        } else {
+            // Refreshing terraform state file to make sure the plan is compared to the most recent state of the infrastructure.
+            // This task is needed to avoid thd drift with 'Plan: 0 to add, 0 to change, 0 to destroy.' reported by terraform after the initial apply of the plan.
+            taskBuilder.add(refreshTaskWithName("Refreshing Terraform state"));
+        }
+
+        DynamicTasks.queue(taskBuilder.build());
         DynamicTasks.waitForLast();
     }
 
-    // WARN: AWS resources have dynamic properties that will always report a drift, the state will never be 'equal' to the plan.
-    // TODO a software solution is necessary
     @Override // used for polling as well
     public Map<String, Object> runJsonPlanTask() {
         Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Creating the plan => 'tfplan'"));

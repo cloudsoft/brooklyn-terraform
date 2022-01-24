@@ -9,6 +9,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.cloudsoft.terraform.TerraformConfiguration;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.function.Predicate;
@@ -21,6 +23,7 @@ import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
  * Naive version. To be improved further.
  */
 public final class StateParser {
+    private static final Logger LOG = LoggerFactory.getLogger(StateParser.class);
     public static final ImmutableList blankItems = ImmutableList.of("[]", "", "null", "\"\"", "{}", "[{}]");
 
     private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
@@ -113,6 +116,12 @@ public final class StateParser {
         Map<String, Object> result = new HashMap<>();
 
         planLogs.stream().filter(providerPredicate).findFirst().ifPresent(p -> result.put(PLAN_PROVIDER, p.getProvider()));
+
+        if (result.get(PLAN_PROVIDER) == PlanLogEntry.Provider.AWS) {
+            //AWS resources have dynamic properties that will always report a drift, the state will never be 'equal' to the plan.
+            LOG.debug(" ---> AWS resources found. Determining drift using our AMP analyser because Terraform is not reliable!");
+            // TODO inject here our own comparator to determine if there is drift and return here the edited planLog, that does not report drift
+        }
 
         Optional<PlanLogEntry> changeSummaryLog = planLogs.stream().filter(changeSummaryPredicate).findFirst(); // it is not there when the config is broken
         if(changeSummaryLog.isPresent()) {
