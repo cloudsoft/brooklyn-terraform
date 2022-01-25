@@ -53,11 +53,11 @@ resource "aws_instance" "ubuntu-tomcat" {
     host        = self.public_ip
   }
 
-  ebs_block_device {
+/*  ebs_block_device {
     device_name = "/dev/sda1"
     volume_type = "gp2"
     volume_size = 30
-  }
+  }*/
 
   provisioner "file" {
     source      = "./tomcat-scripts/"
