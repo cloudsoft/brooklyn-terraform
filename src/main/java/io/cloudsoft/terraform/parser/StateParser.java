@@ -117,12 +117,6 @@ public final class StateParser {
 
         planLogs.stream().filter(providerPredicate).findFirst().ifPresent(p -> result.put(PLAN_PROVIDER, p.getProvider()));
 
-        if (result.get(PLAN_PROVIDER) == PlanLogEntry.Provider.AWS) {
-            //AWS resources have dynamic properties that will always report a drift, the state will never be 'equal' to the plan.
-            LOG.debug(" ---> AWS resources found. Determining drift using our AMP analyser because Terraform is not reliable!");
-            // TODO inject here our own comparator to determine if there is drift and return here the edited planLog, that does not report drift
-        }
-
         Optional<PlanLogEntry> changeSummaryLog = planLogs.stream().filter(changeSummaryPredicate).findFirst(); // it is not there when the config is broken
         if(changeSummaryLog.isPresent()) {
             if (NO_CHANGES.equals(changeSummaryLog.get().message)) {

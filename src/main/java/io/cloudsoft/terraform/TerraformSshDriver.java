@@ -194,21 +194,11 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             }
         }).asTask();
 
-        TaskBuilder<Object> taskBuilder = Tasks.builder()
+        DynamicTasks.queue(Tasks.builder()
                 .displayName("Creating the planned infrastructure")
                 .add(verifyPlanTask)
-                .add(checkAndApply);
-
-        if (planLog.get(PLAN_PROVIDER) == PlanLogEntry.Provider.AWS) {
-            LOG.debug(" ---> AWS resources found. No need to refresh state because terraform will re-create resources from scratch!");
-            // TODO check if other cloud providers might be affected by this
-        } else {
-            // Refreshing terraform state file to make sure the plan is compared to the most recent state of the infrastructure.
-            // This task is needed to avoid thd drift with 'Plan: 0 to add, 0 to change, 0 to destroy.' reported by terraform after the initial apply of the plan.
-            taskBuilder.add(refreshTaskWithName("Refreshing Terraform state"));
-        }
-
-        DynamicTasks.queue(taskBuilder.build());
+                .add(checkAndApply)
+                .add(refreshTaskWithName("Refreshing Terraform state")).build());
         DynamicTasks.waitForLast();
     }
 
