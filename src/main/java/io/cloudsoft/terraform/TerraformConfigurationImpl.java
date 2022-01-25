@@ -10,7 +10,6 @@ import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.DataResource;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
-import io.cloudsoft.terraform.parser.PlanLogEntry;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
