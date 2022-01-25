@@ -33,6 +33,12 @@ and then launch (or restart) Brooklyn.
     nohup $BROOKLYN_HOME/bin/brooklyn launch &
 ```
 
+### Under the Bonnet
+
+AMP executes various terraform commands and uses their output to decide resource statuses and populate sensors. The following image shows the commands executed by AMP.
+
+![](docs/AMP_and_Terraform.jpg)
+
 ## Use
 
 **Note** If you installed the project with `catalog.bom` then you can use the entity by using type
