@@ -12,6 +12,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     String PLAN_PROVIDER = "tf.plan.provider";
     String RESOURCE_CHANGES = "tf.resource.changes";
     String PLAN_MESSAGE = "tf.plan.message";
+    String PLAN_ERRORS = "tf.errors";
 
     void customize();
     void launch();
@@ -38,8 +39,8 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     default String applyCommand() {
         return makeTerraformCommand("apply -no-color -input=false tfplan"); // Create or update infrastructure
     }
-    default String lightApplyCommand() {
-        return makeTerraformCommand(" apply -refresh-only -auto-approve -no-color -input=false tfplan"); // Create or update infrastructurecd
+    default String refreshCommand() {
+        return makeTerraformCommand(" apply -refresh-only -auto-approve -no-color -input=false"); // Create or update infrastructure
     }
     default String showCommand() {
         return makeTerraformCommand("show -no-color -json"); // Show the current state or a saved plan

@@ -1,6 +1,7 @@
 package io.cloudsoft.terraform;
 
 import com.google.common.collect.ImmutableMap;
+import io.cloudsoft.terraform.parser.PlanLogEntry;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
@@ -11,9 +12,10 @@ import org.apache.brooklyn.entity.software.base.AbstractSoftwareProcessSshDriver
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
+import org.apache.brooklyn.util.core.task.TaskBuilder;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
-import org.apache.brooklyn.util.exceptions.Exceptions;
+import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
@@ -36,6 +38,7 @@ import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAs
 
 public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
     private static final Logger LOG = LoggerFactory.getLogger(TerraformSshDriver.class);
+    private final String EMPTY_TF_CFG_WARN ="Terraform initialized in an empty directory!";
 
     public TerraformSshDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
@@ -44,17 +47,12 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public int runDestroyTask() {
-        Task<String> destroyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), destroyCommand())
+        DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), destroyCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Destroying terraform deployment.")
                 .returning(p -> p.getStdout()).newTask()
                 .asTask());
         DynamicTasks.waitForLast();
-
-        if (destroyTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform destroy`! ");
-            // TODO decide where we put the output from here, in case of error
-        }
         return 0;
     }
 
@@ -88,6 +86,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return osType + "_" + archType;
     }
 
+    // Order of execution during AMP deploy: step 1 - set properties from the configuration on the entity and create terraform install directory
     @Override
     public void preInstall() {
         final String installFileName = format("terraform_%s_%s.zip", getVersion(), getOsTag());
@@ -98,6 +97,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .replace("${driver.osTag}", getOsTag()));
     }
 
+    // Order of execution during AMP deploy: step 2 - download and install (unzip) the terraform executable
     @Override
     public void install() {
         List<String> urls = resolver.getTargets();
@@ -116,8 +116,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     private void clean() {
         final String runPath = getRunDir();
-
-        Task<Object> initTask = DynamicTasks.queue(Tasks.builder()
+        DynamicTasks.queue(Tasks.builder()
                 .displayName("Clean terraform workspace")
                 .add(SshTasks.newSshExecTaskFactory(getMachine(),
                                 "rm -rf /tmp/backup; mkdir /tmp/backup; cd " +runPath +";" +
@@ -129,80 +128,94 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                         .asTask())
                 .build());
         DynamicTasks.waitForLast();
-        if (initTask.asTask().isError()) {
-            throw new IllegalStateException("Error cleaning the terraform workspace. ");
-        }
     }
 
+    // Order of execution during AMP deploy: step 3 - zip up the current configuration files if any, unzip the new configuration files, run `terraform init -input=false`
     @Override
     public void customize() {
         newScript(CUSTOMIZING).execute();
         clean();
         InputStream configuration = getConfiguration();
-        // copy terraform configuration file(s)
+        // copy terraform configuration file or zip
         getMachine().copyTo(configuration, getConfigurationFilePath());
         copyTfVars();
 
         final String cfgPath= getConfigurationFilePath();
+        Task<Integer> unzipTask = SshTasks.newSshExecTaskFactory(getMachine(),
+                        "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
+                                + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getRunDir() + " &&"
+                                + "unzip " + cfgPath + ".zip ; fi")
+                .requiringExitCodeZero()
+                .environmentVariables(getShellEnvironment())
+                .summary("Preparing configuration (unzip of necessary)...")
+                .newTask()
+                .asTask();
+        Task<String> initTask = SshTasks.newSshExecTaskFactory(getMachine(), initCommand())
+                .requiringZeroAndReturningStdout()
+                .environmentVariables(getShellEnvironment())
+                .summary("Initializing terraform infrastructure")
+                .newTask()
+                .asTask();
 
-        Task<Object> initTask = DynamicTasks.queue(Tasks.builder()
+        Task<Object> verifyTask =  Tasks.create("Verifying Terraform Workspace", () -> {
+            try {
+                String result =  initTask.get();
+                if(result.contains(EMPTY_TF_CFG_WARN)) {
+                    throw new IllegalStateException("Invalid or missing Terraform configuration." + result);
+                }
+
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException("Cannot retrieve result of command `terraform init -input=false`!", e);
+            }
+        }).asTask();
+        DynamicTasks.queue(Tasks.builder()
                         .displayName("Initializing terraform workspace")
-                .add(SshTasks.newSshExecTaskFactory(getMachine(),
-                                "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
-                                        + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getRunDir() + " &&"
-                                         + "unzip " + cfgPath + ".zip ; fi")
-                        .environmentVariables(getShellEnvironment())
-                        .summary("Preparing configuration (unzip of necessary)...")
-                        .requiringExitCodeZero().newTask()
-                        .asTask())
-                .add(SshTasks.newSshExecTaskFactory(getMachine(), initCommand())
-                        .environmentVariables(getShellEnvironment())
-                        .summary("Initializing terraform infrastructure")
-                        .requiringZeroAndReturningStdout().newTask()
-                        .asTask())
+                .add(unzipTask)
+                .add(initTask)
+                .add(verifyTask)
                 .build());
         DynamicTasks.waitForLast();
-
-        if (initTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform init`! ");
-        }
     }
 
     @Override
     public void launch() {
-        Map<String,Object> planLog = runJsonPlanTask();
-        boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
-        if(deploymentExists) {
-            LOG.debug("Terraform plan exists!!");
-        } else {
-            runApplyTask();
-            runJsonPlanTask();
-            runLightApplyTask();
-        }
+        final Map<String,Object> planLog = runJsonPlanTask();
+        Task<Object> verifyPlanTask = Tasks.create("Verify Plan", () -> {
+            if(planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
+                throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
+            }
+        }).asTask();
+        Task<Object> checkAndApply =Tasks.create("Apply (if no existing deployment is found)", () -> {
+            boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
+            if (deploymentExists) {
+                LOG.debug("Terraform plan exists!!");
+            } else {
+                runApplyTask();
+            }
+        }).asTask();
+
+        DynamicTasks.queue(Tasks.builder()
+                .displayName("Creating the planned infrastructure")
+                .add(verifyPlanTask)
+                .add(checkAndApply)
+                .add(refreshTaskWithName("Refreshing Terraform state")).build());
+        DynamicTasks.waitForLast();
     }
 
-    /**
-     *
-     * @return {@code true} if deployment already exists
-     */
+    @Override // used for polling as well
     public Map<String, Object> runJsonPlanTask() {
-        Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), jsonPlanCommand())
-                .environmentVariables(getShellEnvironment())
-                .summary("Initializing terraform plan")
-                .returning(p -> p.getStdout())
-                .newTask()
-                .asTask());
+        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Creating the plan => 'tfplan'"));
         DynamicTasks.waitForLast();
         String result;
         try {
             result = planTask.get();
+            return StateParser.parsePlanLogEntries(result);
         } catch (InterruptedException | ExecutionException e) {
             throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
         }
-        Map<String,Object> planLog = StateParser.parsePlanLogEntries(result);
-        return  planLog;
     }
 
+    // Needed for extracting pure Terraform output for the tf.plan sensor
     @Override
     public String runPlanTask() {
         Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), planCommand())
@@ -236,32 +249,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public void runApplyTask() {
-        Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), applyCommand())
-                .environmentVariables(getShellEnvironment())
-                .summary("Applying terraform plan")
-                .requiringZeroAndReturningStdout()
-                .newTask()
-                .asTask());
-        DynamicTasks.waitForLast();
-
-        if (applyTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform apply`!");
-        }
-        entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
-    }
-
-    private void runLightApplyTask() {
-        Task<String> applyTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), lightApplyCommand())
-                .environmentVariables(getShellEnvironment())
-                .summary("Applying `terraform apply -refresh-only`")
-                .returning(p -> p.getStdout())
-                .newTask()
-                .asTask());
-        DynamicTasks.waitForLast();
-
-        if (applyTask.asTask().isError()) {
-            throw new IllegalStateException("Error executing `terraform apply -refresh-only`!");
-        }
+       DynamicTasks.queue(applyTaskWithName("Applying terraform plan"));
+       DynamicTasks.waitForLast();
+       entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
     }
 
     /**
@@ -312,5 +302,32 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             InputStream tfStream =  new ResourceUtils(entity).getResourceFromUrl(varsURL);
             getMachine().copyTo(tfStream, getTfVarsFilePath());
         }
+    }
+
+    private Task jsonPlanTaskWithName(final String name){
+        return SshTasks.newSshExecTaskFactory(getMachine(), jsonPlanCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary(name)
+                .returning(ProcessTaskWrapper::getStdout)
+                .newTask()
+                .asTask();
+    }
+
+    private Task applyTaskWithName(final String name) {
+        return SshTasks.newSshExecTaskFactory(getMachine(), applyCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary(name)
+                .requiringZeroAndReturningStdout()
+                .newTask()
+                .asTask();
+    }
+
+    private Task refreshTaskWithName(final String name) {
+        return SshTasks.newSshExecTaskFactory(getMachine(), refreshCommand())
+                .environmentVariables(getShellEnvironment())
+                .summary(name)
+                .requiringZeroAndReturningStdout()
+                .newTask()
+                .asTask();
     }
 }

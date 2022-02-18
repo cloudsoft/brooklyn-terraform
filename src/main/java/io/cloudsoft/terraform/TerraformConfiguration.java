@@ -37,7 +37,7 @@ public interface TerraformConfiguration extends SoftwareProcess {
     // Update reference.json when changing this value.
     @SetFromFlag("version")
     ConfigKey<String> SUGGESTED_VERSION = ConfigKeys
-            .newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.0.11");
+            .newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.1.4");
 
     @SetFromFlag("tfPollingPeriod")
     ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
@@ -73,7 +73,8 @@ public interface TerraformConfiguration extends SoftwareProcess {
     AttributeSensor<String> CONFIGURATION_APPLIED = Sensors.newStringSensor("tf.configuration.applied",
             "The most recent time a Terraform configuration has been successfully applied.");
 
-    AttributeSensor<String> PLAN = Sensors.newStringSensor("tf.plan",
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    AttributeSensor<Map<String, Object>> PLAN = new BasicAttributeSensor(Map.class, "tf.plan",
             "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.");
 
     AttributeSensor<String> OUTPUT = Sensors.newStringSensor("tf.output",

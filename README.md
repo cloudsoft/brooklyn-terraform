@@ -33,6 +33,12 @@ and then launch (or restart) Brooklyn.
     nohup $BROOKLYN_HOME/bin/brooklyn launch &
 ```
 
+### Under the Bonnet
+
+AMP executes various terraform commands and uses their output to decide resource statuses and populate sensors. The following image shows the commands executed by AMP.
+
+![](docs/AMP_and_Terraform.jpg)
+
 ## Use
 
 **Note** If you installed the project with `catalog.bom` then you can use the entity by using type
@@ -68,7 +74,7 @@ services:
         resource "aws_instance" "example" {
             ami = "ami-408c7f28"
             instance_type = "t1.micro"
-            tags {
+            tags = {
                 Name = "brooklyn-terraform-test"
             }
         }
@@ -352,7 +358,17 @@ outputs that were changed and the type of change.
 
 Apache Brooklyn inspects the Terraform deployment every 30 seconds and updates the sensors and the Brooklyn managed entities.
 
-**Note** In this section infrastructure is used to describe a collection of cloud resources managed by Terraform. 
+**Note:** If you are using AWS, be aware that some AWS have dynamic properties that refresh every time terraform checks their state. This ments that terraform will report a continuous drift. An example of such a dynamic property is:
+```hcl
+ ebs_block_device {
+    device_name = "/dev/sda1"
+    volume_type = "gp2"
+    volume_size = 30
+  }
+```
+Thus,we recommend not using it, unless the Terraform configuration contains a statement to ignore its changes.
+
+**Note:** In this section infrastructure is used to describe a collection of cloud resources managed by Terraform. 
 
 #### All is Well With the World
 
@@ -490,3 +506,4 @@ services:
         - tf.resource.type
         - vsphere_virtual_machine
 ```
+

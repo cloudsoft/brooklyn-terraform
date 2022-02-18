@@ -9,6 +9,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.cloudsoft.terraform.TerraformConfiguration;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.function.Predicate;
@@ -21,6 +23,7 @@ import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
  * Naive version. To be improved further.
  */
 public final class StateParser {
+    private static final Logger LOG = LoggerFactory.getLogger(StateParser.class);
     public static final ImmutableList blankItems = ImmutableList.of("[]", "", "null", "\"\"", "{}", "[{}]");
 
     private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
@@ -183,6 +186,9 @@ public final class StateParser {
                             "resource.action", "No action. Unrecoverable state."
                     ));
                 }
+                if(ple.diagnostic.detail != null) {
+                    sb.append(ple.message + ple.diagnostic.detail).append("\n");
+                }
                 sb.append(ple.message).append("\n");
             });
             result.put("tf.errors",  sb);
@@ -193,6 +199,7 @@ public final class StateParser {
             } else {
                 result.put(PLAN_MESSAGE, "Terraform in RECOVERABLE error state. Check configuration syntax.");
             }
+            return result;
         }
 
         if(result.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC && result.containsKey("tf.output.changes")) {
