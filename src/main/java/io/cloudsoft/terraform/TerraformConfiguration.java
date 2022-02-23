@@ -84,6 +84,9 @@ public interface TerraformConfiguration extends SoftwareProcess {
     AttributeSensor<Map<String, Object>> STATE = new BasicAttributeSensor(Map.class, "tf.state",
             "A map constructed from the state file on disk which contains the state of all managed infrastructure.");
 
+    AttributeSensor<TerraformStatus> DRIFT_STATUS = Sensors.newSensor(TerraformStatus.class,"tf.drift.status",
+            "Drift status of the configuration" );
+
     @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
     void apply();
 

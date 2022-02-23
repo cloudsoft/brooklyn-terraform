@@ -75,7 +75,7 @@ public final class StateParser {
                                 resourceBody.put("value." + value.getKey(), value.getValue().asText());
 
                                 if (value.getKey().equalsIgnoreCase("instance_state")) {
-                                    resourceBody.put("resource.status", value.getValue().asText());
+                                    //resourceBody.put("resource.status", value.getValue().asText());
                                 }
                             }
                         }

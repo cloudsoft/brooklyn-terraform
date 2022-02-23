@@ -252,6 +252,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
        DynamicTasks.queue(applyTaskWithName("Applying terraform plan"));
        DynamicTasks.waitForLast();
        entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
+       entity.getChildren().forEach(c -> entity.removeChild(c));
     }
 
     /**

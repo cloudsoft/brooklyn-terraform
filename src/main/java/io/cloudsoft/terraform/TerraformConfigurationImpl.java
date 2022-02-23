@@ -3,7 +3,6 @@ package io.cloudsoft.terraform;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Function;
-import com.google.common.base.Objects;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
@@ -54,6 +53,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
 
     private Boolean applyDriftComplianceCheckToResources = false;
+    private Boolean isPostApply = false;
 
     @Override
     public void init() {
@@ -142,7 +142,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private void updateResources(Map<String, Object> resources, Entity parent, Class<? extends TerraformResource> clazz) {
         List<Entity> childrenToRemove = new ArrayList<>();
         parent.getChildren().stream().filter(c -> clazz.isAssignableFrom(c.getClass())).forEach(c -> {
-            if (!c.sensors().get(RESOURCE_STATUS).equals("running")) c.sensors().set(RESOURCE_STATUS, "running");
+            if (Objects.isNull(c.sensors().get(RESOURCE_STATUS)) ||
+                    (!c.sensors().get(RESOURCE_STATUS).equals("running") &&
+                    c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC))){
+                c.sensors().set(RESOURCE_STATUS, "running");
+            }
             if (resources.containsKey(c.getConfig(TerraformResource.ADDRESS))) { //child in resource set, update sensors
                 ((TerraformResource) c).refreshSensors((Map<String, Object>) resources.get(c.getConfig(TerraformResource.ADDRESS)));
                 resources.remove(c.getConfig(TerraformResource.ADDRESS));
@@ -177,10 +181,16 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Nullable
         @Override
         public Map<String, Object> apply(@Nullable Map<String, Object> tfPlanStatus) {
-                if(tfPlanStatus.get(PLAN_STATUS).equals( TerraformConfiguration.TerraformStatus.ERROR)) {
+            Boolean driftChanged = false;
+            if (!Objects.isNull(sensors().get(PLAN)) &&
+                    sensors().get(PLAN).containsKey("tf.resource.changes") &&
+                    !sensors().get(PLAN).get("tf.resource.changes").equals(tfPlanStatus.get("tf.resource.changes"))){
+                driftChanged = true;
+            }
+            if(tfPlanStatus.get(PLAN_STATUS).equals( TerraformConfiguration.TerraformStatus.ERROR)) {
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                         tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
-                    updateResourceStates(tfPlanStatus);
+                updateResourceStates(tfPlanStatus);
             } else if(!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
                 if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
@@ -199,6 +209,9 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
                 updateDeploymentState();
             }
+            if (driftChanged || Objects.isNull(sensors().get(DRIFT_STATUS)) || !sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get("tf.plan.status"))){
+                sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get("tf.plan.status"));
+            }
             lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
             return tfPlanStatus;
         }
@@ -211,7 +224,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                             .filter(c -> c instanceof ManagedResource)
                             .filter(c -> resourceAddr.equals(c.config().get(TerraformResource.ADDRESS)))
                             .findAny().ifPresent(c -> {
-                                c.sensors().set(RESOURCE_STATUS, "changed");
+                                if (!c.sensors().get(RESOURCE_STATUS).equals("changed") &&
+                                    !c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC)) {
+                                    c.sensors().set(RESOURCE_STATUS, "changed");
+                                }
                                 ((ManagedResource) c).updateResourceState();
                             });
                 });
@@ -279,7 +295,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);
                     final Object currentValue = sensors().get(sensor);
                     final Object newValue = result.get(name).get("value");
-                    if (!Objects.equal(currentValue, newValue)) {
+                    if (!Objects.equals(currentValue, newValue)) {
                         sensors().set(sensor, newValue);
                     }
                 }
