@@ -480,6 +480,29 @@ E.g: Terraform configuration declares a tag resource used to tag a VM and the pr
 
 **Note:** Unfortunately, Terraform cannot recover from this state, and neither does AMP. Once in this state, effectors become useless, and destroying the resources doesn't work either. Clean-up has to be done manually.
 
+### Drift Compliance Check
+
+Additionally, AMP allows introducing drift compliance checks for the deployed terraform configuration. 
+In order to enable the drift compliance monitoring, initializer of type `terraform-drift-compliance-check` can be added to the blueprint.
+This enables the compliance check for the configuration entity, in order to check the resources in particular as well, `terraform.resources-drift.enabled` configuration should be added.
+Below is a sample blueprint showing how the drift compliance check can be added for both the configuration entity as well as the managed resources.
+
+```
+name: Brooklyn Terraform Deployment
+location: localhost
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      tf.configuration.url: https://url.to/configuration.zip
+    brooklyn.initializers:
+    - type: terraform-drift-compliance-check
+      brooklyn.config:
+        terraform.resources-drift.enabled: true
+```
+
+The compliance check can be viewed in the `Dashboard` module of AMP and shows detailed information about the drift status for the configuration as well as the resources specified.
+The check automatically reacts to drift, bringing the infrastructure back to the desired state as well as updating the configuration.
 
 ## Grouping Resources
 
@@ -506,4 +529,3 @@ services:
         - tf.resource.type
         - vsphere_virtual_machine
 ```
-
