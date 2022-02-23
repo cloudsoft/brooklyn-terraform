@@ -1,5 +1,6 @@
 package io.cloudsoft.terraform.compliance;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import io.cloudsoft.amp.dashboard.beans.ComplianceCheck;
 import io.cloudsoft.terraform.TerraformConfiguration;
@@ -26,6 +27,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
+
+import static io.cloudsoft.terraform.TerraformDriver.PLAN_MESSAGE;
+import static io.cloudsoft.terraform.TerraformDriver.PLAN_STATUS;
 
 public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigKeys{
 
@@ -65,6 +70,8 @@ public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigK
         }
     }
 
+    private static Predicate<Map<String,Object> > driftInfoCheck = d -> d.containsKey(PLAN_STATUS) && !(TerraformConfiguration.TerraformStatus.SYNC.equals(d.get(PLAN_STATUS))) && d.containsKey("tf.resource.changes");
+
     public class TerraformEntityDriftCheck implements SensorEventListener<TerraformStatus> {
 
         private Entity entity;
@@ -84,7 +91,7 @@ public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigK
             result.priority = 1d;
             result.created = Instant.now();
             result.pass = state.equals(TerraformStatus.SYNC);
-            result.summary = getSummaryForConfiguration(entity, tfPlan);
+            result.summary = getSummaryForConfiguration(tfPlan);
             result.notes = getNotesForConfiguration(entity, tfPlan);
 
             Set<ComplianceCheck> status = Sets.newHashSet();
@@ -95,15 +102,15 @@ public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigK
             entity.sensors().set(DRIFT_COMPLIANCE, status);
         }
 
-        private String getSummaryForConfiguration(Entity entity, Map<String,Object> driftInfo){
+        private String getSummaryForConfiguration(Map<String,Object> driftInfo){
             String summary = "";
-            if (driftInfo.containsKey("tf.plan.status")){
-                if (driftInfo.get("tf.plan.status").equals(TerraformStatus.SYNC)) {
+            if (driftInfo.containsKey(PLAN_STATUS)){
+                if (driftInfo.get(PLAN_STATUS).equals(TerraformStatus.SYNC)) {
                     summary += "The infrastructure matches the configuration. No changes required.";
                 } else {
-                    summary += "The infrastructure does not match the configuration. Current status: " + driftInfo.get("tf.plan.status") + ". ";
-                    if (driftInfo.containsKey("tf.plan.message") && !driftInfo.containsKey("errors")){
-                        String message = ((String) driftInfo.get("tf.plan.message")).split(".Plan: ")[1];
+                    summary += "The infrastructure does not match the configuration. Current status: " + driftInfo.get(PLAN_STATUS) + ". ";
+                    if (driftInfo.containsKey(PLAN_MESSAGE) && !driftInfo.containsKey("errors")){
+                        String message = ((String) driftInfo.get(PLAN_MESSAGE)).split(".Plan: ")[1];
                         summary += " - Required changes: " + message;
                     }
                 }
@@ -115,9 +122,7 @@ public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigK
 
         private String getNotesForConfiguration(Entity entity, Map<String,Object> driftInfo){
             String notes = "Total number of managed resources: " + entity.getChildren().size() + ". ";
-            if (driftInfo.containsKey("tf.plan.status") &&
-                    !(driftInfo.get("tf.plan.status").equals(TerraformConfiguration.TerraformStatus.SYNC)) &&
-                    driftInfo.containsKey("tf.resource.changes")){
+            if (driftInfoCheck.test(driftInfo)){
                 List<Map<String, Object>> resourcesChanges = (List<Map<String, Object>>) driftInfo.get("tf.resource.changes");
                 notes += "Number of resources with problems: " + resourcesChanges.size() + " - Details: ";
                 for (Map<String,Object> resource : resourcesChanges){
@@ -153,15 +158,12 @@ public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigK
             result.summary = getSummaryForResource(eventData);
             result.notes = "";
 
-            Set<ComplianceCheck> status = Sets.newHashSet();
-
-            status.add(result);
             LOG.debug(String.format("Terraform Drift compliance check for: %s with result: %b",entity.getDisplayName(), result.pass));
 
-            entity.sensors().set(DRIFT_COMPLIANCE, status);
+            entity.sensors().set(DRIFT_COMPLIANCE, ImmutableSet.of(result));
         }
 
-        private String getSummaryForResource(String resourceStatus){
+        private String getSummaryForResource(final String resourceStatus){
             if (resourceStatus.equals("running") || resourceStatus.equals("ok")){
                 return "The resource is in a healthy state.";
             }
