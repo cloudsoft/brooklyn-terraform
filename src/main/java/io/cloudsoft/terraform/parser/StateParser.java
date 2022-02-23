@@ -73,10 +73,6 @@ public final class StateParser {
                             Map.Entry<String,JsonNode> value =  it.next();
                             if(isNotBlankPredicate.test(value.getValue())) {
                                 resourceBody.put("value." + value.getKey(), value.getValue().asText());
-
-                                if (value.getKey().equalsIgnoreCase("instance_state")) {
-                                    //resourceBody.put("resource.status", value.getValue().asText());
-                                }
                             }
                         }
                     }

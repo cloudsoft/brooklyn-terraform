@@ -53,7 +53,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
 
     private Boolean applyDriftComplianceCheckToResources = false;
-    private Boolean isPostApply = false;
 
     @Override
     public void init() {
@@ -142,7 +141,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private void updateResources(Map<String, Object> resources, Entity parent, Class<? extends TerraformResource> clazz) {
         List<Entity> childrenToRemove = new ArrayList<>();
         parent.getChildren().stream().filter(c -> clazz.isAssignableFrom(c.getClass())).forEach(c -> {
-            if (Objects.isNull(c.sensors().get(RESOURCE_STATUS)) ||
+            if (!c.sensors().getAll().containsKey(RESOURCE_STATUS) ||
                     (!c.sensors().get(RESOURCE_STATUS).equals("running") &&
                     c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC))){
                 c.sensors().set(RESOURCE_STATUS, "running");
@@ -182,7 +181,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Override
         public Map<String, Object> apply(@Nullable Map<String, Object> tfPlanStatus) {
             Boolean driftChanged = false;
-            if (!Objects.isNull(sensors().get(PLAN)) &&
+            if (sensors().getAll().containsKey(PLAN) &&
                     sensors().get(PLAN).containsKey("tf.resource.changes") &&
                     !sensors().get(PLAN).get("tf.resource.changes").equals(tfPlanStatus.get("tf.resource.changes"))){
                 driftChanged = true;
@@ -209,7 +208,9 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
                 updateDeploymentState();
             }
-            if (driftChanged || Objects.isNull(sensors().get(DRIFT_STATUS)) || !sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get("tf.plan.status"))){
+            if (driftChanged ||
+                    !sensors().getAll().containsKey(DRIFT_STATUS) ||
+                    !sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get("tf.plan.status"))){
                 sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get("tf.plan.status"));
             }
             lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
