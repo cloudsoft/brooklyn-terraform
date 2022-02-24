@@ -30,7 +30,12 @@ public class StartableManagedResourceImpl extends ManagedResourceImpl implements
 
     @Override
     public boolean refreshSensors(Map<String, Object> resource) {
-        resource.forEach((k, v) -> sensors().set(Sensors.newStringSensor("tf." + k), v.toString()));
+        resource.forEach((k, v) -> {
+            if (!sensors().get(Sensors.newStringSensor("tf." + k)).equals(v)){
+                sensors().set(Sensors.newStringSensor("tf." + k), v.toString());
+            }
+        });
+
         if (resource.containsKey(IP_SENSOR_NAME)) {
             String ip = resource.get(IP_SENSOR_NAME).toString();
             sensors().set(Attributes.SSH_ADDRESS, UserAndHostAndPort.fromParts("tbd", ip, 22));

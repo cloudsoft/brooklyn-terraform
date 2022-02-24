@@ -25,7 +25,6 @@ public class TerraformJsonPlanParsingTest {
         Map<String,Object> resources = StateParser.parseResources(state);
         assertEquals(resources.size(), 1);
         assertTrue(resources.containsKey("aws_instance.example1"));
-        assertTrue(((Map<String,Object>)(resources.get("aws_instance.example1"))).containsKey("resource.status"));
     }
 
     @Test

@@ -19,6 +19,10 @@ services:
     - name: db.vm.name
       type: string
       reconfigurable: true
+  brooklyn.initializers:
+    - type: terraform-drift-compliance-check
+      brooklyn.config:
+        terraform.resources-drift.enabled: true
 - type: org.apache.brooklyn.entity.group.DynamicGroup
   name: VSphere VMs
   brooklyn.config:

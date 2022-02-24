@@ -3,7 +3,6 @@ package io.cloudsoft.terraform;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Function;
-import com.google.common.base.Objects;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
@@ -40,6 +39,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 
 import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.entity.StartableManagedResource.RESOURCE_STATUS;
@@ -52,6 +52,8 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     private Map<String, Object> lastCommandOutputs = Collections.synchronizedMap(Maps.newHashMapWithExpectedSize(3));
     private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
+
+    private Boolean applyDriftComplianceCheckToResources = false;
 
     @Override
     public void init() {
@@ -76,12 +78,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED));
         getChildren().forEach(child -> {
             if (child instanceof BasicGroup){
-                child.getChildren().forEach(grandChild -> {
-                    if (grandChild instanceof TerraformResource){
-                        removeChild(grandChild);
-                        Entities.unmanage(grandChild);
-                    }
-                } );
+                child.getChildren().stream().filter(gc -> gc instanceof TerraformResource)
+                                .forEach(gc -> {
+                                    removeChild(gc);
+                                    Entities.unmanage(gc);
+                                });
                 removeChild(child);
             }
             if (child instanceof TerraformResource){
@@ -89,7 +90,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 Entities.unmanage(child);
             }
         });
-
     }
 
 
@@ -137,10 +137,15 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
+    private static Predicate<? super Entity> runningOrSync = c -> !c.sensors().getAll().containsKey(RESOURCE_STATUS) || (!c.sensors().get(RESOURCE_STATUS).equals("running") &&
+                    c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC));
+
     private void updateResources(Map<String, Object> resources, Entity parent, Class<? extends TerraformResource> clazz) {
         List<Entity> childrenToRemove = new ArrayList<>();
         parent.getChildren().stream().filter(c -> clazz.isAssignableFrom(c.getClass())).forEach(c -> {
-            c.sensors().set(RESOURCE_STATUS, "running");
+            if (runningOrSync.test(c)){
+                c.sensors().set(RESOURCE_STATUS, "running");
+            }
             if (resources.containsKey(c.getConfig(TerraformResource.ADDRESS))) { //child in resource set, update sensors
                 ((TerraformResource) c).refreshSensors((Map<String, Object>) resources.get(c.getConfig(TerraformResource.ADDRESS)));
                 resources.remove(c.getConfig(TerraformResource.ADDRESS));
@@ -148,7 +153,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 childrenToRemove.add(c);
             }
         });
-        childrenToRemove.forEach(c -> parent.removeChild(c)); //  child not in resource set (deleted by terraform -> remove child)
+        childrenToRemove.forEach(parent::removeChild); //  child not in resource set (deleted by terraform -> remove child)
     }
 
     /**
@@ -175,10 +180,15 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Nullable
         @Override
         public Map<String, Object> apply(@Nullable Map<String, Object> tfPlanStatus) {
-                if(tfPlanStatus.get(PLAN_STATUS).equals( TerraformConfiguration.TerraformStatus.ERROR)) {
+            boolean driftChanged = false;
+            if (sensors().getAll().containsKey(PLAN) && sensors().get(PLAN).containsKey(RESOURCE_CHANGES) &&
+                    !sensors().get(PLAN).get(RESOURCE_CHANGES).equals(tfPlanStatus.get(RESOURCE_CHANGES))){
+                driftChanged = true;
+            }
+            if(TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                         tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
-                    updateResourceStates(tfPlanStatus);
+                updateResourceStates(tfPlanStatus);
             } else if(!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
                 if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
@@ -197,6 +207,9 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
                 updateDeploymentState();
             }
+            if (driftChanged || !sensors().getAll().containsKey(DRIFT_STATUS) || !sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get(PLAN_STATUS))){
+                sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
+            }
             lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
             return tfPlanStatus;
         }
@@ -208,12 +221,16 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     TerraformConfigurationImpl.this.getChildren().stream()
                             .filter(c -> c instanceof ManagedResource)
                             .filter(c -> resourceAddr.equals(c.config().get(TerraformResource.ADDRESS)))
-                            .findAny().ifPresent(c -> {
-                                c.sensors().set(RESOURCE_STATUS, "changed");
-                                ((ManagedResource) c).updateResourceState();
-                            });
+                            .findAny().ifPresent(this::checkAndUpdateResource);
                 });
             }
+        }
+
+        private void checkAndUpdateResource(Entity c) {
+            if (!c.sensors().get(RESOURCE_STATUS).equals("changed") && !c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC)) {
+                c.sensors().set(RESOURCE_STATUS, "changed");
+            }
+            ((ManagedResource) c).updateResourceState();
         }
     }
 
@@ -277,7 +294,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);
                     final Object currentValue = sensors().get(sensor);
                     final Object newValue = result.get(name).get("value");
-                    if (!Objects.equal(currentValue, newValue)) {
+                    if (!Objects.equals(currentValue, newValue)) {
                         sensors().set(sensor, newValue);
                     }
                 }
@@ -383,5 +400,15 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 Time.sleep(Duration.FIVE_SECONDS);
             }
         }
+    }
+
+    @Override
+    public Boolean isApplyDriftComplianceToResources(){
+        return applyDriftComplianceCheckToResources;
+    }
+
+    @Override
+    public void setApplyDriftComplianceToResources(Boolean doApply){
+        applyDriftComplianceCheckToResources = doApply;
     }
 }
