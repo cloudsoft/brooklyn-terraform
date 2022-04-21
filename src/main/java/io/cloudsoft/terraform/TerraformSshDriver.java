@@ -79,7 +79,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         if (os == null) return "linux_amd64";
         // If not Mac, assume Linux
         String osType = os.isMac() ? "darwin" : "linux";
-        String archType = os.is64bit() ? "amd64" : "386";
+        String archType = os.is64bit() ?
+                os.getArch().toLowerCase().contains("arm") ? "arm64" : "amd64":
+                os.getArch().toLowerCase().contains("arm") ? "arm" : "386";
 
         return osType + "_" + archType;
     }
