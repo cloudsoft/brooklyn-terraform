@@ -333,4 +333,28 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .newTask()
                 .asTask();
     }
+
+    @Override
+    public String getEnvironmentDir() {
+        String baseDir = super.getRunDir();
+        String workingDirectory = getWorkingDirectory();
+        return Strings.isEmpty(workingDirectory) ?
+                baseDir :
+                baseDir + "/" + workingDirectory;
+    }
+
+    public String getWorkingDirectory() {
+        String workingDir = entity.getConfig(TerraformConfiguration.WORKING_DIRECTORY);
+        return workingDir.startsWith("/") ?
+                removeInitialSlashes(workingDir) :
+                workingDir;
+    }
+
+    private String removeInitialSlashes(String workingDir) {
+        //todojd improve + test
+        while(workingDir.startsWith("/")){
+            workingDir = workingDir.substring(1);
+        }
+        return workingDir;
+    }
 }
