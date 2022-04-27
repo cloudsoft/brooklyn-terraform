@@ -25,6 +25,7 @@ import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
 public final class StateParser {
     private static final Logger LOG = LoggerFactory.getLogger(StateParser.class);
     public static final ImmutableList blankItems = ImmutableList.of("[]", "", "null", "\"\"", "{}", "[{}]");
+    public static final String CHILD_MODULES = "child_modules";
 
     private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
     private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.CHANGE_SUMMARY;
@@ -36,7 +37,11 @@ public final class StateParser {
 
 
     public static Map<String, Object> parseResources(final String state){
-        Map<String, Object> result  = new HashMap<>();
+        return parseResources(state,0);
+    }
+    public static Map<String, Object> parseResources(final String state, int moduleDepth){
+
+            Map<String, Object> result  = new HashMap<>();
         ObjectMapper objectMapper = new ObjectMapper();
         try {
             JsonNode root = objectMapper.readTree(state);
@@ -51,48 +56,57 @@ public final class StateParser {
             if(!root.get("values").has("root_module")) {
                 throw new  IllegalArgumentException ("A valid deployment state should have a root_module node!");
             }
-            if(!root.get("values").get("root_module").has("resources")) {
+            JsonNode rootModule = root.get("values").get("root_module");
+            if(!rootModule.has("resources")) {
                 throw new  IllegalArgumentException ("A valid deployment state should have a resources node!");
             }
-
-            JsonNode resourceNode = root.at("/values/root_module/resources");
-            resourceNode.forEach(resource ->  {
-                Map<String, Object>  resourceBody = new LinkedHashMap<>();
-
-                //if (resource.has("mode") && "managed".equals(resource.get("mode").asText())) {
-                    result.put(resource.get("address").asText(), resourceBody);
-
-                    resourceBody.put("resource.address", resource.get("address").asText());
-                    resourceBody.put("resource.mode", resource.get("mode").asText());
-                    resourceBody.put("resource.type", resource.get("type").asText());
-                    resourceBody.put("resource.name", resource.get("name").asText());
-                    resourceBody.put("resource.provider", resource.get("provider_name").asText());
-                    if(resource.has("values")) {
-                        Iterator<Map.Entry<String, JsonNode>>  it = resource.get("values").fields();
-                        while(it.hasNext()) {
-                            Map.Entry<String,JsonNode> value =  it.next();
-                            if(isNotBlankPredicate.test(value.getValue())) {
-                                resourceBody.put("value." + value.getKey(), value.getValue().asText());
-                            }
-                        }
-                    }
-
-                    if(resource.has("sensitive_values")) {
-                        Iterator<Map.Entry<String, JsonNode>>  it = resource.get("sensitive_values").fields();
-                        while(it.hasNext()) {
-                            Map.Entry<String,JsonNode> value =  it.next();
-                            if(isNotBlankPredicate.test(value.getValue())) {
-                                resourceBody.put("sensitive.value." + value.getKey(), value.getValue().asText());
-                            }
-                        }
-                    }
-                //}
-
-            });
+            parseResources(result, rootModule, 0, moduleDepth);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Cannot parse Terraform state!", e);
         }
         return result;
+    }
+
+    private static void parseResources(Map<String, Object> result, JsonNode parsingModule, int moduleDepthCounter, final int maxModuleDepth) {
+        moduleDepthCounter++;
+        for (JsonNode resource : parsingModule.get("resources")) {
+            Map<String, Object> resourceBody = new LinkedHashMap<>();
+
+            //if (resource.has("mode") && "managed".equals(resource.get("mode").asText())) {
+            result.put(resource.get("address").asText(), resourceBody);
+
+            resourceBody.put("resource.address", resource.get("address").asText());
+            resourceBody.put("resource.mode", resource.get("mode").asText());
+            resourceBody.put("resource.type", resource.get("type").asText());
+            resourceBody.put("resource.name", resource.get("name").asText());
+            resourceBody.put("resource.provider", resource.get("provider_name").asText());
+            if (resource.has("values")) {
+                Iterator<Map.Entry<String, JsonNode>> it = resource.get("values").fields();
+                while (it.hasNext()) {
+                    Map.Entry<String, JsonNode> value = it.next();
+                    if (isNotBlankPredicate.test(value.getValue())) {
+                        resourceBody.put("value." + value.getKey(), value.getValue().asText());
+                    }
+                }
+            }
+
+            if (resource.has("sensitive_values")) {
+                Iterator<Map.Entry<String, JsonNode>> it = resource.get("sensitive_values").fields();
+                while (it.hasNext()) {
+                    Map.Entry<String, JsonNode> value = it.next();
+                    if (isNotBlankPredicate.test(value.getValue())) {
+                        resourceBody.put("sensitive.value." + value.getKey(), value.getValue().asText());
+                    }
+                }
+            }
+            //}
+            if ((maxModuleDepth >= moduleDepthCounter) && parsingModule.has(CHILD_MODULES)) {
+                JsonNode modules = parsingModule.get(CHILD_MODULES);
+                for (JsonNode module : modules) {
+                    parseResources(result, module, moduleDepthCounter++, maxModuleDepth);
+                }
+            }
+        }
     }
 
     public static Map<String, Object> parsePlanLogEntries(final String planLogEntriesAsStr){

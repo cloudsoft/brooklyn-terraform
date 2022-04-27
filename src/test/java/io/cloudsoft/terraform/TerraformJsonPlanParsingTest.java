@@ -289,4 +289,33 @@ public class TerraformJsonPlanParsingTest {
         assertEquals(resources.size(), 3);
         assertEquals(resources.stream().filter(m -> m.containsValue("create")).count(), 3);
     }
+
+    @Test
+    void testParsedStateWithModule() throws IOException {
+        String state = loadTestData("state/show-using-module.json");
+        Map<String, Object> result = StateParser.parseResources(state,0);
+        // Only one resource as root
+        assertEquals(result.size(),1);
+        // Nine resources reading the first level of modules
+        result = StateParser.parseResources(state,1);
+        assertEquals(result.size(),9);
+        // 21 resources reading the second level of modules
+        result = StateParser.parseResources(state,2);
+        assertEquals(result.size(),21);
+        // There is only two levels, passing more depth is ignored
+        result = StateParser.parseResources(state,10);
+        assertEquals(result.size(),21);
+    }
+
+    @Test
+    void testParsedStateWithoutModule() throws IOException {
+        String state = loadTestData("state/show-single-resource.json");
+        // If not depth is passed, defaults in 0
+        Map<String, Object> result = StateParser.parseResources(state);
+        assertEquals(result.size(),1);
+        result = StateParser.parseResources(state,1);
+        assertEquals(result.size(),1);
+        result = StateParser.parseResources(state,10);
+        assertEquals(result.size(),1);
+    }
 }
