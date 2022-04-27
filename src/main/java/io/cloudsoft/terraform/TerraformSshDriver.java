@@ -29,6 +29,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 
 import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_URL;
 import static java.lang.String.format;
@@ -73,15 +74,16 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return getStateFilePath();
     }
 
+    final String ARM_ARCH_PATTERNS = "(arm|aarch)\\w*";
     public String getOsTag() {
         OsDetails os = getLocation().getOsDetails();
         // If no details, assume 64-bit Linux
         if (os == null) return "linux_amd64";
         // If not Mac, assume Linux
         String osType = os.isMac() ? "darwin" : "linux";
-        String archType = os.is64bit() ?
-                os.getArch().toLowerCase().contains("arm") ? "arm64" : "amd64":
-                os.getArch().toLowerCase().contains("arm") ? "arm" : "386";
+        String archType = os.is64bit() ? // temporary, remove after Juan's changes in brooklyn-core
+                Pattern.matches(ARM_ARCH_PATTERNS, os.getArch().toLowerCase()) ? "arm64" : "amd64":
+                Pattern.matches(ARM_ARCH_PATTERNS, os.getArch().toLowerCase()) ? "arm" : "386";
 
         return osType + "_" + archType;
     }
