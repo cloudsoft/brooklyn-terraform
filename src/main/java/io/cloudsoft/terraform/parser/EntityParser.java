@@ -19,11 +19,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static io.cloudsoft.terraform.entity.ManagedResource.RESOURCE_STATUS;
 import static io.cloudsoft.terraform.entity.TerraformResource.*;
 
 public  final class EntityParser {
+
+    private static Predicate<Map<String,Object>> isRunnable = resource -> resource.get("resource.type").toString().endsWith("_instance") ||
+            resource.get("resource.type").toString().endsWith("_virtual_machine") ||
+            resource.get("resource.type").toString().endsWith("_cluster");
 
     public static void processResources(Map<String, Object> resources, Entity entity) {
         List<Map<String, Object>> dataResources = getDataResources(resources);
@@ -42,7 +48,7 @@ public  final class EntityParser {
             managedResources.forEach(resource -> {
                 resource.put("drift-compliance", ((TerraformConfiguration) entity).isApplyDriftComplianceToResources());
                 resource.put("total-resource-number", managedResourceNumber);
-                if (resource.get("resource.type").toString().endsWith("_instance") || resource.get("resource.type").toString().endsWith("_virtual_machine")){
+                if (isRunnable.test(resource)){
                     entity.addChild(basicSpec(StartableManagedResource.class, resource));
                 } else
                     entity.addChild(basicSpec(ManagedResource.class, resource));
@@ -76,7 +82,9 @@ public  final class EntityParser {
                 .configure(PROVIDER, contentsMap.get("resource.provider").toString())
                 .configure(ADDRESS, contentsMap.get("resource.address").toString())
                 .configure(NAME, contentsMap.get("resource.name").toString());
-        EntityInitializer labels = (!Objects.isNull(contentsMap.get("drift-compliance")) && !Objects.isNull(contentsMap.get("total-resource-number"))) ? new DriftCheck((Boolean) contentsMap.get("drift-compliance"), (int) contentsMap.get("total-resource-number")) : new DriftCheck();
+        EntityInitializer labels = (!Objects.isNull(contentsMap.get("drift-compliance")) && !Objects.isNull(contentsMap.get("total-resource-number"))) ?
+                new DriftCheck((Boolean) contentsMap.get("drift-compliance"), (int) contentsMap.get("total-resource-number")) :
+                new DriftCheck();
         spec.addInitializer(labels);
         return spec;
     }

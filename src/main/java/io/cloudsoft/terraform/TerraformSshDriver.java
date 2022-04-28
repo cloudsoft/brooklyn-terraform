@@ -29,6 +29,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 
 import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_URL;
 import static java.lang.String.format;
@@ -73,6 +74,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return getStateFilePath();
     }
 
+    final String ARM_ARCH_PATTERNS = "(arm|aarch)\\w*";
     public String getOsTag() {
         OsDetails os = getLocation().getOsDetails();
         // If no details, assume 64-bit Linux

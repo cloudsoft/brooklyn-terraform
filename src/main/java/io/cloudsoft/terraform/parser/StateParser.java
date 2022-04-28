@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
 
 import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.parser.PlanLogEntry.NO_CHANGES;
+import static io.cloudsoft.terraform.parser.PlanLogEntry.Provider.GOOGLE;
 
 /**
  * Naive version. To be improved further.
@@ -72,7 +74,11 @@ public final class StateParser {
                         while(it.hasNext()) {
                             Map.Entry<String,JsonNode> value =  it.next();
                             if(isNotBlankPredicate.test(value.getValue())) {
-                                resourceBody.put("value." + value.getKey(), value.getValue().asText());
+                                if((resourceBody.get("resource.address").toString().startsWith(GOOGLE.getPrefix()) && value.getKey().equals("cluster_config"))){
+                                    parseClusterData(value.getValue(), "value.cluster_config", resourceBody);
+                                } else {
+                                    resourceBody.put("value." + value.getKey(), value.getValue().asText());
+                                }
                             }
                         }
                     }
@@ -93,6 +99,46 @@ public final class StateParser {
             throw new IllegalStateException("Cannot parse Terraform state!", e);
         }
         return result;
+    }
+
+    /**
+     * We need to process this node to extract useful cluster data.
+     * Careful with this one, because it is a tad recursive!
+     * @param value
+     * @return
+     */
+    private static void parseClusterData(JsonNode value, String prefix, Map<String,Object> result) {
+        if (value instanceof ArrayNode ) {
+            ArrayNode arrayNode = (ArrayNode) value;
+            for (int i = 0; i < arrayNode.size(); i++) {
+                JsonNode node = arrayNode.get(i);
+                if (node instanceof TextNode) {
+                    result.put(prefix +".[" + i + "]", node.asText());
+                } else {
+                    Iterator<Map.Entry<String, JsonNode>> it = node.fields();
+                    while (it.hasNext()) {
+                        Map.Entry<String, JsonNode> pair = it.next();
+                        if (isNotBlankPredicate.test(pair.getValue())) {
+                            switch (pair.getKey()) {
+                                case "master_config":
+                                    parseClusterData(pair.getValue(), prefix + "[" + i + "].master_config", result);
+                                    break;
+                                case "worker_config":
+                                    parseClusterData(pair.getValue(), prefix + "[" + i + "].worker_config", result);
+                                    break;
+                                case "instance_names":
+                                    parseClusterData(pair.getValue(), prefix + "[" + i + "].instance_name", result);
+                                    break;
+                                default:
+                                    if (pair.getValue() instanceof TextNode) {
+                                        result.put(prefix + "[" + i + "]." + pair.getKey(), pair.getValue().asText());
+                                    }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public static Map<String, Object> parsePlanLogEntries(final String planLogEntriesAsStr){
