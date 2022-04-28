@@ -29,7 +29,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
 
 import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_URL;
 import static java.lang.String.format;
@@ -80,9 +79,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         if (os == null) return "linux_amd64";
         // If not Mac, assume Linux
         String osType = os.isMac() ? "darwin" : "linux";
-        String archType = os.is64bit() ?
-                os.isArm() ? "arm64" : "amd64":
-                os.isArm() ? "arm" : "386";
+        String archType = os.is64bit() ? "amd64" : "386";
 
         return osType + "_" + archType;
     }
