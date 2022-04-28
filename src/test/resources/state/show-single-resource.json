@@ -1,0 +1,102 @@
+{
+  "format_version": "1.0",
+  "terraform_version": "1.1.4",
+  "values": {
+    "outputs": {
+      "id": {
+        "sensitive": false,
+        "value": "sg-01484b93f40426a7f"
+      },
+      "name": {
+        "sensitive": false,
+        "value": "terraform-20220425083341393100000001"
+      }
+    },
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_security_group.allow_all",
+          "mode": "managed",
+          "type": "aws_security_group",
+          "name": "allow_all",
+          "provider_name": "registry.terraform.io/hashicorp/aws",
+          "schema_version": 1,
+          "values": {
+            "arn": "arn:aws:ec2:eu-west-2:304295633295:security-group/sg-01484b93f40426a7f",
+            "description": "test-security-group allowing all access",
+            "egress": [
+              {
+                "cidr_blocks": [
+                  "0.0.0.0/0"
+                ],
+                "description": "",
+                "from_port": 0,
+                "ipv6_cidr_blocks": [],
+                "prefix_list_ids": [],
+                "protocol": "-1",
+                "security_groups": [],
+                "self": false,
+                "to_port": 0
+              }
+            ],
+            "id": "sg-01484b93f40426a7f",
+            "ingress": [
+              {
+                "cidr_blocks": [
+                  "0.0.0.0/0"
+                ],
+                "description": "",
+                "from_port": 0,
+                "ipv6_cidr_blocks": [],
+                "prefix_list_ids": [],
+                "protocol": "-1",
+                "security_groups": [],
+                "self": false,
+                "to_port": 0
+              }
+            ],
+            "name": "terraform-20220425083341393100000001",
+            "name_prefix": "terraform-",
+            "owner_id": "304295633295",
+            "revoke_rules_on_delete": false,
+            "tags": {
+              "Name": "TestSG-KillMePlease"
+            },
+            "tags_all": {
+              "Name": "TestSG-KillMePlease",
+              "cloudsoft:group": "AMP",
+              "cloudsoft:workload": "Terraform",
+              "environment": "dev"
+            },
+            "timeouts": null,
+            "vpc_id": "vpc-619e7d08"
+          },
+          "sensitive_values": {
+            "egress": [
+              {
+                "cidr_blocks": [
+                  false
+                ],
+                "ipv6_cidr_blocks": [],
+                "prefix_list_ids": [],
+                "security_groups": []
+              }
+            ],
+            "ingress": [
+              {
+                "cidr_blocks": [
+                  false
+                ],
+                "ipv6_cidr_blocks": [],
+                "prefix_list_ids": [],
+                "security_groups": []
+              }
+            ],
+            "tags": {},
+            "tags_all": {}
+          }
+        }
+      ]
+    }
+  }
+}

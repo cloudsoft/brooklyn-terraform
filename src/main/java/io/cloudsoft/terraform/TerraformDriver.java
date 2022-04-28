@@ -53,7 +53,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     }
 
     default String makeTerraformCommand(String argument) {
-        return format("cd %s && %s/terraform %s", getRunDir(), getInstallDir(), argument);
+        return format("cd %s && %s/terraform %s", getEnvironmentDir(), getInstallDir(), argument);
     }
 
     default String getConfigurationFilePath() {
@@ -65,11 +65,11 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     }
 
     default String getStateFilePath() {
-        return getRunDir() + "/terraform.tfstate";
+        return getEnvironmentDir() + "/terraform.tfstate";
     }
 
     // these are just here to allow the terraform commands building methods to be default too :)
     String getRunDir();
     String getInstallDir();
-
+    String getEnvironmentDir();
 }

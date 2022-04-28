@@ -127,7 +127,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
      */
     private void updateDeploymentState() {
         final String result = getDriver().runShowTask();
-        Map<String, Object> state = StateParser.parseResources(result);
+        Map<String, Object> state = StateParser.parseResources(result, getConfig(TerraformConfiguration.MODULE_DEPTH));
         sensors().set(TerraformConfiguration.STATE, state);
         Map<String, Object> resources = new HashMap<>(state);
         updateResources(resources, this, ManagedResource.class);
@@ -137,9 +137,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
-    private static Predicate<? super Entity> runningOrSync = c -> !c.sensors().getAll().containsKey(RESOURCE_STATUS) || (!c.sensors().get(RESOURCE_STATUS).equals("running") &&
-                    c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC));
-
+    private static Predicate<? super Entity> runningOrSync = c -> !c.sensors().getAll().containsKey(RESOURCE_STATUS) ||
+            (c.getParent().sensors().getAll().containsKey(DRIFT_STATUS) &&
+                    !c.sensors().get(RESOURCE_STATUS).equals("running") &&
+                    c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC)
+            );
     private void updateResources(Map<String, Object> resources, Entity parent, Class<? extends TerraformResource> clazz) {
         List<Entity> childrenToRemove = new ArrayList<>();
         parent.getChildren().stream().filter(c -> clazz.isAssignableFrom(c.getClass())).forEach(c -> {

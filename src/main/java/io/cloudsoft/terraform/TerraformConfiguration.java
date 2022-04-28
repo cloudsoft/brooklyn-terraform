@@ -70,6 +70,19 @@ public interface TerraformConfiguration extends SoftwareProcess {
             .description("URL of the file containing values for the Terraform variables.")
             .build();
 
+    @SetFromFlag("tfWorkingDirectory")
+    ConfigKey<String> WORKING_DIRECTORY = ConfigKeys.builder(String.class)
+            .name("tf.working.directory")
+            .description("Working directory for Terraform commands.")
+            .defaultValue("")
+            .build();
+
+    @SetFromFlag("tfModuleDepthState")
+    ConfigKey<Integer> MODULE_DEPTH = ConfigKeys.builder(Integer.class)
+            .name("tf.module.depth")
+            .description("Module depth to be represented.")
+            .defaultValue(1)
+            .build();
     AttributeSensor<String> CONFIGURATION_APPLIED = Sensors.newStringSensor("tf.configuration.applied",
             "The most recent time a Terraform configuration has been successfully applied.");
 
