@@ -37,7 +37,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return makeTerraformCommand("plan -lock=false -input=false -no-color"); // Show changes required by the current in the normal TF style, provides more info than the json version
     }
     default String applyCommand() {
-        return makeTerraformCommand("apply -no-color -input=false tfplan"); // Create or update infrastructure
+        return makeTerraformCommand("apply -no-color -input=false -auto-approve"); // Create or update infrastructure
     }
     default String refreshCommand() {
         return makeTerraformCommand(" apply -refresh-only -auto-approve -no-color -input=false"); // Create or update infrastructure
