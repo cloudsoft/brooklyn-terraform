@@ -18,9 +18,11 @@ import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
 import org.apache.brooklyn.util.text.Strings;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.InputStream;
 import java.sql.Date;
 import java.text.SimpleDateFormat;
@@ -29,15 +31,19 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
 
 import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_URL;
+import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_PATH;
 import static java.lang.String.format;
 import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
 
 public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
     private static final Logger LOG = LoggerFactory.getLogger(TerraformSshDriver.class);
-    private final String EMPTY_TF_CFG_WARN ="Terraform initialized in an empty directory!";
+    public static final String WHICH_TERRAFORM_COMMAND = "which terraform";
+    private final String EMPTY_TF_CFG_WARN = "Terraform initialized in an empty directory!";
+
+    private Boolean terraformAlreadyAvailable;
+    private Boolean terraformInPath;
 
     public TerraformSshDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
@@ -91,6 +97,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     // Order of execution during AMP deploy: step 1 - set properties from the configuration on the entity and create terraform install directory
     @Override
     public void preInstall() {
+        if (terraformAlreadyAvailable()) return;
         final String installFileName = format("terraform_%s_%s.zip", getVersion(), getOsTag());
         resolver = Entities.newDownloader(this, ImmutableMap.of("filename", installFileName));
         setExpandedInstallDir(Os.mergePaths(getInstallDir(), resolver.getUnpackedDirectoryName(format("terraform_%s_%s", getVersion(), getOsTag()))));
@@ -102,6 +109,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     // Order of execution during AMP deploy: step 2 - download and install (unzip) the terraform executable
     @Override
     public void install() {
+        if (terraformAlreadyAvailable()) return;
         List<String> urls = resolver.getTargets();
         String saveAs = resolver.getFilename();
 
@@ -332,5 +340,57 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .requiringZeroAndReturningStdout()
                 .newTask()
                 .asTask();
+    }
+
+    private boolean terraformAlreadyAvailable() {
+        if (terraformAlreadyAvailable == null) {
+            final String explicitPath = entity.getConfig(TerraformConfiguration.TERRAFORM_PATH);
+            if (Strings.isNonBlank(explicitPath)) {
+                // Check the explicit path provided
+                terraformAlreadyAvailable = new File(explicitPath).exists() || new File(explicitPath + File.pathSeparator + "terraform").exists();
+                if(!terraformAlreadyAvailable){
+                    throw new IllegalArgumentException("Terraform not found at location indicated in config key `"+ TERRAFORM_PATH.getName()+"`: "+explicitPath);
+                }
+                String runDir = removeCommandFromPathAndClean(entity.getConfig(TERRAFORM_PATH));
+                setExpandedInstallDir(runDir);
+                setInstallDir(runDir);
+            } else
+                // try to find Terraform in the system if the config allow it
+                terraformAlreadyAvailable = entity.getConfig(TerraformConfiguration.LOOK_FOR_TERRAFORM_INSTALLED) && terraformInPath();
+        }
+        return terraformAlreadyAvailable;
+    }
+
+    private boolean terraformInPath() {
+        if (terraformInPath == null) {
+            terraformInPath = false;
+            Task<String> terraformLocalPathTask = SshTasks.newSshExecTaskFactory(getMachine(), WHICH_TERRAFORM_COMMAND)
+                    .requiringZeroAndReturningStdout()
+                    .environmentVariables(getShellEnvironment())
+                    .summary("Searching for Terraform in the system.")
+                    .newTask()
+                    .asTask();
+            DynamicTasks.queue(terraformLocalPathTask);
+            DynamicTasks.waitForLast();
+            try {
+                String output = terraformLocalPathTask.get();
+                if (Strings.isNonEmpty(output) && output.toLowerCase().contains("terraform")) {
+                    output = removeCommandFromPathAndClean(output);
+                    setExpandedInstallDir(output);
+                    setInstallDir(output);
+                    terraformInPath = true;
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                LOG.debug("Terraform not found in path");
+            }
+        }
+        return terraformInPath;
+    }
+
+    private String removeCommandFromPathAndClean(String path) {
+        String cleanPath = StringUtils.removeEnd(path, "\n");
+        cleanPath = StringUtils.removeEnd(cleanPath, "terraform");
+        cleanPath = StringUtils.removeEnd(cleanPath, "/");
+        return cleanPath;
     }
 }

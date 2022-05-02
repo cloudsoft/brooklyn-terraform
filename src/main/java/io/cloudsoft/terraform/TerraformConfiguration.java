@@ -70,10 +70,24 @@ public interface TerraformConfiguration extends SoftwareProcess {
             .description("URL of the file containing values for the Terraform variables.")
             .build();
 
+    @SetFromFlag("tfPath")
+    ConfigKey<String> TERRAFORM_PATH = ConfigKeys.builder(String.class)
+            .name("tf.path")
+            .description("Path to the Terraform executable")
+            .defaultValue("")
+            .build();
+    @SetFromFlag("tfSearch")
+    ConfigKey<Boolean> LOOK_FOR_TERRAFORM_INSTALLED = ConfigKeys.builder(Boolean.class)
+            .name("tf.search")
+            .description("Allow to look for the terraform binary in the system if not fount in explicit path" +
+                    " (`" + TERRAFORM_PATH.getName() + "` config key) or the property wasn't supplied")
+            .defaultValue(false)
+            .build();
+
     AttributeSensor<String> CONFIGURATION_APPLIED = Sensors.newStringSensor("tf.configuration.applied",
             "The most recent time a Terraform configuration has been successfully applied.");
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     AttributeSensor<Map<String, Object>> PLAN = new BasicAttributeSensor(Map.class, "tf.plan",
             "The contents of the Terraform plan command which specifies exactly what actions will be taken upon applying the configuration.");
 
