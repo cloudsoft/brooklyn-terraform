@@ -160,10 +160,12 @@ public final class StateParser {
         planLogs.stream().filter(providerPredicate).findFirst().ifPresent(p -> result.put(PLAN_PROVIDER, p.getProvider()));
 
         Optional<PlanLogEntry> changeSummaryLog = planLogs.stream().filter(changeSummaryPredicate).findFirst(); // it is not there when the config is broken
+        boolean phantomDriftDetected = false; // a type of drift typical for AWS where no resources need changing but drift is reported.
         if(changeSummaryLog.isPresent()) {
             if (NO_CHANGES.equals(changeSummaryLog.get().message)) {
                 result.put(PLAN_MESSAGE, "No changes. Your infrastructure matches the configuration.");
                 result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.SYNC);
+                phantomDriftDetected = true;
             } else {
                 result.put(PLAN_MESSAGE, "Configuration and infrastructure do not match." + changeSummaryLog.get().message);
                 result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
@@ -200,7 +202,7 @@ public final class StateParser {
             }
         }
 
-        if (planLogs.stream().anyMatch(driftPredicate)) {
+        if (! phantomDriftDetected && planLogs.stream().anyMatch(driftPredicate)) {
             List<Map<String,Object>> resources = new ArrayList<>();
             planLogs.stream().filter(driftPredicate).forEach(ple -> {
                 if (!"noop".equals(ple.change.get("action"))) {
