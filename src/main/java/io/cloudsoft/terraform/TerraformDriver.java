@@ -31,7 +31,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return makeTerraformCommand("init -input=false"); // Prepare your working directory for other commands
     }
     default String jsonPlanCommand() {
-        return makeTerraformCommand("plan -out=tfplan -lock=false -input=false -no-color -json"); // Show changes required by the current configuration
+        return makeTerraformCommand("plan -lock=false -input=false -no-color -json"); // Show changes required by the current configuration
     }
     default String planCommand() {
         return makeTerraformCommand("plan -lock=false -input=false -no-color"); // Show changes required by the current in the normal TF style, provides more info than the json version

@@ -80,7 +80,6 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return getStateFilePath();
     }
 
-    final String ARM_ARCH_PATTERNS = "(arm|aarch)\\w*";
     public String getOsTag() {
         OsDetails os = getLocation().getOsDetails();
         // If no details, assume 64-bit Linux
@@ -143,14 +142,15 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     // Order of execution during AMP deploy: step 3 - zip up the current configuration files if any, unzip the new configuration files, run `terraform init -input=false`
     @Override
     public void customize() {
-        newScript(CUSTOMIZING).execute();
-        clean();
-        InputStream configuration = getConfiguration();
-        // copy terraform configuration file or zip
-        getMachine().copyTo(configuration, getConfigurationFilePath());
-        copyTfVars();
-
         final String cfgPath= getConfigurationFilePath();
+        Task<Object> copyTask = Tasks.create("Copy configuration file(s)", () -> {
+            newScript(CUSTOMIZING).execute();
+            clean();
+            InputStream configuration = getConfiguration();
+            // copy terraform configuration file or zip
+            getMachine().copyTo(configuration, cfgPath);
+            copyTfVars();
+        }).asTask();
         Task<Integer> unzipTask = SshTasks.newSshExecTaskFactory(getMachine(),
                         "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
                                 + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getRunDir() + " &&"
@@ -180,6 +180,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         }).asTask();
         DynamicTasks.queue(Tasks.builder()
                         .displayName("Initializing terraform workspace")
+                .add(copyTask)
                 .add(unzipTask)
                 .add(initTask)
                 .add(verifyTask)
@@ -214,7 +215,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override // used for polling as well
     public Map<String, Object> runJsonPlanTask() {
-        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Creating the plan => 'tfplan'"));
+        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Creating the plan."));
         DynamicTasks.waitForLast();
         String result;
         try {
