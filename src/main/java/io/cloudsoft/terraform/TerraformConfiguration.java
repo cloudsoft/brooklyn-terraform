@@ -43,7 +43,7 @@ public interface TerraformConfiguration extends SoftwareProcess {
     ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
             .name("tf.polling.period")
             .description("Contents of the configuration file that will be applied by Terraform.")
-            .defaultValue(Duration.seconds(30))
+            .defaultValue(Duration.seconds(15))
             .constraint(input -> !input.isShorterThan(Duration.seconds(15))) // if shorter than 30s difficulties of executing 'apply' appear
             .build();
 
