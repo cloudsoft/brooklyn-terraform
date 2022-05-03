@@ -92,7 +92,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         });
     }
 
-
     @Override
     protected void connectSensors() {
         super.connectSensors();
@@ -185,11 +184,23 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     !sensors().get(PLAN).get(RESOURCE_CHANGES).equals(tfPlanStatus.get(RESOURCE_CHANGES))){
                 driftChanged = true;
             }
-            if(TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
+
+            final TerraformStatus currentPlanStatus = (TerraformStatus) tfPlanStatus.get(PLAN_STATUS);
+            final boolean ignoreDrift = !getConfig(TerraformConfiguration.TERRAFORM_DRIFT_CHECK);
+
+            if(ignoreDrift || currentPlanStatus == TerraformStatus.SYNC) {
+                // plan status is SYNC so no errors, no ASYNC resources OR drift is ignored
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
+                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
+                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "compliance.drift"));
+                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
+                updateDeploymentState();
+            } else if(TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
                 ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                         tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
                 updateResourceStates(tfPlanStatus);
             } else if(!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
+                TerraformConfigurationImpl.this.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
                 if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
                     updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
@@ -199,16 +210,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 }
                 TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
                 TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
-            } else {
-                // plan status is SYNC so no errors, no ASYNC resources
-                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
-                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
-                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "compliance.drift"));
-                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
-                updateDeploymentState();
             }
+
             if (driftChanged || !sensors().getAll().containsKey(DRIFT_STATUS) || !sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get(PLAN_STATUS))){
-                sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
+                TerraformConfigurationImpl.this.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
             }
             lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
             return tfPlanStatus;
@@ -230,7 +235,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             if (!c.sensors().get(RESOURCE_STATUS).equals("changed") && !c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC)) {
                 c.sensors().set(RESOURCE_STATUS, "changed");
             }
-            ((ManagedResource) c).updateResourceState();
+            ((ManagedResource) c).updateResourceState(); // TODO this method gets called twice when updating resources and updating them accoring to the plan, maybe fix at some point!!
         }
     }
 

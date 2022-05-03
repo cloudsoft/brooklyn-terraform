@@ -44,7 +44,7 @@ public interface TerraformConfiguration extends SoftwareProcess {
             .name("tf.polling.period")
             .description("Contents of the configuration file that will be applied by Terraform.")
             .defaultValue(Duration.seconds(30))
-            .constraint(input -> !input.isShorterThan(Duration.seconds(30))) // if shorter than 30s difficulties of executing 'apply' appear
+            .constraint(input -> !input.isShorterThan(Duration.seconds(15))) // if shorter than 30s difficulties of executing 'apply' appear
             .build();
 
     @SetFromFlag("downloadUrl")
@@ -82,6 +82,13 @@ public interface TerraformConfiguration extends SoftwareProcess {
             .description("Allow to look for the terraform binary in the system if not fount in explicit path" +
                     " (`" + TERRAFORM_PATH.getName() + "` config key) or the property wasn't supplied")
             .defaultValue(false)
+            .build();
+
+    @SetFromFlag("tfDriftCheck")
+    ConfigKey<Boolean> TERRAFORM_DRIFT_CHECK = ConfigKeys.builder(Boolean.class)
+            .name("tf.drift.check")
+            .description("Allow to look skip drift checking for the deployment by setting it to 'false'")
+            .defaultValue(true)
             .build();
 
     AttributeSensor<String> CONFIGURATION_APPLIED = Sensors.newStringSensor("tf.configuration.applied",

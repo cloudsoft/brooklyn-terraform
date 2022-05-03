@@ -33,9 +33,7 @@ public class ManagedResourceImpl extends BasicEntityImpl implements  ManagedReso
                 sensors().set(Sensors.newStringSensor("tf." + k), v.toString());
             }
         });
-        if (!(sensors().get(RESOURCE_STATUS).equals("ok") || sensors().get(RESOURCE_STATUS).equals("running"))) {
-            sensors().set(RESOURCE_STATUS, "ok");
-        }
+        updateResourceState();
         return true;
     }
 
