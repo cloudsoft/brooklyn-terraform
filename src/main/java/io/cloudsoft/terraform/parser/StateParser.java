@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -26,7 +27,12 @@ import static io.cloudsoft.terraform.parser.PlanLogEntry.Provider.GOOGLE;
  */
 public final class StateParser {
     private static final Logger LOG = LoggerFactory.getLogger(StateParser.class);
-    public static final ImmutableList blankItems = ImmutableList.of("[]", "", "null", "\"\"", "{}", "[{}]");
+    public static final ImmutableList BLANK_ITEMS = ImmutableList.of("[]", "", "null", "\"\"", "{}", "[{}]");
+
+    /**
+     * Resources phantom drift is reported for
+     */
+    public static final ImmutableList PROBLEMATIC_RESOURCES = ImmutableList.of("aws_emr_cluster.spark_cluster");
 
     private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
     private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.CHANGE_SUMMARY;
@@ -34,7 +40,7 @@ public final class StateParser {
     private static  Predicate<? super PlanLogEntry> plannedChangedPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.PLANNED_CHANGE;
     private static  Predicate<? super PlanLogEntry> driftPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.RESOURCE_DRIFT;
     private static  Predicate<? super PlanLogEntry> errorPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC;
-    private static Predicate<? super JsonNode> isNotBlankPredicate = node -> node != null && !blankItems.contains((node instanceof TextNode) ? node.asText() : node.toString());
+    private static Predicate<? super JsonNode> isNotBlankPredicate = node -> node != null && !BLANK_ITEMS.contains((node instanceof TextNode) ? node.asText() : node.toString());
 
 
     public static Map<String, Object> parseResources(final String state){
@@ -160,12 +166,12 @@ public final class StateParser {
         planLogs.stream().filter(providerPredicate).findFirst().ifPresent(p -> result.put(PLAN_PROVIDER, p.getProvider()));
 
         Optional<PlanLogEntry> changeSummaryLog = planLogs.stream().filter(changeSummaryPredicate).findFirst(); // it is not there when the config is broken
-        boolean phantomDriftDetected = false; // a type of drift typical for AWS where no resources need changing but drift is reported.
+        final AtomicBoolean noChangesDetected = new AtomicBoolean(false);
         if(changeSummaryLog.isPresent()) {
             if (NO_CHANGES.equals(changeSummaryLog.get().message)) {
                 result.put(PLAN_MESSAGE, "No changes. Your infrastructure matches the configuration.");
                 result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.SYNC);
-                phantomDriftDetected = true;
+                noChangesDetected.set(true);
             } else {
                 result.put(PLAN_MESSAGE, "Configuration and infrastructure do not match." + changeSummaryLog.get().message);
                 result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
@@ -202,14 +208,17 @@ public final class StateParser {
             }
         }
 
-        if (! phantomDriftDetected && planLogs.stream().anyMatch(driftPredicate)) {
+        if (planLogs.stream().anyMatch(driftPredicate)) {
             List<Map<String,Object>> resources = new ArrayList<>();
             planLogs.stream().filter(driftPredicate).forEach(ple -> {
                 if (!"noop".equals(ple.change.get("action"))) {
-                    resources.add(ImmutableMap.of(
-                            "resource.addr", ((Map<String, String>) ple.change.get("resource")).get("addr"),
-                            "resource.action", ple.change.get("action").toString()
-                    ));
+                    boolean isProblematic =   PROBLEMATIC_RESOURCES.contains(((Map<String, String>) ple.change.get("resource")).get("addr"));
+                    if (! (noChangesDetected.get() && isProblematic)) {
+                        resources.add(ImmutableMap.of(
+                                "resource.addr", ((Map<String, String>) ple.change.get("resource")).get("addr"),
+                                "resource.action", ple.change.get("action").toString()
+                        ));
+                    }
                 }
             });
             if(!resources.isEmpty()) {

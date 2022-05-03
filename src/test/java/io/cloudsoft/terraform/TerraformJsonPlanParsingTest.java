@@ -17,16 +17,23 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.assertEquals;
 
 public class TerraformJsonPlanParsingTest {
+    @Test
+    public void readAwsEmrPhantomDrift() throws IOException {
+        final String logs = loadTestData("state/aws-phantom-drift.json");
 
+        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        assertEquals(result.size(), 3);
+        assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.SYNC);
+        assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
+        assertEquals(result.get(PLAN_MESSAGE), "No changes. Your infrastructure matches the configuration.");
+    }
     @Test
     public void readGcpManagedResources() throws IOException {
         final String state = loadTestData("state/gcp-cluster-state.json");
 
         Map<String,Object> resources = StateParser.parseResources(state);
-        ((Map<String,Object>)resources.get("google_dataproc_cluster.spark_cluster"))
-                .forEach((k,v) -> System.out.println("\n " + k + "\n\t " + v));
-/*        assertEquals(resources.size(), 1);
-        assertTrue(resources.containsKey("aws_instance.example1"));*/
+        assertEquals(resources.size(), 7);
+        assertTrue(resources.containsKey("google_dataproc_cluster.spark_cluster"));
     }
 
 

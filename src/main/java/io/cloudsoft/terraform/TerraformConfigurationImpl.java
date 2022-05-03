@@ -172,7 +172,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
         @Override
         public Map<String, Object> get() {
-            // wrap in changeinprogress {}
             return driver.runJsonPlanTask();
         }
     }
@@ -322,7 +321,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         while(true) {
             if (configurationChangeInProgress.compareAndSet(false, true)) {
                 try {
-                    //Objects.requireNonNull(getDriver()).runJsonPlanTask(); // avoid stale plan terraform issue
                     Objects.requireNonNull(getDriver()).runApplyTask();
                     return;
                 } finally {
