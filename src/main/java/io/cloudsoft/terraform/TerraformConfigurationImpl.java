@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.DataResource;
@@ -62,14 +63,20 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void init() {
         super.init();
+    }
+
+    @Override
+    protected void preStart() {
+        super.preStart();
         Set<ConfigKey<?>> terraformVars =  this.config().findKeysPresent(k -> k.getName().startsWith("tf_var"));
+        final Map<String,Object> env = MutableMap.copyOf(this.getConfig(SoftwareProcess.SHELL_ENVIRONMENT));
         terraformVars.forEach(c -> {
-            Map<String,Object> env = MutableMap.copyOf(this.getConfig(SoftwareProcess.SHELL_ENVIRONMENT));
             final String bcName = c.getName();
+            final String tfName = bcName.replace("tf_var.", "TF_VAR_");
             final Object value = this.getConfig(ConfigKeys.newConfigKey(Object.class, bcName));
-            env.put(bcName.replace("tf_var.", "TF_VAR_"), value);
-            this.config().set(ConfigKeys.newConfigKey(Map.class, SoftwareProcess.SHELL_ENVIRONMENT.getName()), env);
+            env.put(tfName, value);
         });
+        this.config().set(SoftwareProcess.SHELL_ENVIRONMENT, ImmutableMap.copyOf(env));
     }
 
     @Override
