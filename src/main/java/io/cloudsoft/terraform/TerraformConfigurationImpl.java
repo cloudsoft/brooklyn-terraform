@@ -68,6 +68,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     protected void preStart() {
         super.preStart();
+        // this bit of code automatically converts any brooklyn configuration starting with tf_var. into TERRAFORM environment variables
         Set<ConfigKey<?>> terraformVars =  this.config().findKeysPresent(k -> k.getName().startsWith("tf_var"));
         final Map<String,Object> env = MutableMap.copyOf(this.getConfig(SoftwareProcess.SHELL_ENVIRONMENT));
         terraformVars.forEach(c -> {
