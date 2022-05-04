@@ -9,10 +9,12 @@ import io.cloudsoft.terraform.entity.TerraformResource;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntityInitializer;
 import org.apache.brooklyn.api.entity.EntitySpec;
+import org.apache.brooklyn.camp.brooklyn.BrooklynCampConstants;
 import org.apache.brooklyn.core.entity.AbstractEntity;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.entity.group.BasicGroup;
+import org.apache.brooklyn.util.text.Strings;
 
 import java.util.List;
 import java.util.Map;
@@ -22,7 +24,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static io.cloudsoft.terraform.entity.ManagedResource.RESOURCE_STATUS;
 import static io.cloudsoft.terraform.entity.TerraformResource.*;
 
 public  final class EntityParser {
@@ -30,6 +31,13 @@ public  final class EntityParser {
     private static Predicate<Map<String,Object>> isRunnable = resource -> resource.get("resource.type").toString().endsWith("_instance") ||
             resource.get("resource.type").toString().endsWith("_virtual_machine") ||
             resource.get("resource.type").toString().endsWith("_cluster");
+
+    private static String getIdPrefixFor(Entity entity) {
+        if (entity == null)
+            return "tf.";
+        String prefix = entity.config().get(BrooklynCampConstants.PLAN_ID);
+        return Strings.isNonBlank(prefix)? prefix+"." : entity.getId()+".";
+    }
 
     public static void processResources(Map<String, Object> resources, Entity entity) {
         List<Map<String, Object>> dataResources = getDataResources(resources);
@@ -40,7 +48,7 @@ public  final class EntityParser {
             Optional<Entity> groupOpt =  entity.getChildren().stream().filter(c -> c instanceof BasicGroup).findAny();
             if (!groupOpt.isPresent()) {
                 BasicGroup dataGroup = entity.addChild(EntitySpec.create(BasicGroup.class).configure(AbstractEntity.DEFAULT_DISPLAY_NAME, "Data Resources"));
-                dataResources.forEach(resource -> dataGroup.addChild(basicSpec(DataResource.class, resource)));
+                dataResources.forEach(resource -> dataGroup.addChild(basicSpec(DataResource.class, resource, getIdPrefixFor(entity))));
                 dataGroup.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.CREATED);
             }
         }
@@ -49,9 +57,9 @@ public  final class EntityParser {
                 resource.put("drift-compliance", ((TerraformConfiguration) entity).isApplyDriftComplianceToResources());
                 resource.put("total-resource-number", managedResourceNumber);
                 if (isRunnable.test(resource)){
-                    entity.addChild(basicSpec(StartableManagedResource.class, resource));
+                    entity.addChild(basicSpec(StartableManagedResource.class, resource, getIdPrefixFor(entity)));
                 } else
-                    entity.addChild(basicSpec(ManagedResource.class, resource));
+                    entity.addChild(basicSpec(ManagedResource.class, resource, getIdPrefixFor(entity)));
                 }
             );
         }
@@ -75,13 +83,14 @@ public  final class EntityParser {
                 .collect(Collectors.toList());
     }
 
-    public static EntitySpec<? extends Entity> basicSpec(Class<? extends TerraformResource> clazz, Map<String, Object> contentsMap) {
+    public static EntitySpec<? extends Entity> basicSpec(Class<? extends TerraformResource> clazz, Map<String, Object> contentsMap, final String prefix) {
         EntitySpec<? extends Entity> spec = EntitySpec.create(clazz)
                 .configure(STATE_CONTENTS, contentsMap)
                 .configure(TYPE, contentsMap.get("resource.type").toString())
                 .configure(PROVIDER, contentsMap.get("resource.provider").toString())
                 .configure(ADDRESS, contentsMap.get("resource.address").toString())
-                .configure(NAME, contentsMap.get("resource.name").toString());
+                .configure(NAME, contentsMap.get("resource.name").toString())
+                .configure(BrooklynCampConstants.PLAN_ID, prefix.concat(contentsMap.get("resource.address").toString()));
         EntityInitializer labels = (!Objects.isNull(contentsMap.get("drift-compliance")) && !Objects.isNull(contentsMap.get("total-resource-number"))) ?
                 new DriftCheck((Boolean) contentsMap.get("drift-compliance"), (int) contentsMap.get("total-resource-number")) :
                 new DriftCheck();
