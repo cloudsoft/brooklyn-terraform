@@ -11,9 +11,12 @@ import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
+import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
+import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
+import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
@@ -27,6 +30,7 @@ import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
+import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.CountdownTimer;
@@ -58,6 +62,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void init() {
         super.init();
+        Set<ConfigKey<?>> terraformVars =  this.config().findKeysPresent(k -> k.getName().startsWith("tf_var"));
+        terraformVars.forEach(c -> {
+            Map<String,Object> env = MutableMap.copyOf(this.getConfig(SoftwareProcess.SHELL_ENVIRONMENT));
+            final String bcName = c.getName();
+            final Object value = this.getConfig(ConfigKeys.newConfigKey(Object.class, bcName));
+            env.put(bcName.replace("tf_var.", "TF_VAR_"), value);
+            this.config().set(ConfigKeys.newConfigKey(Map.class, SoftwareProcess.SHELL_ENVIRONMENT.getName()), env);
+        });
     }
 
     @Override
