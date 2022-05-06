@@ -37,7 +37,7 @@ and then launch (or restart) Brooklyn.
 
 AMP executes various terraform commands and uses their output to decide resource statuses and populate sensors. The following image shows the commands executed by AMP.
 
-![](docs/AMP_and_Terraform.jpg)
+![](docs/AMP_and_Terraform.png)
 
 ## Use
 
@@ -45,17 +45,23 @@ AMP executes various terraform commands and uses their output to decide resource
 `terraform`. If you installed the dependencies manually then you should refer to the Java type
 `io.cloudsoft.terraform.TerraformConfiguration` instead. Examples below refer to `terraform`.
 
-The entity requires a value for one of the `tf.configuration.contents` and `tf.configuration.url`
-cofiguration keys.
+The entity requires a value for one of the `tf.configuration.contents` and `tf.configuration.url` configuration keys.
 
 `tf.configuration.contents` allows you to include a plan directly in a blueprint.
 
-`tf.configuration.url` has the entity load a remote resource at runtime. The resource must be accessible to the Brooklyn
-server. The resource can be a single `configuration.tf` file or a `*.zip` archive containing multiple `*.tf` files and `terraform.tfvars` file.
+`tf.configuration.url` has the entity load a remote resource at runtime. The resource must be accessible to the Brooklyn server. The resource can be a single `configuration.tf` file or a `*.zip` archive containing multiple `*.tf` files and `terraform.tfvars` file.
+
+Other useful configurations:
+
+* `tf.polling.period` : how often should AMP check the status of the Terraform deployment. Default value is 15s.
+* `tf.drift.check` : default value is `true` which means AMP reports drift if Terraform does. Set this to `false` (not recommended) to disable drift checking.  
+* `tf_var.*` : all configurations prefixed with `tf_var.` are converted to Terraform variables. This is a practical way to avoid using `terraform.tfvars` files and inject the values  directly from the AMP blueprint. Just don't use special characters(e.g. ".") when naming your configurations!
+* `version` : set this with the version of Terraform you want AMP to use to manage your deployment. AMP downloads it and installs in a directory that gets deleted when the application is stopped. By default, the version used is the one configured in the current version of `brooklyn-terraform`.
+* `tf.search` : when set to `true` AMP looks for the terraform version installed on the location. If found, it uses it to manage the deployment. By default, it is set to `false`.
+* `tf.path` :  set this with the terraform cli path on the location to instruct AMP to use it to manage the deployment.
 
 When started the entity installs Terraform and applies the configured plan. For example, the following blueprint can be used to run
-Terraform on localhost with a plan that provisions an instance in Amazon EC2 us-east-1 and assigns
-it an elastic IP:
+Terraform on localhost with a plan that provisions an instance in Amazon EC2 us-east-1 and assigns it an elastic IP:
 
 ```yaml
 location: localhost
@@ -149,7 +155,7 @@ services:
 
 ### Terraform Resources
 
-Each resource that Terraform manages corresponds to an entity represented in Apache Brooklyn as a child of the Terraform Configuration entity. 
+Each resource that Terraform manages corresponds to an entity represented in AMP as a child of the Terraform Configuration entity. 
 
 Resources can be grouped in AMP configuring a`org.apache.brooklyn.entity.group.DynamicGroup`  with a `io.cloudsoft.terraform.predicates.TerraformDiscoveryPredicates` that provided a criteria based on which resources should be grouped(e.g. resource type).
 
@@ -182,7 +188,7 @@ Values for Terraform variables referenced in the configuration can be provided b
 The Terraform environment variables should be named according to the specifications in the [official Terraform documentation](https://www.terraform.io/docs/language/values/variables.html#environment-variables).
 
 For example, the following blueprint describes a Terraform deployment with the configuration provided as a single file hosted on an Artifactory server. The AWS credentials values
-are provided by a Vault installation using Terraform environment variables.
+are provided by a Vault installation using Terraform environment variables. You can declare your own terraform variables like shown below: 
 
 ```yaml
 location: localhost
@@ -198,7 +204,21 @@ services:
         TF_VAR_aws_credential: $brooklyn:external("vault", "aws_credential")
 ```
 
-Brooklyn also supports providing a `terraform.tfvars` a remote resource at runtime using `tf.tfvars.url`.
+Or you can also use `tf_var.` prefixes Brooklyn configurations:
+
+```yaml
+location: localhost
+name: Brooklyn Terraform Deployment With Environment Variables
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      tf.configuration.url: https://search.maven.org/remotecontent?filepath=org/apache/brooklyn/instance-with-vars.tf
+      tf_var.aws_identity: $brooklyn:external("vault", "aws_identity")
+      tf_var.aws_credential: $brooklyn:external("vault", "aws_credential")
+```
+
+Brooklyn also supports providing a `terraform.tfvars` as remote resource at runtime using `tf.tfvars.url`.
 
 ```yaml
 location: localhost
@@ -235,7 +255,7 @@ And configure the `terraform` provider in `brooklyn.properties`:
 
 ### Updating an Existing Deployment
 
-Apache Brooklyn facilitates modifying an existing Terraform deployment through effectors and mutable config keys. 
+AMP facilitates modifying an existing Terraform deployment through effectors and mutable config keys. 
 
 ### Terraform Backends
 
@@ -280,9 +300,10 @@ The Terraform Configuration entity provides an effector named `reinstallConfig`.
 If the `/tmp/backup` directory exists, it is deleted. The URL is expected to point to a `*.zip` archive containing the new configuration files.
 If no URL is provided, the effector uses the URL provided as a value for the `tf.configuration.url` when the blueprint is deployed.
 
-This effector is useful when the `tf.configuration.url` points to a dynamic URL, such as a GitHub release(e.g. https://github.com/<REPO>/<PROJECT>/releases/latest/download/tf-config.zip) because it allows updating the Terraform configuration from a remote dynamic source.
+This effector is useful when the `tf.configuration.url` points to a dynamic URL, such as a GitHub release
+(e.g. `https://github.com/${REPO}/${PROJECT}/releases/latest/download/tf-config.zip`) because it allows updating the Terraform configuration from a remote dynamic source.
 
-**Note** Invoking the `reinstallConfig` effector will not affect the `*.tfvars` file that is provided using the `tf.tfvars.url` configuration key.
+**Note:** Invoking the `reinstallConfig` effector will not affect the `*.tfvars` file that is provided using the `tf.tfvars.url` configuration key.
 
 #### Using the Managed Resource effectors
 
@@ -291,7 +312,7 @@ Currently, these effectors have no functionality for the Managed Resources and a
 
 #### Customizing Terraform Variables Values Using Brooklyn Configurations
 
-Apache Brooklyn allows injection of values for Terraform Variables using `brooklyn.config` and modifying those values after a Terraform configuration has been applied. 
+AMP allows injection of values for Terraform Variables using `brooklyn.config` and modifying those values after a Terraform configuration has been applied. 
 
 In the following blueprint, a Brooklyn parameter named `resourceName` is declared having a property `reconfigurable` set to `true`. This means the value of this parameter can be edited after an application is deployed. 
 The `resourceName` parameter is configured to have the value `overriddenResourceName` in the `brooklyn.config` section of the Terraform Configuration service.
@@ -332,12 +353,12 @@ services:
 
 The `resourceName` parameter value can be easily modified via the App Inspector UI in the Terraform Configuration entity's Config Summary Table(its value can also be changed using the `br` CLI, or via the REST API).
 Once the variable is modified, a notification of the success/failure of the operation is displayed.
-If the new value was accepted, the `tf.plan` sensor displays `{tf.plan.status=DESYNCHRONIZED, <resource change details>}` and Apache Brooklyn and Brooklyn sets the application `ON_FIRE`.
+If the new value was accepted, the `tf.plan` sensor displays `{tf.plan.status=DESYNCHRONIZED, <resource change details>}` and AMP and Brooklyn sets the application `ON_FIRE`.
 The `tf.plan.status=DESYNCHRONIZED` means the plan that was executed (based on the most recent configuration, that includes the new variable value) no longer matches the infrastructure, so the plan and the infrastructure are not in sync.
 
 The user needs to invoke the `apply` effector for the Terraform Configuration entity to apply the changes of the updated configuration.
 
-In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 
 ### Destroy Operations
 
@@ -351,14 +372,14 @@ Undoing the effect of a `destroy` effector invocation on the Terraform Configura
 
 ### Terraform Drift Managing
 
-One challenge when managing infrastructure as code is drift. Drift is the term for when the real-world state of your infrastructure differs from the state defined in your configuration.
-Apache Brooklyn collaborates with Terraform to report the status of the  managed infrastructure accurately. Apache Brooklyn uses the `terraform plan` command JSON output 
+One challenge when managing infrastructure as code is **drift**. Drift is the term for when the real-world state of your infrastructure differs from the state defined in your configuration.
+AMP collaborates with Terraform to report the status of the  managed infrastructure accurately. AMP uses the `terraform plan` command JSON output 
 to extract information relevant to the situation the deployment is in and how it got there. That information is analyzed and the conclusions are displayed by the `tf.plan` sensor. The `tf.plan` sensors contains key-value pairs, containing, the plan state, resources that were changed,
 outputs that were changed and the type of change. 
 
-Apache Brooklyn inspects the Terraform deployment every 30 seconds and updates the sensors and the Brooklyn managed entities.
+AMP inspects the Terraform deployment every 30 seconds and updates the sensors and the Brooklyn managed entities.
 
-**Note:** If you are using AWS, be aware that some AWS have dynamic properties that refresh every time terraform checks their state. This ments that terraform will report a continuous drift. An example of such a dynamic property is:
+**Note:** If you are using AWS, be aware that some AWS have dynamic properties that refresh every time terraform checks their state. This means that terraform will report a continuous drift. An example of such a dynamic property is:
 ```hcl
  ebs_block_device {
     device_name = "/dev/sda1"
@@ -383,9 +404,9 @@ The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so i
 In this situation manual intervention is required, and there are two possible actions:
 
 - Invoking the `apply` effector of the Terraform Configuration entity resets the resources to their initial configuration (e.g. the tag of an AWS instance is reverted to the value declared in the configuration)
-- Manually edit the terraform configuration file(s) to include the infrastructure updates and then invoke the `apply` effector
+- Manually edit the Terraform configuration file(s) to include the infrastructure updates and then invoke the `apply` effector
 
-In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 
 #### Resource and Output Declaration is Added to the Configuration File(s)
 
@@ -394,22 +415,22 @@ The `tf.plan.status=DESYNCHRONIZED` means the plan that was executed (based on t
 The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`.
 In this situation manual intervention is required, and the only possible action is to invoke the `apply` effector of the Terraform Configuration entity. This triggers Terraform to execute the updated plan, create the new resources and outputs.
 
-In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, new entities corresponding the newly created resources are added, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, new entities corresponding the newly created resources are added, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 
 #### Resource and Output Declaration is Removed to the Configuration File(s)
 
-This situation is 99% to the previous one, with the exception being that at the next Apache Brooklyn inspection, entities matching deleted resources are removed. 
+This situation is 99% to the previous one, with the exception being that at the next AMP inspection, entities matching deleted resources are removed. 
 
 #### Only Output Declarations are Added/Removed to/from the Configuration File(s)
 
 This situation is quite special since output configuration changing is not affecting the infrastructure in any way so Terraform is not that sensitive about it.
-However, Apache Brooklyn is a stricter about this and any output configuration changes cause the `tf.plan` sensor to display `{tf.plan.status=DESYNCHRONIZED, <output change details>}`.
+However, AMP is a stricter about this and any output configuration changes cause the `tf.plan` sensor to display `{tf.plan.status=DESYNCHRONIZED, <output change details>}`.
 In this case the `tf.plan.status=DESYNCHRONIZED` means the plan that was executed had different outputs than the ones currently in the configuration, so the plan and configuration are not in sync.
 The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The rest of the entities are not affected in any way. 
 
 In this situation manual intervention is required, and the only possible action is to invoke the `apply` effector of the Terraform Configuration entity. This triggers Terraform to execute the updated plan, create/remove the new  outputs.
 
-In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, new `tf.output.*` sensors are created, the ones that no longer match a Terraform output declaration are removed, 
+In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, new `tf.output.*` sensors are created, the ones that no longer match a Terraform output declaration are removed, 
 and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 
 #### Resource is Destroyed Outside Terraform
@@ -422,15 +443,15 @@ The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so i
 In this situation manual intervention is required, and there are two possible actions:
 
 - Invoking the `apply` effector of the Terraform Configuration entity resets the resources to their initial configuration (e.g. the missing resource is re-created with the details from the configuration)
-- Manually edit the terraform configuration file(s) to remove the configuration for the destroyed resource and then invoke the `apply` effector
+- Manually edit the Terraform configuration file(s) to remove the configuration for the destroyed resource and then invoke the `apply` effector
 
-In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 If the choice was to re-create the destroyed resource, an entity matching the new resource appears under the  Terraform Configuration entity, otherwise the entity without a matching resource is removed. 
 
 #### Resource State is Not as Expected
 
-This is a special situation when a resource is changed outside terraform, but the characteristic that changed is not something that Terraform manages. For example, let's consider a Terraform configuration declaring an AWS instance to be created.
-The plan is executed and the resource is created. What happens if the AWS instance is stopped?
+This is a special situation when a resource is changed outside terraform, but the characteristic that changed is not something that Terraform manages. For example, 
+let's consider a Terraform configuration declaring an AWS instance to be created. The plan is executed and the resource is created. What happens if the AWS instance is stopped?
 
 This resource state change is reported as an `update drift` by Terraform.
 Based on the information provided by the `tf.plan` sensor the affected entity are shown as being `ON_FIRE`. 
@@ -438,26 +459,26 @@ The `tf.plan` sensor displays:
 
 ```
 {
-  tf.plan.message=Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 0 to add, 0 to change, 0 to destroy., 
-  tf.plan.status=DRIFT, 
-  tf.resource.changes=[
-    {
-      resource.addr=aws_instance.example,
-      resource.action=update
-    }
-  ]
+    tf.plan.message=Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 0 to add, 0 to change, 0 to destroy., 
+    tf.plan.status=DRIFT, 
+    tf.resource.changes=[
+        {
+          resource.addr=aws_instance.example,
+          resource.action=update
+        }
+    ]
 }
 ```
 The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`. 
 The `tf.plan` contents are somewhat conflicting because although there are resource changes, its message says `Plan: 0 to add, 0 to change, 0 to destroy.`
-This is because the resource is unreacheable, but none of its configurations as known by terraform are changed. 
+This is because the resource is unreachable, but none of its configurations as known by terraform are changed. 
 
 In this situation there are two possible actions:
 
 - Invoke the `apply` effector of the Terraform Configuration entity, this will apply the configuration, conclude there is nothing to apply because nothing has changed. The resource state will be refreshed, and the new instance state of 'stopped' will be recorded.
 - Manually start the instance and then invoke the `apply` effector,  this will apply the configuration, conclude there is nothing to apply because nothing has changed. The resource state will be refreshed, and the new instance state of 'running' will be recorded.
 
-In about 30 seconds, at the next Apache Brooklyn inspection, if the `apply` effector executed correctly, the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 If the instance was not started manually, the matching entity is shown as stopped (grey bubble). If the instance was started the matching entity is shown as running(green bubble). 
 The Terraform Configuration entity managing and unaffected entities are shown as `RUNNING`.
 
@@ -465,18 +486,20 @@ The Terraform Configuration entity managing and unaffected entities are shown as
 
 **Editing Configuration File(s) Goes Wrong**
 
-Manually editing the Terraform configuration file(s) is a risky business(we are only humans, after all) and in case there are errors Apache Brooklyn reflects this situation as well.
-In case of duplicate resources, or syntax errors, the `tf.plan` sensor displays `{tf.plan.status=ERROR, <hints about what is wrong>}`. There is also a special Apache Brooklyn sensor named `service.problems` 
+Manually editing the Terraform configuration file(s) is a risky business(we are only humans, after all) and in case there are errors AMP reflects this situation as well.
+In case of duplicate resources, or syntax errors, the `tf.plan` sensor displays `{tf.plan.status=ERROR, <hints about what is wrong>}`. There is also a special AMP sensor named `service.problems` 
 that is populated with the details of the error and a very helpful message: `{"TF-ERROR":"Something went wrong. Check your configuration.<hints about what is wrong>"}`. 
 This sensor causes the Terraform Configuration entity and the application to be reported as being `ON_FIRE`, but the entities matching resources are shown as `RUNNING` since they are not affected by the configuration errors.
 
-The only action possible in this situation is to repair the broken configuration file(s).  In about 30 seconds, at the next Apache Brooklyn inspection, all will be well with the world again. If valid changes were added to the configuration, invoking the `apply` effector is required.
+The only action possible in this situation is to repair the broken configuration file(s).  In about 15-30 seconds, at the next AMP inspection, all will be well with the world again. If valid changes were added to the configuration, invoking the `apply` effector is required.
 
 **Manually Modifying Infrastructure**
 
-Depending on the cloud provider used and dependencies between resources declared in the Terraform configuration file(s), manually modifying or deleting infrastructure resources has a big change to put the Terraform deployment in an UNRECOVERABLE error state. 
+Depending on the cloud provider used and dependencies between resources declared in the Terraform configuration file(s), 
+manually modifying or deleting infrastructure resources is a big change, enough to put the Terraform deployment in an UNRECOVERABLE error state. 
 
-E.g: Terraform configuration declares a tag resource used to tag a VM and the provider is VSphere. If the tag is manually deleted, the Terraform deployment goes into an UNRECOVERABLE error state that is reflected in AMP using the `tf.plan` sensor that shows `{tf.plan.message=Terraform in UNRECOVERABLE error state., tf.errors=<...>, tf.plan.status=ERROR, tf.resource.changes=[{resource.addr=.., resource.action=No action. Unrecoverable state.}]}`. 
+E.g: Terraform configuration declares a tag resource used to tag a VM and the provider is VSphere. If the tag is manually deleted, the Terraform deployment goes into an 
+UNRECOVERABLE error state that is reflected in AMP using the `tf.plan` sensor that shows `{tf.plan.message=Terraform in UNRECOVERABLE error state., tf.errors=<...>, tf.plan.status=ERROR, tf.resource.changes=[{resource.addr=.., resource.action=No action. Unrecoverable state.}]}`. 
 
 **Note:** Unfortunately, Terraform cannot recover from this state, and neither does AMP. Once in this state, effectors become useless, and destroying the resources doesn't work either. Clean-up has to be done manually.
 

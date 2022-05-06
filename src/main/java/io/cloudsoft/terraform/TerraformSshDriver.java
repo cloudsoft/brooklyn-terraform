@@ -109,18 +109,21 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     @Override
     public void install() {
         if (terraformAlreadyAvailable()) return;
-        List<String> urls = resolver.getTargets();
-        String saveAs = resolver.getFilename();
+        DynamicTasks.queue(Tasks.create("Downloading Terraform " + getVersion(), () -> {
+                        List<String> urls = resolver.getTargets();
+                        String saveAs = resolver.getFilename();
 
-        List<String> commands = new LinkedList<>();
-        commands.add(BashCommands.INSTALL_ZIP);
-        commands.add(BashCommands.INSTALL_UNZIP);
-        commands.add(BashCommands.INSTALL_CURL);
-        // Hashicorp server requires at least TLSv1.2
-        commands.addAll(commandsToDownloadUrlsAsWithMinimumTlsVersion(urls, saveAs, "1.2"));
-        commands.add(format("unzip -o %s", saveAs));
+                        List<String> commands = new LinkedList<>();
+                        commands.add(BashCommands.INSTALL_ZIP);
+                        commands.add(BashCommands.INSTALL_UNZIP);
+                        commands.add(BashCommands.INSTALL_CURL);
+                        // Hashicorp server requires at least TLSv1.2
+                        commands.addAll(commandsToDownloadUrlsAsWithMinimumTlsVersion(urls, saveAs, "1.2"));
+                        commands.add(format("unzip -o %s", saveAs));
 
-        newScript(INSTALLING).body.append(commands).execute();
+                        newScript(INSTALLING).body.append(commands).execute();
+                }).asTask());
+        DynamicTasks.waitForLast();
     }
 
     private void clean() {
