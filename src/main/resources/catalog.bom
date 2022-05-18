@@ -29,3 +29,15 @@ brooklyn.catalog:
     name: "Terraform Resource Type Predicate"
     item:
       type: io.cloudsoft.terraform.predicates.ResourceType
+
+  - id: terraform-entity
+    name: "Terraform Entity"
+    itemType: entity
+    item:
+        type: io.cloudsoft.terraform.TerraformEntity
+
+  - id: terraform-effector
+    format: java-type-name
+    itemType: bean
+    item:
+        type: io.cloudsoft.terraform.TerraformEffector
