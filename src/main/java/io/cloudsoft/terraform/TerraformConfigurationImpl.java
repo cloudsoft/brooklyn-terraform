@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.DataResource;
@@ -12,12 +11,9 @@ import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
-import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
-import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
-import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
@@ -31,7 +27,6 @@ import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
-import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.CountdownTimer;
@@ -46,6 +41,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
+import static io.cloudsoft.terraform.TerraformCommons.convertConfigToTerraformEnvVar;
 import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.entity.StartableManagedResource.RESOURCE_STATUS;
 import static io.cloudsoft.terraform.parser.EntityParser.processResources;
@@ -69,15 +65,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     protected void preStart() {
         super.preStart();
         // this bit of code automatically converts any brooklyn configuration starting with tf_var. into TERRAFORM environment variables
-        Set<ConfigKey<?>> terraformVars =  this.config().findKeysPresent(k -> k.getName().startsWith("tf_var"));
-        final Map<String,Object> env = MutableMap.copyOf(this.getConfig(SoftwareProcess.SHELL_ENVIRONMENT));
-        terraformVars.forEach(c -> {
-            final String bcName = c.getName();
-            final String tfName = bcName.replace("tf_var.", "TF_VAR_");
-            final Object value = this.getConfig(ConfigKeys.newConfigKey(Object.class, bcName));
-            env.put(tfName, value);
-        });
-        this.config().set(SoftwareProcess.SHELL_ENVIRONMENT, ImmutableMap.copyOf(env));
+        convertConfigToTerraformEnvVar(this);
     }
 
     @Override

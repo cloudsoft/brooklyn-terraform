@@ -41,3 +41,9 @@ brooklyn.catalog:
     itemType: bean
     item:
         type: io.cloudsoft.terraform.TerraformEffector
+
+  - id: terraform-sensor
+    format: java-type-name
+    itemType: bean
+    item:
+        type: io.cloudsoft.terraform.TerraformSensor

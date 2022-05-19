@@ -6,17 +6,27 @@ import org.apache.brooklyn.core.effector.AddEffectorInitializerAbstract;
 import org.apache.brooklyn.core.effector.EffectorBody;
 import org.apache.brooklyn.core.effector.Effectors;
 import org.apache.brooklyn.util.core.config.ConfigBag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
 @SuppressWarnings({"unchecked", "UnstableApiUsage", "unused"})
 public class TerraformEffector extends AddEffectorInitializerAbstract {
+    private static final Logger LOG = LoggerFactory.getLogger(TerraformEffector.class);
 
     public TerraformEffector() {
     }
 
+    public TerraformEffector(ConfigBag configBag) {
+        super(configBag);
+    }
+
     @Override
     protected  Effectors.EffectorBuilder<String> newEffectorBuilder() {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Creating terraform effector {}", initParam(EFFECTOR_NAME));
+        }
         Effectors.EffectorBuilder<String> eff = newAbstractEffectorBuilder(String.class);
         eff.impl(new Body(eff.buildAbstract(), initParams()));
         return eff;
@@ -36,8 +46,7 @@ public class TerraformEffector extends AddEffectorInitializerAbstract {
         @Override
         public String call(ConfigBag parameters) {
             ConfigBag configBag = ConfigBag.newInstanceCopying(this.params).putAll(parameters);
-            // TODO
-            return null;
+            return TerraformCommons.executeAndRetrieveOutput(entity(),configBag);
         }
     }
 }

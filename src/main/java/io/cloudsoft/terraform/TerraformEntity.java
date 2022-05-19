@@ -7,6 +7,7 @@ import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigConstraints;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.trait.Startable;
+import org.apache.brooklyn.entity.stock.BasicStartable;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
 import org.apache.brooklyn.util.time.Duration;
 
@@ -15,7 +16,7 @@ import org.apache.brooklyn.util.time.Duration;
         description = "Brooklyn Terraform Entity with Custom Effectors",
         iconUrl = "classpath://io/cloudsoft/terraform/logo.png")
 @ImplementedBy(TerraformEntityImpl.class)
-public interface TerraformEntity extends Entity, Startable {
+public interface TerraformEntity extends Entity, BasicStartable {
 
     @SetFromFlag("tfPollingPeriod")
     ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
