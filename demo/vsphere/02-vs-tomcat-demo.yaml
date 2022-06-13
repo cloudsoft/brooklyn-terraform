@@ -15,8 +15,8 @@ services:
     tf_var.vsphere_compute_cluster: "ESXi Cluster"
     tf_var.vsphere_network: "Public 4020 esx41"
     tf_var.vsphere_virtual_machine: "cloudsoft-ubuntu-20.04-for-terraform"
-    tf_var.vm_user: "XXX" # replace with actual value $brooklyn:external("vmlogin", "user")
-    tf_var.vm_password: "XXX" # replace with actual value $brooklyn:external("vmlogin", "password")
+    tf_var.vm_user: "XXX" # replace with actual value $brooklyn:external("vsphere", "vmuser")
+    tf_var.vm_password: "XXX" # replace with actual value $brooklyn:external("vsphere", "vmpassword")
     # the next set of values should be customized by every user deploying the  02-vs-tomcat-demo.yaml
     tf_var.vsphere_demo: "Brooklyn Terraform Demo Vms"
     tf_var.category_name: "terraform-test-category"
