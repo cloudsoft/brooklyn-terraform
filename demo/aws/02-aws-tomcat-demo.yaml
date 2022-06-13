@@ -6,8 +6,8 @@ services:
   brooklyn.config:
     tf.configuration.url: https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/aws-tomcat.zip
     # these automatically get converted to Terraform environment variables
-    tf_var.aws_identity: $brooklyn:external("terraform", "aws.credential")  # use these as env in the effector
-    tf_var.aws_credential: $brooklyn:external("terraform", "aws.secret")  # use these as env in the effector
+    tf_var.access_key: $brooklyn:external("terraform", "aws.credential")  # use these as env in the effector
+    tf_var.secret_key: $brooklyn:external("terraform", "aws.secret")  # use these as env in the effector
     tf_var.ami_id: "ami-0ff4c8fb495a5a50d"
     tf_var.db_vm_name: "demo/tf-ubuntu-mysql"
     tf_var.tomcat_vm_name: "demo/tf-ubuntu-tomcat"
