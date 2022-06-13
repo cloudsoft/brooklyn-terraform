@@ -1,0 +1,43 @@
+location: localhost
+name: Apache Tomcat + MySQL on VSphere Demo
+services:
+- type: terraform
+  name: Terraform Configuration
+  brooklyn.config:
+    tomcat.vm.name: terraform-tomcat-vm
+    db.vm.name: terraform-mysql-vm
+    tf.configuration.url: https://github.com/iuliana/vs-tomcat/releases/latest/download/vs-tomcat.zip
+    # these automatically get converted to Terraform environment variables
+    tf_var.vsphere_server: "vcenter.dns-test.cloudsoftdev.net"
+    tf_var.vsphere_user: "XXX"  # replace with actual value or $brooklyn:external("vsphere", "user")
+    tf_var.vsphere_password: "XXX" # replace with actual value or $brooklyn:external("vsphere", "password")
+    tf_var.vsphere_datastore: "esx41-SSD1"
+    tf_var.vsphere_compute_cluster: "ESXi Cluster"
+    tf_var.vsphere_network: "Public 4020 esx41"
+    tf_var.vsphere_virtual_machine: "cloudsoft-ubuntu-20.04-for-terraform"
+    tf_var.vm_user: "XXX" # replace with actual value $brooklyn:external("vmlogin", "user")
+    tf_var.vm_password: "XXX" # replace with actual value $brooklyn:external("vmlogin", "password")
+    # the next set of values should be customized by every user deploying the  02-vs-tomcat-demo.yaml
+    tf_var.vsphere_demo: "Brooklyn Terraform Demo Vms"
+    tf_var.category_name: "terraform-test-category"
+    tf_var.db_vm_name: '$brooklyn:config("db.vm.name")'
+    tf_var.tomcat_vm_name: '$brooklyn:config("tomcat.vm.name")'
+  brooklyn.parameters:
+    - name: tomcat.vm.name
+      type: string
+      reconfigurable: true
+    - name: db.vm.name
+      type: string
+      reconfigurable: true
+  brooklyn.initializers:
+    - type: terraform-drift-compliance-check
+      brooklyn.config:
+        terraform.resources-drift.enabled: true
+- type: org.apache.brooklyn.entity.group.DynamicGroup
+  name: VSphere VMs
+  brooklyn.config:
+    dynamicgroup.entityfilter:
+      $brooklyn:object:
+        type: terraform-predicate-resource-type
+        constructor.args:
+         - "vsphere_virtual_machine"
