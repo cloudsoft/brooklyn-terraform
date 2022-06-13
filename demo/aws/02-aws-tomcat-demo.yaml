@@ -11,7 +11,6 @@ services:
     tf_var.db_vm_name: "demo/tf-ubuntu-mysql"
     tf_var.tomcat_vm_name: "demo/tf-ubuntu-tomcat"
 
-
 - type: org.apache.brooklyn.entity.group.DynamicGroup
   name: AWS VMs
   brooklyn.config:
