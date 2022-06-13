@@ -1,0 +1,11 @@
+== AWS Terraform DEMO
+
+To use external properties, edit the `/etc/brooklyn.cfg` file in you AMP instance and add the following:
+
+[source, bash]
+----
+brooklyn.external.terraform=org.apache.brooklyn.core.config.external.InPlaceExternalConfigSupplier
+# terraform configurations for AWS
+brooklyn.external.terraform.aws.credential=xxx  #replace this with an actual value
+brooklyn.external.terraform.aws.secret=xxx  #replace this with an actual value
+----
