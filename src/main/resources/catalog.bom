@@ -15,6 +15,12 @@ brooklyn.catalog:
     item:
       type: io.cloudsoft.terraform.TerraformConfiguration
 
+  - id: tf-entity
+    name: "Terraform Configuration"
+    itemType: entity
+    item:
+      type: io.cloudsoft.terraform.TerraformConfiguration
+
   - id: terraform-drift-compliance-check
     name: "Terraform Drift Compliance Check"
     item:
