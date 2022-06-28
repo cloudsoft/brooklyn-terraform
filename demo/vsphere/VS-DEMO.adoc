@@ -1,0 +1,13 @@
+== Vsphere Terraform DEMO
+
+To use external properties, edit the `/etc/brooklyn.cfg` file in you AMP instance and add the following:
+
+[source, bash]
+----
+brooklyn.external.vsphere=org.apache.brooklyn.core.config.external.InPlaceExternalConfigSupplier
+# terraform configurations for AWS
+brooklyn.external.vsphere.user=xxx  #replace this with an actual value
+brooklyn.external.vsphere.password=xxx  #replace this with an actual value
+brooklyn.external.vsphere.vmuser=xxx  #replace this with an actual value
+brooklyn.external.vsphere.vmpassword=xxx  #replace this with an actual value
+----
