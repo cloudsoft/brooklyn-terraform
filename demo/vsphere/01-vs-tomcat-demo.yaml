@@ -27,7 +27,9 @@ services:
   name: VSphere VMs
   brooklyn.config:
     dynamicgroup.entityfilter:
-      $brooklyn:object:
-        type: terraform-predicate-resource-type
-        constructor.args:
-         - "vsphere_virtual_machine"
+      sensor: tf.resource.type
+      equal: vsphere_virtual_machine
+#      $brooklyn:object:
+#        type: terraform-predicate-resource-type
+#        constructor.args:
+#         - "vsphere_virtual_machine"

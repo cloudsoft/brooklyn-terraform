@@ -16,7 +16,10 @@ services:
   name: AWS VMs
   brooklyn.config:
     dynamicgroup.entityfilter:
-      $brooklyn:object:
-        type: terraform-predicate-resource-type
-        constructor.args:
-        - "aws_instance"
+      sensor: tf.resource.type
+      equal: aws_instance
+
+#      $brooklyn:object:
+#        type: terraform-predicate-resource-type
+#        constructor.args:
+#        - "aws_instance"
