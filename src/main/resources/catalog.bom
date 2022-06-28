@@ -20,11 +20,11 @@ brooklyn.catalog:
     item:
       type: io.cloudsoft.terraform.compliance.DriftCheck
 
+  # discouraged now, in favour of predicate dsl specifying the sensor directly
   - id: terraform-predicate-sensor-matches
     name: "Terraform Sensor Matches Predicate"
     item:
       type: io.cloudsoft.terraform.predicates.SensorMatches
-
   - id: terraform-predicate-resource-type
     name: "Terraform Resource Type Predicate"
     item:

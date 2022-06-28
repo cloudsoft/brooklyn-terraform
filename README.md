@@ -164,12 +164,8 @@ services:
   name: VSphere Tags
   brooklyn.config:
     dynamicgroup.entityfilter:
-      '$brooklyn:object':
-        type: io.cloudsoft.terraform.predicates.TerraformDiscoveryPredicates
-        factoryMethod.name: sensorMatches
-        factoryMethod.args:
-        - tf.resource.type
-        - vsphere_tag
+      sensor: tf.resource.type
+      equals: vsphere_tag
 ```
 
 **Note:** The entities corresponding grouping nodes created based on predicates do not update their state in tandem with the Terraform Configuration entity, so if the Terraform deployment is modified and resources are added or removed, 
