@@ -30,7 +30,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
     @Test(groups="Live")
     public void testCreateSecurityGroup() throws Exception {
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
-                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://plans/create-security-group.tf")
+                .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-security-group.tf")
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
         app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
         assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
@@ -47,7 +47,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
     @Test(groups="Live")
     public void testCreateInstance() throws Exception {
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
-                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
+                .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
         app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
 
@@ -67,7 +67,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
     @Test(groups="Live")
     public void testCreateInstanceWithDynamicGroups() throws Exception {
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
-                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
+                .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
                 terraformConfiguration
                         .addChild(EntitySpec.create(DynamicGroup.class)

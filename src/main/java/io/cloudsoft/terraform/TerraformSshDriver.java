@@ -296,23 +296,23 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
      * @return
      */
     private InputStream getConfiguration() {
-        final String configurationUrl = entity.getConfig(TerraformConfiguration.CONFIGURATION_URL);
+        final String configurationUrl = entity.getConfig(TerraformCommons.CONFIGURATION_URL);
         if (Strings.isNonBlank(configurationUrl)) {
             return new ResourceUtils(entity).getResourceFromUrl(configurationUrl);
         }
-        final String configurationContents = entity.getConfig(TerraformConfiguration.CONFIGURATION_CONTENTS);
+        final String configurationContents = entity.getConfig(TerraformCommons.CONFIGURATION_CONTENTS);
         if (Strings.isNonBlank(configurationContents)) {
             return KnownSizeInputStream.of(configurationContents);
         }
         throw new IllegalStateException("Could not resolve Terraform configuration from " +
-                TerraformConfiguration.CONFIGURATION_URL.getName() + " or " + TerraformConfiguration.CONFIGURATION_CONTENTS.getName());
+                TerraformCommons.CONFIGURATION_URL.getName() + " or " + TerraformCommons.CONFIGURATION_CONTENTS.getName());
     }
 
     /**
      * If a `terraform.tfvars` file is present in the bundle is copied in the terraform workspace
      */
     private void  copyTfVars(){
-        final String varsURL = entity.getConfig(TerraformConfiguration.TFVARS_FILE_URL);
+        final String varsURL = entity.getConfig(TerraformCommons.TFVARS_FILE_URL);
         if (Strings.isNonBlank(varsURL)) {
             InputStream tfStream =  new ResourceUtils(entity).getResourceFromUrl(varsURL);
             getMachine().copyTo(tfStream, getTfVarsFilePath());
