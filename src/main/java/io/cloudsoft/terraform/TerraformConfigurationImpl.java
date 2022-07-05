@@ -11,6 +11,10 @@ import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
+import org.apache.brooklyn.api.location.Location;
+import org.apache.brooklyn.api.location.MachineLocation;
+import org.apache.brooklyn.api.location.MachineProvisioningLocation;
+import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
@@ -23,15 +27,18 @@ import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.group.BasicGroup;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
+import org.apache.brooklyn.entity.software.base.SoftwareProcessDriverLifecycleEffectorTasks;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
+import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.CountdownTimer;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.brooklyn.util.time.Time;
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +48,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
+import static io.cloudsoft.terraform.TerraformCommons.SSH_MODE;
 import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.entity.StartableManagedResource.RESOURCE_STATUS;
 import static io.cloudsoft.terraform.parser.EntityParser.processResources;
@@ -59,6 +67,33 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void init() {
         super.init();
+    }
+
+    // TODO check this.
+    @Override
+    protected SoftwareProcessDriverLifecycleEffectorTasks getLifecycleEffectorTasks() {
+        String executionMode = getConfig(TerraformCommons.TF_EXECUTION_MODE);
+        if(Objects.equals(SSH_MODE, executionMode)) {
+            return getConfig(LIFECYCLE_EFFECTOR_TASKS);
+        } else {
+            return new SoftwareProcessDriverLifecycleEffectorTasks(){
+                @Override
+                protected Map<String, Object> obtainProvisioningFlags(MachineProvisioningLocation<?> location) {
+                    throw new  NotImplementedException("Should not be called!");
+                }
+
+                @Override
+                protected Task<MachineLocation> provisionAsync(MachineProvisioningLocation<?> location) {
+                    throw new  NotImplementedException("Should not be called!");
+                }
+
+                @Override
+                protected void startInLocations(Collection<? extends Location> locations, ConfigBag parameters) {
+                    entity().getDriver().start(); // TODO look at logic around starting children
+                }
+                // TODO stop might work, but if not check and implement
+            };
+        }
     }
 
     @Override
@@ -323,7 +358,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     @Override
     public TerraformDriver getDriver() {
-        return (TerraformDriver) super.getDriver();
+        String executionMode = getConfig(TerraformCommons.TF_EXECUTION_MODE);
+        if(Objects.equals(SSH_MODE, executionMode)) {
+            return (TerraformDriver) super.getDriver();
+        } else {
+            return new TerraformDockerDriver(this);
+        }
     }
 
     @Override

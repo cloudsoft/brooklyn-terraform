@@ -1,0 +1,16 @@
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      # default value is 'kube'
+      #tf.execution.mode: "kube"
+      shell.env:
+        workingDir: /tfws
+        volumeMounts:
+          - name: tf-workspace
+            mountPath: /tfws
+        volumes:
+          - name: tf-workspace
+            hostPath:
+              path: /tfws
+      tf.configuration.url: 'https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/instance-with-creds.tf'

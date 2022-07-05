@@ -43,8 +43,19 @@ public interface TerraformCommons {
             .description("URL of the file containing values for the Terraform variables.")
             .build();
 
+    @SetFromFlag("tfExecutionMode")
+    ConfigKey<String> TF_EXECUTION_MODE = ConfigKeys.builder(String.class)
+            .name("tf.execution.mode") // should be part of deployed the bundle
+            .description("If Terraform should run in a location ('ssh'), or in a container managed by a Kubernetes instance('kube').")
+            .defaultValue("kube")
+            .build();
 
-
+    String SSH_MODE = "ssh";
+    /**
+     * I added this because commands can also be used by directly calling {@code docker run ...},
+     * in case we even want to add a driver for that as well
+     */
+    String KUBE_MODE = "kube";
     /**
      * This method converts any brooklyn configuration starting with tf_var. into TERRAFORM environment variables
      */
