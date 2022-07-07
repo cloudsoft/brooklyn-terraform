@@ -26,13 +26,13 @@ import static org.apache.brooklyn.tasks.kubectl.ContainerCommons.CONTAINER_IMAGE
  *   [ ] Write tests
  *   [ ] Update documentation
  */
-public class TerraformDockerDriver implements TerraformDriver {
-    private static final Logger LOG = LoggerFactory.getLogger(TerraformDockerDriver.class);
+public class TerraformContainerDriver implements TerraformDriver {
+    private static final Logger LOG = LoggerFactory.getLogger(TerraformContainerDriver.class);
     protected final EntityLocal entity;
 
     private String workingDir ="";
 
-    public TerraformDockerDriver(EntityLocal entity) {
+    public TerraformContainerDriver(EntityLocal entity) {
         this.entity = entity;
         // TODO
         // check that the entityID is the generated one

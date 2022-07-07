@@ -362,7 +362,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         if(Objects.equals(SSH_MODE, executionMode)) {
             return (TerraformDriver) super.getDriver();
         } else {
-            return new TerraformDockerDriver(this);
+            return new TerraformContainerDriver(this);
         }
     }
 
