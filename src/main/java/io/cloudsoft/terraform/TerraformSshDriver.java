@@ -5,11 +5,17 @@ import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.OsDetails;
 import org.apache.brooklyn.api.mgmt.Task;
+import org.apache.brooklyn.config.ConfigKey;
+import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
+import org.apache.brooklyn.core.entity.EntityInternal;
 import org.apache.brooklyn.entity.software.base.AbstractSoftwareProcessSshDriver;
+import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
+import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.ResourceUtils;
+import org.apache.brooklyn.util.core.json.ShellEnvironmentSerializer;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
@@ -30,6 +36,7 @@ import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_URL;
@@ -317,6 +324,22 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             InputStream tfStream =  new ResourceUtils(entity).getResourceFromUrl(varsURL);
             getMachine().copyTo(tfStream, getTfVarsFilePath());
         }
+    }
+
+    public Map<String, String> getShellEnvironment() {
+        Map<String, Object> env = MutableMap.copyOf(entity.getConfig(SoftwareProcess.SHELL_ENVIRONMENT));
+
+        // extend the parent to read vars whenever the shell environment is fetched, so if a var changes we will flag that as drift
+        Set<ConfigKey<?>> terraformVars =  entity.config().findKeysPresent(k -> k.getName().startsWith("tf_var"));
+        terraformVars.forEach(c -> {
+            final String bcName = c.getName();
+            final String tfName = bcName.replace("tf_var.", "TF_VAR_");
+            final Object value = entity.getConfig(ConfigKeys.newConfigKey(Object.class, bcName));
+            env.put(tfName, value);
+        });
+
+        ShellEnvironmentSerializer envSerializer = new ShellEnvironmentSerializer(((EntityInternal)entity).getManagementContext());
+        return envSerializer.serialize(env);
     }
 
     private Task jsonPlanTaskWithName(final String name){
