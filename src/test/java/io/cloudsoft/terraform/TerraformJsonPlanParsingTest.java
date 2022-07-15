@@ -47,6 +47,17 @@ public class TerraformJsonPlanParsingTest {
     }
 
     @Test
+    public void checkAWSTags() throws IOException {
+        final String state = loadTestData("state/aws-instance-state.json");
+
+        Map<String,Object> resources = StateParser.parseResources(state);
+        assertEquals(resources.size(), 1);
+        assertTrue(resources.containsKey("aws_instance.example1"));
+        assertTrue(((Map<String,Object>)resources.get("aws_instance.example1")).containsKey("value.tags"));
+        assertTrue(((Map<String,Object>)resources.get("aws_instance.example1")).containsKey("value.tags_all"));
+    }
+
+    @Test
     public void readVSManagedResources() throws IOException {
         final String state = loadTestData("state/vs-state.json");
 
