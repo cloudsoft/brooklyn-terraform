@@ -43,6 +43,7 @@ import javax.annotation.Nullable;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 import static io.cloudsoft.terraform.TerraformDriver.*;
@@ -55,7 +56,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private static final String TF_OUTPUT_SENSOR_PREFIX = "tf.output";
 
     private Map<String, Object> lastCommandOutputs = Collections.synchronizedMap(Maps.newHashMapWithExpectedSize(3));
-    private AtomicBoolean configurationChangeInProgress = new AtomicBoolean(false);
+    private AtomicReference<Thread> configurationChangeInProgress = new AtomicReference(null);
 
     private Boolean applyDriftComplianceCheckToResources = false;
 
@@ -67,7 +68,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void rebind() {
         lastCommandOutputs = Collections.synchronizedMap(Maps.newHashMapWithExpectedSize(3));
-        configurationChangeInProgress = new AtomicBoolean(false);
+        configurationChangeInProgress = new AtomicReference(null);
         super.rebind();
     }
 
@@ -289,7 +290,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Nullable
         @Override
         public Map<String, Object> apply(@Nullable Map<String, Object> input) {
-            if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(PLAN.getName())) {
+            if (lastCommandOutputs.containsKey(PLAN.getName())) {
                 return (Map<String, Object>) lastCommandOutputs.get(PLAN.getName());
             } else {
                 return input;
@@ -346,7 +347,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private final class OutputFailureFunction implements Function<String, String> {
         @Override
         public String apply(String input) {
-            if (configurationChangeInProgress.get() && lastCommandOutputs.containsKey(OUTPUT.getName())) {
+            if (lastCommandOutputs.containsKey(OUTPUT.getName())) {
                 return (String) lastCommandOutputs.get(OUTPUT.getName());
             } else {
                 return input;
@@ -371,13 +372,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     private <V> V retryUntilLockAvailable(String summary, Callable<V> runWithLock, Duration timeout, Duration retryFrequency) {
         CountdownTimer timer = timeout.countdownTimer();
         while(true) {
-            if (configurationChangeInProgress.compareAndSet(false, true)) {
+            boolean hadLock = Thread.currentThread().equals(configurationChangeInProgress.get());
+            if (hadLock || configurationChangeInProgress.compareAndSet(null, Thread.currentThread())) {
                 try {
                     return runWithLock.call();
                 } catch (Exception e) {
                     throw Exceptions.propagate(e);
                 } finally {
-                    configurationChangeInProgress.set(false);
+                    if (!hadLock) configurationChangeInProgress.set(null);
                 }
             } else {
                 if(timer.isExpired()) {
@@ -440,7 +442,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 }
                 return null;
             } finally {
-                configurationChangeInProgress.set(false);
                 sensors().set(Startable.SERVICE_UP, Boolean.TRUE);
                 sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
                 sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
