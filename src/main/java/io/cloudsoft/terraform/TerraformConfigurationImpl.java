@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.DataResource;
@@ -12,12 +11,13 @@ import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
-import org.apache.brooklyn.api.entity.EntityLocal;
+import org.apache.brooklyn.api.location.Location;
+import org.apache.brooklyn.api.location.MachineLocation;
+import org.apache.brooklyn.api.location.MachineProvisioningLocation;
+import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
-import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
-import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
@@ -27,10 +27,12 @@ import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.group.BasicGroup;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
+import org.apache.brooklyn.entity.software.base.SoftwareProcessDriverLifecycleEffectorTasks;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
+import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.guava.Maybe;
@@ -38,6 +40,7 @@ import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.CountdownTimer;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.brooklyn.util.time.Time;
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +50,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
+import static io.cloudsoft.terraform.TerraformCommons.SSH_MODE;
 import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.entity.StartableManagedResource.RESOURCE_STATUS;
 import static io.cloudsoft.terraform.parser.EntityParser.processResources;
@@ -64,6 +68,33 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void init() {
         super.init();
+    }
+
+    // TODO check this.
+    @Override
+    protected SoftwareProcessDriverLifecycleEffectorTasks getLifecycleEffectorTasks() {
+        String executionMode = getConfig(TerraformCommons.TF_EXECUTION_MODE);
+        if(Objects.equals(SSH_MODE, executionMode)) {
+            return getConfig(LIFECYCLE_EFFECTOR_TASKS);
+        } else {
+            return new SoftwareProcessDriverLifecycleEffectorTasks(){
+                @Override
+                protected Map<String, Object> obtainProvisioningFlags(MachineProvisioningLocation<?> location) {
+                    throw new  NotImplementedException("Should not be called!");
+                }
+
+                @Override
+                protected Task<MachineLocation> provisionAsync(MachineProvisioningLocation<?> location) {
+                    throw new  NotImplementedException("Should not be called!");
+                }
+
+                @Override
+                protected void startInLocations(Collection<? extends Location> locations, ConfigBag parameters) {
+                    entity().getDriver().start(); // TODO look at logic around starting children
+                }
+                // TODO stop might work, but if not check and implement
+            };
+        }
     }
 
     @Override
@@ -85,10 +116,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         getChildren().forEach(child -> {
             if (child instanceof BasicGroup){
                 child.getChildren().stream().filter(gc -> gc instanceof TerraformResource)
-                                .forEach(gc -> {
-                                    removeChild(gc);
-                                    Entities.unmanage(gc);
-                                });
+                        .forEach(gc -> {
+                            removeChild(gc);
+                            Entities.unmanage(gc);
+                        });
                 removeChild(child);
             }
             if (child instanceof TerraformResource){
@@ -107,7 +138,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         if (machine.isPresent()) {
             addFeed(FunctionFeed.builder()
                     .entity(this)
-                    .period(getConfig(TerraformConfiguration.POLLING_PERIOD))
+                    .period(getConfig(TerraformCommons.POLLING_PERIOD))
                     .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(getDriver()))
                             .onResult(new PlanSuccessFunction())
                             .onFailure(new PlanFailureFunction()))
@@ -143,7 +174,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     }
 
     private static Predicate<? super Entity> runningOrSync = c -> !c.sensors().getAll().containsKey(RESOURCE_STATUS) || (!c.sensors().get(RESOURCE_STATUS).equals("running") &&
-                    c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC));
+            c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC));
 
     private void updateResources(Map<String, Object> resources, Entity parent, Class<? extends TerraformResource> clazz) {
         List<Entity> childrenToRemove = new ArrayList<>();
@@ -332,7 +363,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     @Override
     public TerraformDriver getDriver() {
-        return (TerraformDriver) super.getDriver();
+        String executionMode = getConfig(TerraformCommons.TF_EXECUTION_MODE);
+        if(Objects.equals(SSH_MODE, executionMode)) {
+            return (TerraformDriver) super.getDriver();
+        } else {
+            return new TerraformContainerDriver(this);
+        }
     }
 
     @Override
@@ -378,7 +414,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             "This is useful when the URL points to a GitHub or Artifactory release.")
     public void reinstallConfig(@EffectorParam(name = "configUrl", description = "URL pointing to the terraform configuration") @Nullable String configUrl) {
         if(StringUtils.isNotBlank(configUrl)) {
-            config().set(CONFIGURATION_URL, configUrl);
+            config().set(TerraformCommons.CONFIGURATION_URL, configUrl);
         }
         CountdownTimer timer = Duration.ONE_MINUTE.countdownTimer();
         while(true) {
