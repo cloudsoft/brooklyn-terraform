@@ -158,7 +158,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 childrenToRemove.add(c);
             }
         });
-        childrenToRemove.forEach(parent::removeChild); //  child not in resource set (deleted by terraform -> remove child)
+        childrenToRemove.forEach(Entities::unmanage);   // unmanage nodes that are no longer relevant (removing them as children causes leaks)
     }
 
     /**
@@ -349,11 +349,19 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 }
             } else {
                 if(timer.isExpired()) {
-                    throw new IllegalStateException("Cannot apply configuration: operation timed out.");
+                    throw new IllegalStateException("Cannot apply configuration: operation timed out (another change in progress?)");
                 }
                 Time.sleep(Duration.FIVE_SECONDS);
             }
         }
+    }
+
+    @Override
+    @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
+    public void plan() {
+        getDriver().runPlanTask();
+        new PlanSuccessFunction().apply(new PlanProvider(getDriver()).get());
+        new OutputSuccessFunction().apply(new OutputProvider(getDriver()).get());
     }
 
     @Override

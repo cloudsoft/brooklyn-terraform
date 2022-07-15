@@ -111,6 +111,9 @@ public interface TerraformConfiguration extends SoftwareProcess {
     @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
     void apply();
 
+    @Effector(description="Performs the Terraform plan command to show what would change (and refresh sensors).")
+    void plan();
+
     @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
     void destroy();
 

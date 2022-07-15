@@ -201,7 +201,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     @Override
     public void launch() {
         final Map<String,Object> planLog = runJsonPlanTask();
-        Task<Object> verifyPlanTask = Tasks.create("Verify Plan", () -> {
+        Task<Object> verifyPlanTask = Tasks.create("Verify plan", () -> {
             if (planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
                 throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
             }
@@ -216,23 +216,24 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         }).asTask();
 
         DynamicTasks.queue(Tasks.builder()
-                .displayName("Creating the planned infrastructure")
+                .displayName("Verify and apply terraform")
                 .add(verifyPlanTask)
                 .add(checkAndApply)
-                .add(refreshTaskWithName("Refreshing Terraform state")).build());
+                .add(refreshTaskWithName("Refresh Terraform state")).build());
         DynamicTasks.waitForLast();
     }
 
     @Override // used for polling as well
     public Map<String, Object> runJsonPlanTask() {
-        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Creating the plan."));
+        DynamicTasks.queue(refreshTaskWithName("Refresh Terraform state"));
+        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Analyse and create terraform plan"));
         DynamicTasks.waitForLast();
         String result;
         try {
             result = planTask.get();
             return StateParser.parsePlanLogEntries(result);
         } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
+            throw new IllegalStateException("Error running terraform plan (json)", e);
         }
     }
 
@@ -241,7 +242,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     public String runPlanTask() {
         Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), planCommand())
                 .environmentVariables(getShellEnvironment())
-                .summary("Inspecting terraform plan changes")
+                .summary("Analyse and create terraform plan (human readable change report)")
                 .returning(p -> p.getStdout())
                 .newTask()
                 .asTask());
@@ -249,12 +250,13 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         try {
             return planTask.get();
         } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+            throw new IllegalStateException("Error running terraform plan", e);
         }
     }
 
     @Override
     public String runOutputTask() {
+        DynamicTasks.queue(refreshTaskWithName("Gather terraform output"));
         Task<String> outputTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), outputCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Retrieving terraform outputs")
@@ -262,9 +264,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .asTask());
         DynamicTasks.waitForLast();
         try {
-           return outputTask.get(); // TODO Should we allow this task to err ?
+           return outputTask.get();
         } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+            throw new IllegalStateException("Error gathering terraform output", e);
         }
     }
 
