@@ -24,7 +24,8 @@ resource "aws_instance" "web" {
   instance_type = "t2.micro"
 
   tags = {
-    Name = "terraform-test-cfg-in-bundle"
+    Name = "Test-Brooklyn-Terraform-KillMePlease"
+    Purpose = "terraform-test-cfg-in-bundle"
   }
 
   # Lookup the correct AMI based on the region

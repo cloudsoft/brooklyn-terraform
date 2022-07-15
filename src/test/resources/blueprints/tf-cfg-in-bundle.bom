@@ -2,6 +2,7 @@ services:
   - type: terraform
     name: Terraform Configuration
     brooklyn.config:
+      tf.search: true
       # requires aws cli + creds installed on the machine deploying this
       # Fetching archives over HTTP
       tf.configuration.url: classpath://plans/create-instance.tf

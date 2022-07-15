@@ -2,6 +2,7 @@ services:
   - type: terraform
     name: Terraform Configuration
     brooklyn.config:
+      tf.search: true
       # Fetching archives over HTTP
       tf.configuration.url: 'https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/instance-with-creds.tf'
 
