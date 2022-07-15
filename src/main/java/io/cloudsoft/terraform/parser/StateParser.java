@@ -34,7 +34,7 @@ public final class StateParser {
      */
     public static final ImmutableList PROBLEMATIC_RESOURCES = ImmutableList.of("aws_emr_cluster.spark_cluster");
 
-    private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
+    private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) ple -> ple.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
     private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.CHANGE_SUMMARY;
     private static  Predicate<? super PlanLogEntry> outputsPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.OUTPUTS;
     private static  Predicate<? super PlanLogEntry> plannedChangedPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.PLANNED_CHANGE;
@@ -156,10 +156,10 @@ public final class StateParser {
             try {
                 return objectMapper.readValue(log, PlanLogEntry.class);
             } catch (JsonProcessingException e) {
-                e.printStackTrace();
+                LOG.warn("Unable to parse plan log entry: "+log, e);
             }
             return null;
-        }).collect(Collectors.toList());
+        }).filter(x -> x!=null).collect(Collectors.toList());
 
         Map<String, Object> result = new HashMap<>();
 

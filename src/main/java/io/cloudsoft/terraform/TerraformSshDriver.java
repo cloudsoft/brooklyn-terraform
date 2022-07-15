@@ -167,7 +167,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                                 + "unzip " + cfgPath + ".zip ; fi")
                 .requiringExitCodeZero()
                 .environmentVariables(getShellEnvironment())
-                .summary("Preparing configuration (unzip of necessary)...")
+                .summary("Preparing configuration (unzip if necessary)...")
                 .newTask()
                 .asTask();
         Task<String> initTask = SshTasks.newSshExecTaskFactory(getMachine(), initCommand())
@@ -202,7 +202,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     public void launch() {
         final Map<String,Object> planLog = runJsonPlanTask();
         Task<Object> verifyPlanTask = Tasks.create("Verify Plan", () -> {
-            if(planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
+            if (planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
                 throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
             }
         }).asTask();

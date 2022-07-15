@@ -29,10 +29,13 @@ public class PlanLogEntry {
     }
 
     public enum LType {
-        @JsonProperty("version") VERSION, // not interesred
+        @JsonProperty("version") VERSION, // not interested
         @JsonProperty("refresh_start") REFRESH_START,
         @JsonProperty("refresh_restart") REFRESH_RESTART,
         @JsonProperty("refresh_complete") REFRESH_COMPLETE,
+        @JsonProperty("apply_start") APPLY_START,
+        @JsonProperty("apply_restart") APPLY_RESTART,
+        @JsonProperty("apply_complete") APPLY_COMPLETE,
         @JsonProperty("change_summary") CHANGE_SUMMARY,
         @JsonProperty("planned_change") PLANNED_CHANGE, // interested in this - create /update
         @JsonProperty("resource_drift") RESOURCE_DRIFT, // interested in this

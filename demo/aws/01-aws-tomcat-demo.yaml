@@ -6,11 +6,7 @@ services:
   brooklyn.config:
     tf.configuration.url: https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/aws-tomcat.zip
     # terraform-sample.tfvars  with aws credentials renamed to aws-terraform.tfvars and uploaded to Artifactory
-<<<<<<< HEAD
-    tf.tfvars.url: https://iuliana:TZL4iHFuckTHIS7HH4@artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/amp/aws-terraform.tfvars
-=======
     tf.tfvars.url: https://XXX:XXX@artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/amp/aws-terraform.tfvars
->>>>>>> main
 
 - type: org.apache.brooklyn.entity.group.DynamicGroup
   name: AWS VMs

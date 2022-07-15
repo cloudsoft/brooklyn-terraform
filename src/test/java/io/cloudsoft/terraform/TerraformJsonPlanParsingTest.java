@@ -318,4 +318,16 @@ public class TerraformJsonPlanParsingTest {
         assertEquals(resources.size(), 3);
         assertEquals(resources.stream().filter(m -> m.containsValue("create")).count(), 3);
     }
+
+    @Test
+    public void readTerraformV125Drift() throws IOException {
+        final String logs = loadTestData("state/plan-drift-tf125.json");
+
+        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        assertEquals(result.size(), 5);
+        assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
+        assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
+        assertEquals(result.get(PLAN_MESSAGE), "Configuration and infrastructure do not match.Plan: 1 to add, 0 to change, 1 to destroy.");
+    }
+
 }

@@ -32,10 +32,10 @@ public interface TerraformConfiguration extends SoftwareProcess {
         ERROR // configuration was edited manually and it is incorrect
     }
 
-    // Update reference.json when changing this value.
+    // Update reference.json in the root when changing this value
     @SetFromFlag("version")
     ConfigKey<String> SUGGESTED_VERSION = ConfigKeys
-            .newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.1.9");
+            .newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.2.5");
 
 
     @SetFromFlag("downloadUrl")

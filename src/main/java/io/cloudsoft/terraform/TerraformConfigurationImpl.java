@@ -33,6 +33,8 @@ import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.core.config.ConfigBag;
+import org.apache.brooklyn.util.collections.MutableMap;
+import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.CountdownTimer;
@@ -214,54 +216,64 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Nullable
         @Override
         public Map<String, Object> apply(@Nullable Map<String, Object> tfPlanStatus) {
-            boolean driftChanged = false;
-            if (sensors().getAll().containsKey(PLAN) && sensors().get(PLAN).containsKey(RESOURCE_CHANGES) &&
-                    !sensors().get(PLAN).get(RESOURCE_CHANGES).equals(tfPlanStatus.get(RESOURCE_CHANGES))){
-                driftChanged = true;
-            }
-
-            final TerraformStatus currentPlanStatus = (TerraformStatus) tfPlanStatus.get(PLAN_STATUS);
-            final boolean ignoreDrift = !getConfig(TerraformConfiguration.TERRAFORM_DRIFT_CHECK);
-
-            if(ignoreDrift || currentPlanStatus == TerraformStatus.SYNC) {
-                // plan status is SYNC so no errors, no ASYNC resources OR drift is ignored
-                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
-                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
-                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "compliance.drift"));
-                TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
-                updateDeploymentState();
-            } else if(TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
-                ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
-                        tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
-                updateResourceStates(tfPlanStatus);
-            } else if(!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
-                TerraformConfigurationImpl.this.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
-                if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
-                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
-                    updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
-                    updateResourceStates(tfPlanStatus);
-                } else {
-                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Outputs no longer match initial plan.This is not critical as the infrastructure is not affected. However you might want to invoke 'apply'.");
+            try {
+                boolean driftChanged = false;
+                if (sensors().getAll().containsKey(PLAN) && sensors().get(PLAN).containsKey(RESOURCE_CHANGES) &&
+                        !sensors().get(PLAN).get(RESOURCE_CHANGES).equals(tfPlanStatus.get(RESOURCE_CHANGES))) {
+                    // we had drift previously, and now either we have different drift or we don't have drift
+                    driftChanged = true;
                 }
-                TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
-                TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
-            }
 
-            if (driftChanged || !sensors().getAll().containsKey(DRIFT_STATUS) || !sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get(PLAN_STATUS))){
-                TerraformConfigurationImpl.this.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
+                final TerraformStatus currentPlanStatus = (TerraformStatus) tfPlanStatus.get(PLAN_STATUS);
+                final boolean ignoreDrift = !getConfig(TerraformConfiguration.TERRAFORM_DRIFT_CHECK);
+
+                if (ignoreDrift || currentPlanStatus == TerraformStatus.SYNC) {
+                    // plan status is SYNC so no errors, no ASYNC resources OR drift is ignored
+                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
+                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
+                    TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "compliance.drift"));
+                    TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
+                    updateDeploymentState();
+
+                } else if (TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
+                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
+                            tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
+                    updateResourceStates(tfPlanStatus);
+
+                } else if (!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
+                    TerraformConfigurationImpl.this.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
+                    if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
+                        ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
+                        updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
+                        updateResourceStates(tfPlanStatus);
+                    } else {
+                        ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Outputs no longer match initial plan.This is not critical as the infrastructure is not affected. However you might want to invoke 'apply'.");
+                    }
+                    TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
+                    TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
+                }
+
+                if (driftChanged || !sensors().getAll().containsKey(DRIFT_STATUS) || !sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get(PLAN_STATUS))) {
+                    TerraformConfigurationImpl.this.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
+                }
+                lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
+                return tfPlanStatus;
+            } catch (Exception e) {
+                LOG.error("Unable to process terraform plan", e);
+                throw Exceptions.propagate(e);
             }
-            lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
-            return tfPlanStatus;
         }
 
         private void updateResourceStates(Map<String, Object> tfPlanStatus) {
-            if(tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
-                ((List<Map<String, Object>>) tfPlanStatus.get(RESOURCE_CHANGES)).forEach(changeMap -> {
+            Object hasChanges = tfPlanStatus.get(RESOURCE_CHANGES);
+            LOG.debug("Terraform plan updating: " + tfPlanStatus + ", changes: "+hasChanges);
+            if (hasChanges!=null) {
+                ((List<Map<String, Object>>) hasChanges).forEach(changeMap -> {
                     String resourceAddr = changeMap.get("resource.addr").toString();
                     TerraformConfigurationImpl.this.getChildren().stream()
                             .filter(c -> c instanceof ManagedResource)
                             .filter(c -> resourceAddr.equals(c.config().get(TerraformResource.ADDRESS)))
-                            .findAny().ifPresent(this::checkAndUpdateResource);
+                            .forEach(this::checkAndUpdateResource);
                 });
             }
         }
