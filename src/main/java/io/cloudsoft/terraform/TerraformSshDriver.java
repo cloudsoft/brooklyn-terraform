@@ -17,6 +17,7 @@ import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.json.ShellEnvironmentSerializer;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
+import org.apache.brooklyn.util.core.task.TaskTags;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
 import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
@@ -219,13 +220,13 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .displayName("Verify and apply terraform")
                 .add(verifyPlanTask)
                 .add(checkAndApply)
-                .add(refreshTaskWithName("Refresh Terraform state")).build());
+                .add(refreshTaskWithName("Refresh Terraform state", false)).build());
         DynamicTasks.waitForLast();
     }
 
     @Override // used for polling as well
     public Map<String, Object> runJsonPlanTask() {
-        DynamicTasks.queue(refreshTaskWithName("Refresh Terraform state"));
+        DynamicTasks.queue(refreshTaskWithName("Refresh Terraform state", false));
         Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Analyse and create terraform plan"));
         DynamicTasks.waitForLast();
         String result;
@@ -256,7 +257,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public String runOutputTask() {
-        DynamicTasks.queue(refreshTaskWithName("Gather terraform output"));
+        DynamicTasks.queue(refreshTaskWithName("Gather terraform output", false));
         Task<String> outputTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), outputCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Retrieving terraform outputs")
@@ -364,13 +365,15 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .asTask();
     }
 
-    private Task refreshTaskWithName(final String name) {
-        return SshTasks.newSshExecTaskFactory(getMachine(), refreshCommand())
+    private Task refreshTaskWithName(final String name, boolean required) {
+        Task<String> t = SshTasks.newSshExecTaskFactory(getMachine(), refreshCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary(name)
                 .requiringZeroAndReturningStdout()
                 .newTask()
                 .asTask();
+        if (!required) TaskTags.markInessential(t);
+        return t;
     }
 
     private boolean terraformAlreadyAvailable() {
