@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.DataResource;
@@ -12,12 +11,9 @@ import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
-import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
-import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
-import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
@@ -31,7 +27,7 @@ import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
-import org.apache.brooklyn.util.collections.MutableMap;
+import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
@@ -44,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
@@ -82,17 +79,16 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     protected void postStop() {
         getChildren().forEach(c -> c.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED));
+
+        // when stopped, unmanage all the things we created; we do not need to remove them as children
         getChildren().forEach(child -> {
             if (child instanceof BasicGroup){
                 child.getChildren().stream().filter(gc -> gc instanceof TerraformResource)
                                 .forEach(gc -> {
-                                    removeChild(gc);
                                     Entities.unmanage(gc);
                                 });
-                removeChild(child);
             }
             if (child instanceof TerraformResource){
-                removeChild(child);
                 Entities.unmanage(child);
             }
         });
@@ -106,6 +102,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         Maybe<SshMachineLocation> machine = Locations.findUniqueSshMachineLocation(getLocations());
         if (machine.isPresent()) {
             addFeed(FunctionFeed.builder()
+                    .uniqueTag("scan-terraform-plan-and-output")
                     .entity(this)
                     .period(getConfig(TerraformConfiguration.POLLING_PERIOD))
                     .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(getDriver()))
@@ -158,7 +155,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 childrenToRemove.add(c);
             }
         });
-        childrenToRemove.forEach(Entities::unmanage);   // unmanage nodes that are no longer relevant (removing them as children causes leaks)
+        if (!childrenToRemove.isEmpty()) {
+            LOG.debug("Removing "+clazz+" resources no longer reported by Terraform at "+parent+": "+childrenToRemove);
+            childrenToRemove.forEach(Entities::unmanage);   // unmanage nodes that are no longer relevant (removing them as children causes leaks)
+        }
     }
 
     /**
@@ -268,6 +268,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     }
 
     public static class OutputProvider implements Supplier<String> {
+        // TODO share code with PlanProvider, keep reference
         TerraformDriver driver;
         public OutputProvider(TerraformDriver driver) {
             this.driver = driver;
@@ -335,50 +336,61 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         return (TerraformDriver) super.getDriver();
     }
 
-    @Override
-    @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
-    public void apply() {
-        CountdownTimer timer = Duration.ONE_MINUTE.countdownTimer();
+    private <V> V retryUntilLockAvailable(String summary, Callable<V> runWithLock) {
+        return retryUntilLockAvailable(summary, runWithLock, Duration.ONE_MINUTE, Duration.FIVE_SECONDS);
+    }
+
+    private <V> V retryUntilLockAvailable(String summary, Callable<V> runWithLock, Duration timeout, Duration retryFrequency) {
+        CountdownTimer timer = timeout.countdownTimer();
         while(true) {
             if (configurationChangeInProgress.compareAndSet(false, true)) {
                 try {
-                    Objects.requireNonNull(getDriver()).runApplyTask();
-                    return;
+                    return runWithLock.call();
+                } catch (Exception e) {
+                    throw Exceptions.propagate(e);
                 } finally {
                     configurationChangeInProgress.set(false);
                 }
             } else {
                 if(timer.isExpired()) {
-                    throw new IllegalStateException("Cannot apply configuration: operation timed out (another change in progress?)");
+                    throw new IllegalStateException("Cannot perform "+summary+": operation timed out before lock available (is another change or refresh in progress?)");
                 }
-                Time.sleep(Duration.FIVE_SECONDS);
+                try {
+                    Tasks.withBlockingDetails("Waiting on terraform lock (change or refresh in progress?), before retrying "+summary,
+                            () -> { Time.sleep(retryFrequency); return null; } );
+                } catch (Exception e) {
+                    throw Exceptions.propagate(e);
+                }
             }
         }
     }
 
     @Override
     @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
+    public void apply() {
+        retryUntilLockAvailable("terraform apply", () -> { Objects.requireNonNull(getDriver()).runApplyTask(); return null; });
+    }
+
+    @Override
+    @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
     public void plan() {
-        getDriver().runPlanTask();
-        new PlanSuccessFunction().apply(new PlanProvider(getDriver()).get());
-        new OutputSuccessFunction().apply(new OutputProvider(getDriver()).get());
+        retryUntilLockAvailable("terraform plan (and post-processing)", () -> {
+            getDriver().runPlanTask();
+            new PlanSuccessFunction().apply(new PlanProvider(getDriver()).get());
+            new OutputSuccessFunction().apply(new OutputProvider(getDriver()).get());
+            return null;
+        });
     }
 
     @Override
     @Effector(description = "Destroy the Terraform configuration")
     public void destroy() {
-        final boolean mayProceed = configurationChangeInProgress.compareAndSet(false, true);
-        if (mayProceed) {
-            try {
-                preStop();
-                super.stop();
-                postStop();
-            } finally {
-                configurationChangeInProgress.set(false);
-            }
-        } else {
-            throw new IllegalStateException("Cannot destroy configuration: another operation is in progress.");
-        }
+        retryUntilLockAvailable("terraform destroy", () -> {
+            preStop();
+            super.stop();
+            postStop();
+            return null;
+        }, Duration.seconds(-1), Duration.seconds(1));
     }
 
     @Override
@@ -388,33 +400,25 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         if(StringUtils.isNotBlank(configUrl)) {
             config().set(CONFIGURATION_URL, configUrl);
         }
-        CountdownTimer timer = Duration.ONE_MINUTE.countdownTimer();
-        while(true) {
-            if (configurationChangeInProgress.compareAndSet(false, true)) {
-                try {
-                    sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STARTING);
-                    ServiceStateLogic.setExpectedState(this, Lifecycle.STARTING);
-                    getDriver().customize();
-                    getDriver().launch();
-                    if(getChildren() == null || getChildren().isEmpty()) { // after a destroy
-                        getDriver().postLaunch();
-                        connectSensors();
-                    }
-                    return;
-                } finally {
-                    configurationChangeInProgress.set(false);
-                    sensors().set(Startable.SERVICE_UP, Boolean.TRUE);
-                    sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
-                    sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
-                    ServiceStateLogic.setExpectedState(this, Lifecycle.RUNNING);
+        retryUntilLockAvailable("reinstall configuration from "+configUrl, () -> {
+            try {
+                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STARTING);
+                ServiceStateLogic.setExpectedState(this, Lifecycle.STARTING);
+                getDriver().customize();
+                getDriver().launch();
+                if (getChildren() == null || getChildren().isEmpty()) { // after a destroy
+                    getDriver().postLaunch();
+                    connectSensors();
                 }
-            } else {
-                if(timer.isExpired()) {
-                    throw new IllegalStateException("Cannot re-apply configuration: operation timed out.");
-                }
-                Time.sleep(Duration.FIVE_SECONDS);
+                return null;
+            } finally {
+                configurationChangeInProgress.set(false);
+                sensors().set(Startable.SERVICE_UP, Boolean.TRUE);
+                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
+                sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
+                ServiceStateLogic.setExpectedState(this, Lifecycle.RUNNING);
             }
-        }
+        });
     }
 
     @Override

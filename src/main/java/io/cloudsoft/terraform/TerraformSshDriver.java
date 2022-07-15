@@ -275,7 +275,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
        DynamicTasks.queue(applyTaskWithName("Applying terraform plan"));
        DynamicTasks.waitForLast();
        entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
-       entity.getChildren().forEach(entity::removeChild);
+       // previously removed children here, but (1) there might be children we shouldn't remove; and (2) the synch should take care of that
+       // now force a new plan instead
+       ((TerraformConfiguration)entity).plan();
     }
 
     /**
