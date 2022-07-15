@@ -162,15 +162,17 @@ Resources can be grouped in AMP configuring a`org.apache.brooklyn.entity.group.D
 ```yaml
 name: Apache Tomcat + MySQL on VSphere Demo
 services:
-- type: terraform
+- id: tf-tomcat
+  type: terraform
   name: Terraform Configuration
   brooklyn.config:
     ...
 - type: org.apache.brooklyn.entity.group.DynamicGroup
   name: VSphere Tags
   brooklyn.config:
+    dynamicgroup.ancestor: $brooklyn:entity("tf-tomcat")
     dynamicgroup.entityfilter:
-      sensor: tf.resource.type
+      config: tf.resource.type
       equals: vsphere_tag
 ```
 
@@ -525,14 +527,20 @@ The check automatically reacts to drift, bringing the infrastructure back to the
 
 ## Grouping Resources
 
-AMP only shows resources being created and managed by Terraform, but when deployments consist of a big number of resources, it might be practical to group them together based on various criteria. For example, the next blueprint,a predicate is declared for the Terraform Configuration entity, to group resources based on the output of the `tf.resource.type` sensor. This results  in an additional child entity being created under the Terraform Configuration entity that groups all the VMs together.
+AMP only shows resources being created and managed by Terraform, but when deployments consist of a big number of resources, 
+it might be practical to group them together based on various criteria. 
+For example, the next blueprint,a predicate is declared for the Terraform Configuration entity, 
+to group resources based on the value of the `tf.resource.type` config. 
+This results in an additional child entity being created under the Terraform Configuration 
+entity that groups all the VMs together.
 
 ```yaml
-location: localhost
-name: Hetzner Deploying a single VM
+name: TF Single VM
 services:
 - type: terraform
-  name: Terraform Configuration
+  location: localhost
+  name: Terraform Configuration for VS Tomcat
+  id: tf-vs-tomcat
   brooklyn.config:
     tf.configuration.url: https://.../vs-tomcat.zip
     # populate with the proper credentials
@@ -540,11 +548,8 @@ services:
 - type: org.apache.brooklyn.entity.group.DynamicGroup
   name: VSphere VMs
   brooklyn.config:
+    dynamicgroup.ancestor: $brooklyn:entity("tf-vs-tomcat")
     dynamicgroup.entityfilter:
-      '$brooklyn:object':
-        type: io.cloudsoft.terraform.predicates.TerraformDiscoveryPredicates
-        factoryMethod.name: sensorMatches
-        factoryMethod.args:
-        - tf.resource.type
-        - vsphere_virtual_machine
+      config: tf.resource.type
+      equals: vsphere_virtual_machine
 ```
