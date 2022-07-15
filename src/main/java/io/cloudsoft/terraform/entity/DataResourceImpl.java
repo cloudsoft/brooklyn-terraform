@@ -6,6 +6,7 @@ import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.stock.BasicEntityImpl;
 
 import java.util.Map;
+import java.util.Objects;
 
 public class DataResourceImpl extends BasicEntityImpl  implements DataResource {
 
@@ -16,7 +17,7 @@ public class DataResourceImpl extends BasicEntityImpl  implements DataResource {
     @Override
     public boolean refreshSensors(Map<String, Object> resource) {
         resource.forEach((k, v) -> {
-            if (!sensors().get(Sensors.newStringSensor("tf." + k)).equals(v)){
+            if (!Objects.equals(sensors().get(Sensors.newStringSensor("tf." + k)), v)) {
                 sensors().set(Sensors.newStringSensor("tf." + k), v.toString());
             }
         });

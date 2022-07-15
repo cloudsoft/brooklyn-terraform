@@ -2,7 +2,7 @@
   "entities": [
     {
       "type": "io.cloudsoft.terraform.TerraformConfiguration",
-      "defaultVersion": "1.1.9",
+      "defaultVersion": "1.2.5",
       "name": "TerraformConfiguration",
       "description": "Brooklyn Terraform entity for lifecycle management of a Terraform configuration",
       "iconUrl": "classpath://io/cloudsoft/terraform/logo.png",
