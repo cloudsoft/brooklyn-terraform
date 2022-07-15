@@ -36,7 +36,6 @@ public class TerraformJsonPlanParsingTest {
         assertTrue(resources.containsKey("google_dataproc_cluster.spark_cluster"));
     }
 
-
     @Test
     public void readManagedResources() throws IOException {
         final String state = loadTestData("state/state.json");
@@ -44,6 +43,17 @@ public class TerraformJsonPlanParsingTest {
         Map<String,Object> resources = StateParser.parseResources(state);
         assertEquals(resources.size(), 1);
         assertTrue(resources.containsKey("aws_instance.example1"));
+    }
+
+    @Test
+    public void checkAWSTags() throws IOException {
+        final String state = loadTestData("state/aws-instance-state.json");
+
+        Map<String,Object> resources = StateParser.parseResources(state);
+        assertEquals(resources.size(), 1);
+        assertTrue(resources.containsKey("aws_instance.example1"));
+        assertTrue(((Map<String,Object>)resources.get("aws_instance.example1")).containsKey("value.tags"));
+        assertTrue(((Map<String,Object>)resources.get("aws_instance.example1")).containsKey("value.tags_all"));
     }
 
     @Test

@@ -83,7 +83,7 @@ public final class StateParser {
                                 if((resourceBody.get("resource.address").toString().startsWith(GOOGLE.getPrefix()) && value.getKey().equals("cluster_config"))){
                                     parseClusterData(value.getValue(), "value.cluster_config", resourceBody);
                                 } else {
-                                    resourceBody.put("value." + value.getKey(), value.getValue().asText());
+                                    resourceBody.put("value." + value.getKey(), value.getValue() instanceof TextNode? value.getValue().asText() : value.getValue().toString());
                                 }
                             }
                         }
@@ -94,7 +94,7 @@ public final class StateParser {
                         while(it.hasNext()) {
                             Map.Entry<String,JsonNode> value =  it.next();
                             if(isNotBlankPredicate.test(value.getValue())) {
-                                resourceBody.put("sensitive.value." + value.getKey(), value.getValue().asText());
+                                resourceBody.put("sensitive.value." + value.getKey(),  value.getValue() instanceof TextNode? value.getValue().asText() : value.getValue().toString());
                             }
                         }
                     }

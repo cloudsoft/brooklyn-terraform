@@ -32,6 +32,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
                 .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-security-group.tf")
                 .configure(TerraformCommons.TF_EXECUTION_MODE, TerraformCommons.SSH_MODE)
+                .configure("tf.search", true)
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
         app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
         assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
@@ -50,6 +51,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
                 .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
                 .configure(TerraformCommons.TF_EXECUTION_MODE, TerraformCommons.SSH_MODE)
+                .configure("tf.search", true)
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
         app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
 
@@ -70,6 +72,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
                 .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
                 .configure(TerraformCommons.TF_EXECUTION_MODE, TerraformCommons.SSH_MODE)
+                .configure("tf.search", true)
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
                 terraformConfiguration
                         .addChild(EntitySpec.create(DynamicGroup.class)

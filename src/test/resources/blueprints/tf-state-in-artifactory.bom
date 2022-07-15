@@ -2,6 +2,7 @@ services:
   - type: terraform
     name: Terraform Configuration
     brooklyn.config:
+      tf.search: true
       tf.execution.mode: "ssh"
       tf.configuration.contents: |
         terraform {
@@ -24,6 +25,7 @@ services:
             ami = "ami-02df9ea15c1778c9c"
             instance_type = "t1.micro"
             tags = {
-              Name = "terraform-test-state-in-artifactory"
+                Name = "Test-Brooklyn-Terraform-KillMePlease"
+                Purpose = "terraform-test-state-in-artifactory"
             }
         }
