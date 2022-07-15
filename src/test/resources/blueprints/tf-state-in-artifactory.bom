@@ -2,6 +2,7 @@ services:
   - type: terraform
     name: Terraform Configuration
     brooklyn.config:
+      tf.execution.mode: "ssh"
       tf.configuration.contents: |
         terraform {
             backend "artifactory" {

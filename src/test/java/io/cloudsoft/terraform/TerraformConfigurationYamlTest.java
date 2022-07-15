@@ -33,13 +33,13 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
             "aws_ubuntu20_location", "classpath://locations/aws.ubuntu20.location.bom"
     );
 
-    @Test(groups="Live") // TF on localhost (AMP machine)
+    @Test(groups="Live") // TF already installed on localhost
     public void testDeployFromLocalhostAndFromCfgInBundle() throws Exception {
         Application app = deploy("localhost_location", "classpath://blueprints/tf-cfg-in-bundle.bom");
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
-        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.applied"), v -> v.equals("true"));
 
         // gracefully shutdown and test children are stopped
         ((BasicApplication)app).stop();
@@ -54,7 +54,7 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
-        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.applied"), v -> v.equals("true"));
 
         Assert.assertTrue(((Integer) entity.getChildren().size()).equals(1));
         Entity resource = Iterables.getOnlyElement(entity.getChildren());
@@ -68,7 +68,6 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
         EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.instance_type"), v -> v.equals("\"t2.micro\""));
         EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.value.tags"), v -> v.equals("{\"Name\":\"terraform-test-cfg-in-bundle\"}"));
 
-
         // gracefully shutdown and test children are stopped
         ((BasicApplication)app).stop();
         EntityAsserts.assertAttributeEqualsEventually(entity, Attributes.SERVICE_UP, false);
@@ -81,7 +80,7 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
-        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.applied"), v -> v.equals("true"));
 
         Assert.assertTrue(((Integer) entity.getChildren().size()).equals(1));
         Entity resource = Iterables.getOnlyElement(entity.getChildren());
@@ -108,7 +107,7 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
-        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.applied"), v -> v.equals("true"));
 
         Assert.assertTrue(((Integer) entity.getChildren().size()).equals(1));
         Entity resource = Iterables.getOnlyElement(entity.getChildren());
@@ -134,7 +133,7 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
         Assert.assertTrue(entity instanceof TerraformConfiguration);
-        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.isApplied"), v -> v.equals("true"));
+        EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.applied"), v -> v.equals("true"));
 
         Assert.assertTrue(((Integer) entity.getChildren().size()).equals(1));
         Entity resource = Iterables.getOnlyElement(entity.getChildren());

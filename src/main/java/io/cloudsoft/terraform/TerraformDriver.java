@@ -1,8 +1,15 @@
 package io.cloudsoft.terraform;
 
 import java.util.Map;
+import java.util.Set;
 
+import org.apache.brooklyn.config.ConfigKey;
+import org.apache.brooklyn.core.config.ConfigKeys;
+import org.apache.brooklyn.core.entity.EntityInternal;
+import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessDriver;
+import org.apache.brooklyn.util.collections.MutableMap;
+import org.apache.brooklyn.util.core.json.ShellEnvironmentSerializer;
 
 import static java.lang.String.format;
 
@@ -71,5 +78,26 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     // these are just here to allow the terraform commands building methods to be default too :)
     String getRunDir();
     String getInstallDir();
+
+
+    /**
+     * This method converts any brooklyn configuration starting with tf_var. into TERRAFORM environment variables.
+     * Declared here so it can be reused in all drivers.
+     */
+    default Map<String, String> getShellEnvironment(final EntityInternal entity) {
+        Map<String, Object> env = MutableMap.copyOf(entity.getConfig(SoftwareProcess.SHELL_ENVIRONMENT));
+
+        // extend the parent to read vars whenever the shell environment is fetched, so if a var changes we will flag that as drift
+        Set<ConfigKey<?>> terraformVars =  entity.config().findKeysPresent(k -> k.getName().startsWith("tf_var"));
+        terraformVars.forEach(c -> {
+            final String bcName = c.getName();
+            final String tfName = bcName.replace("tf_var.", "TF_VAR_");
+            final Object value = entity.getConfig(ConfigKeys.newConfigKey(Object.class, bcName));
+            env.put(tfName, value);
+        });
+
+        ShellEnvironmentSerializer envSerializer = new ShellEnvironmentSerializer((entity).getManagementContext());
+        return envSerializer.serialize(env);
+    }
 
 }

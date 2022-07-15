@@ -326,20 +326,12 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         }
     }
 
+    /**
+     * This method converts any brooklyn configuration starting with tf_var. into TERRAFORM environment variables
+     */
+    @Override // the one from {@code AbstractSoftwareProcessSshDriver}
     public Map<String, String> getShellEnvironment() {
-        Map<String, Object> env = MutableMap.copyOf(entity.getConfig(SoftwareProcess.SHELL_ENVIRONMENT));
-
-        // extend the parent to read vars whenever the shell environment is fetched, so if a var changes we will flag that as drift
-        Set<ConfigKey<?>> terraformVars =  entity.config().findKeysPresent(k -> k.getName().startsWith("tf_var"));
-        terraformVars.forEach(c -> {
-            final String bcName = c.getName();
-            final String tfName = bcName.replace("tf_var.", "TF_VAR_");
-            final Object value = entity.getConfig(ConfigKeys.newConfigKey(Object.class, bcName));
-            env.put(tfName, value);
-        });
-
-        ShellEnvironmentSerializer envSerializer = new ShellEnvironmentSerializer(((EntityInternal)entity).getManagementContext());
-        return envSerializer.serialize(env);
+          return getShellEnvironment((EntityInternal)entity);
     }
 
     private Task jsonPlanTaskWithName(final String name){

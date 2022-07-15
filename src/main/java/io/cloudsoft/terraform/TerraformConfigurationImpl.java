@@ -52,7 +52,6 @@ import static io.cloudsoft.terraform.TerraformCommons.SSH_MODE;
 import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.entity.StartableManagedResource.RESOURCE_STATUS;
 import static io.cloudsoft.terraform.parser.EntityParser.processResources;
-import static io.cloudsoft.terraform.TerraformCommons.convertConfigToTerraformEnvVar;
 
 public class TerraformConfigurationImpl extends SoftwareProcessImpl implements TerraformConfiguration {
 
@@ -94,12 +93,6 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 // TODO stop might work, but if not check and implement
             };
         }
-    }
-
-    @Override
-    protected void preStart() {
-        super.preStart();
-        convertConfigToTerraformEnvVar(this);
     }
 
     @Override

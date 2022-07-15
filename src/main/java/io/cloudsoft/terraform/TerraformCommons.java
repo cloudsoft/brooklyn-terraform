@@ -56,18 +56,5 @@ public interface TerraformCommons {
      * in case we even want to add a driver for that as well
      */
     String KUBE_MODE = "kube";
-    /**
-     * This method converts any brooklyn configuration starting with tf_var. into TERRAFORM environment variables
-     */
-    static void convertConfigToTerraformEnvVar(Configurable entity) {
-        Set<ConfigKey<?>> terraformVars =  entity.config().findKeysPresent(k -> k.getName().startsWith("tf_var"));
-        final Map<String,Object> env = MutableMap.copyOf(entity.getConfig(SoftwareProcess.SHELL_ENVIRONMENT));
-        terraformVars.forEach(c -> {
-            final String bcName = c.getName();
-            final String tfName = bcName.replace("tf_var.", "TF_VAR_");
-            final Object value = entity.getConfig(ConfigKeys.newConfigKey(Object.class, bcName));
-            env.put(tfName, value);
-        });
-        entity.config().set(SoftwareProcess.SHELL_ENVIRONMENT, ImmutableMap.copyOf(env));
-    }
+
 }
