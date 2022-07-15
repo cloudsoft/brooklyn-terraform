@@ -105,10 +105,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     .uniqueTag("scan-terraform-plan-and-output")
                     .entity(this)
                     .period(getConfig(TerraformConfiguration.POLLING_PERIOD))
-                    .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(getDriver()))
+                    .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(this))
                             .onResult(new PlanSuccessFunction())
                             .onFailure(new PlanFailureFunction()))
-                    .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(getDriver()))
+                    .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(this))
                             .onResult(new OutputSuccessFunction())
                             .onFailure(new OutputFailureFunction()))
                     .build());
@@ -169,15 +169,45 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 .findAny().ifPresent(c -> updateResources(resources, c, clazz));
     }
 
-    public static class PlanProvider implements Supplier<Map<String,Object>> {
+    protected abstract static class RetryingProvider<T> implements Supplier<T> {
+        String name = null;
+        TerraformConfiguration entity;
+
+        // kept for backwards compatibility / rebind
         TerraformDriver driver;
-        public PlanProvider(TerraformDriver driver) {
-            this.driver = driver;
+
+        protected RetryingProvider(String name, TerraformConfiguration entity) {
+            this.name = name;
+            this.entity = entity;
+        }
+
+        protected TerraformDriver getDriver() {
+            if (entity==null) {
+                // force migration to preferred persistence
+                this.entity = (TerraformConfiguration) driver.getEntity();
+                this.driver = null;
+                if (name==null) name = getClass().getSimpleName();
+                return getDriver();
+            }
+            return entity.getDriver();
+        }
+
+        protected abstract T getWhenHasLock();
+
+        @Override
+        public T get() {
+            return ((TerraformConfigurationImpl) Entities.deproxy(entity)).retryUntilLockAvailable(name==null ? getClass().getSimpleName() : name, this::getWhenHasLock);
+        }
+    }
+
+    public static class PlanProvider extends RetryingProvider<Map<String,Object>> {
+        public PlanProvider(TerraformConfiguration entity) {
+            super("terraform plan analysis", entity);
         }
 
         @Override
-        public Map<String, Object> get() {
-            return driver.runJsonPlanTask();
+        protected Map<String, Object> getWhenHasLock() {
+            return getDriver().runJsonPlanTask();
         }
     }
 
@@ -267,16 +297,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
-    public static class OutputProvider implements Supplier<String> {
-        // TODO share code with PlanProvider, keep reference
-        TerraformDriver driver;
-        public OutputProvider(TerraformDriver driver) {
-            this.driver = driver;
+    public static class OutputProvider extends RetryingProvider<String> {
+        public OutputProvider(TerraformConfiguration entity) {
+            super("terraform output analysis", entity);
         }
 
         @Override
-        public String get() {
-            return driver.runOutputTask();
+        protected String getWhenHasLock() {
+            return getDriver().runOutputTask();
         }
     }
 
@@ -376,8 +404,8 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     public void plan() {
         retryUntilLockAvailable("terraform plan (and post-processing)", () -> {
             getDriver().runPlanTask();
-            new PlanSuccessFunction().apply(new PlanProvider(getDriver()).get());
-            new OutputSuccessFunction().apply(new OutputProvider(getDriver()).get());
+            new PlanSuccessFunction().apply(new PlanProvider(this).get());
+            new OutputSuccessFunction().apply(new OutputProvider(this).get());
             return null;
         });
     }
