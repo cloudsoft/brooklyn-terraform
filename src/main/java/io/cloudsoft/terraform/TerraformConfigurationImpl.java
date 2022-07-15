@@ -9,6 +9,7 @@ import com.google.gson.internal.LinkedTreeMap;
 import io.cloudsoft.terraform.entity.DataResource;
 import io.cloudsoft.terraform.entity.ManagedResource;
 import io.cloudsoft.terraform.entity.TerraformResource;
+import io.cloudsoft.terraform.parser.EntityParser;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
@@ -165,8 +166,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
      * Updates Data resources
      */
     private void updateDataResources(Map<String, Object> resources, Class<? extends TerraformResource> clazz) {
-        getChildren().stream().filter(c-> c instanceof BasicGroup)
-                .findAny().ifPresent(c -> updateResources(resources, c, clazz));
+        EntityParser.getDataResourcesGroup(this).ifPresent(c -> updateResources(resources, c, clazz));
     }
 
     protected abstract static class RetryingProvider<T> implements Supplier<T> {
