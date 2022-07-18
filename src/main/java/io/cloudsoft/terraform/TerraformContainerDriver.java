@@ -1,28 +1,26 @@
 package io.cloudsoft.terraform;
 
-import com.google.common.collect.Iterables;
 import com.google.common.reflect.TypeToken;
+import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.core.config.SetConfigKey;
-import org.apache.brooklyn.core.entity.EntityInitializers;
 import org.apache.brooklyn.core.entity.EntityInternal;
 import org.apache.brooklyn.tasks.kubectl.ContainerTaskFactory;
 import org.apache.brooklyn.util.collections.MutableList;
-import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
-import org.apache.brooklyn.util.time.Duration;
+import org.apache.brooklyn.util.core.task.Tasks;
+import org.apache.commons.lang3.NotImplementedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.Date;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
-import static org.apache.brooklyn.core.mgmt.BrooklynTaskTags.EFFECTOR_TAG;
-import static org.apache.brooklyn.tasks.kubectl.ContainerCommons.CONTAINER_IMAGE;
+import java.util.concurrent.ExecutionException;
 
 /**
  *  Assume Terraform container has: { terraform, curl, unzip } installed
@@ -55,7 +53,18 @@ public class TerraformContainerDriver implements TerraformDriver {
         kubeJobConfig.put("shell.env", env);
 
         String workdir = (String) jobCfg.get("workingDir"); // edit workingDir -> ${workingDir/entityID}, to have a common terraform workspace for all methods in the driver -> sensors and effectors won't need this
-        kubeJobConfig.put("workingDir", workdir+"/"+entity.getId());
+        kubeJobConfig.put("workingDir", workdir + "/" + entity.getId());
+    }
+
+    private void clean(){
+        String backupDir = kubeJobConfig.get("workingDir") + "/backup";
+        kubeJobConfig.put("commands", MutableList.of("/bin/bash", "-c", "rm -rf " + backupDir
+                + "; mkdir " + backupDir + "; mv * " + backupDir + "; mv " + backupDir + "/*.tfstate ."));
+        DynamicTasks.queue(new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                .summary("Moves existing configuration files to " + backupDir)
+                .configure(kubeJobConfig)
+                .newTask().asTask());
+        DynamicTasks.waitForLast();
     }
 
     @Override
@@ -65,47 +74,101 @@ public class TerraformContainerDriver implements TerraformDriver {
                 "if grep -q \"No errors detected\" <<< $(unzip -t configuration.tf ); then mv configuration.tf configuration.zip && unzip configuration.zip ; fi"));
         Task<String> downloadTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
                 .summary("Download and unpack configuration")
-                .tag("CUSTOMIZE")
                 .configure(kubeJobConfig)
-                .newTask();
-        DynamicTasks.queueIfPossible(downloadTask).orSubmitAsync(entity);  // TODO - simulate failure  - if task fails an exception is thrown here
+                .newTask().asTask();
 
-        if(!downloadTask.isError()) {
-            kubeJobConfig.put("commands", MutableList.of("terraform" , "init", "-input=false"));
-            Task<String> initTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                    .summary("Initialize terraform workspace")
-                    .configure(kubeJobConfig)
-                    .newTask();
-            DynamicTasks.queueIfPossible(initTask).orSubmitAsync(entity); // TODO - simulate failure  -   if task fails an exception is thrown here
-            Object result = initTask.getUnchecked();
-            List<String> res = (List<String>) result;
-            while(!res.isEmpty() && Iterables.getLast(res).matches("namespace .* deleted\\s*")) res = res.subList(0, res.size()-1);
+        kubeJobConfig.put("commands", MutableList.of("terraform" , "init", "-input=false"));
+        Task<String> initTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                .summary("Initialize terraform workspace")
+                .configure(kubeJobConfig)
+                .newTask().asTask();
 
-            String finalRes = res.isEmpty() ? "" : Iterables.getLast(res);
-            if(!finalRes.contains("You may now begin working with Terraform.")) {
-                throw new IllegalStateException("Terraform workspace initialization failed: " + finalRes);
+        Task<Object> verifyTask =  Tasks.create("Verifying Terraform Workspace", () -> {
+            try {
+                String result =  initTask.get();
+                if(result.contains(EMPTY_TF_CFG_WARN)) {
+                    throw new IllegalStateException("Invalid or missing Terraform configuration." + result);
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException("Cannot retrieve result of command `terraform init -input=false`!", e);
             }
-        }
+        }).asTask();
+
+        DynamicTasks.queue(Tasks.builder()
+                .displayName("Initializing terraform workspace")
+                .add(downloadTask)
+                .add(initTask)
+                .add(verifyTask)
+                .build());
+        DynamicTasks.waitForLast();
+
     }
 
     @Override
     public void launch() {
         LOG.info(" >> TerraformDockerDriver.launch() ...");
+        final Map<String,Object> planLog = runJsonPlanTask();
+        Task<Object> verifyPlanTask = Tasks.create("Verify Plan", () -> {
+            if (planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
+                throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
+            }
+        }).asTask();
+        Task<Object> checkAndApply =Tasks.create("Apply (if no existing deployment is found)", () -> {
+            boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
+            if (deploymentExists) {
+                LOG.debug("Terraform plan exists!!");
+            } else {
+                runApplyTask();
+            }
+        }).asTask();
+
+        DynamicTasks.queue(Tasks.builder()
+                .displayName("Creating the planned infrastructure")
+                .add(verifyPlanTask)
+                .add(checkAndApply)
+                .add(refreshTask())
+                .build());
+        DynamicTasks.waitForLast();
+
+    }
+
+    @Override // used for polling as well
+    public Map<String, Object> runJsonPlanTask() {
+        kubeJobConfig.put("commands", MutableList.of("terraform" , "plan", "-lock=false", "-input=false", "-json"));
+        Task<String> planTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                .summary("Creating the plan.")
+                .configure(kubeJobConfig)
+                .newTask().asTask();
+        DynamicTasks.waitForLast();
+        String result;
+        try {
+            result = planTask.get();
+            return StateParser.parsePlanLogEntries(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
+        }
+    }
+
+    @Override
+    public void runApplyTask() {
+        LOG.info(" >> TerraformDockerDriver.runApplyTask() ...");
         kubeJobConfig.put("commands", MutableList.of("terraform" , "apply", "-input=false", "-auto-approve"));
         Task<String> applyTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
-                .tag(entity.getId() + "-" + EFFECTOR_TAG)
+                .summary("Applying terraform plan")
                 .configure(kubeJobConfig)
-                .newTask();
-        // Execute task, inspect result, if apply failed, fail this activity -> throw exception
+                .newTask().asTask();
+        DynamicTasks.waitForLast();
+        entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
+        entity.getChildren().forEach(entity::removeChild);
+    }
 
-        // prev ->  SSH behaviour
-        // we need this log too, for drift detection and reinstallConfig effector from TerraformConfigurationImpl
-        // 1. verify plan: run jsonPlanCommand(), analyze output to check plan validity
-        // 2. check plan status:  -> check deployment existence
-        //  2.1 if plan_status = SYNC skip apply
-        //  2.2 if plan_status != SYNC run applyCommand()
-        // 3 refresh: run refreshCommand()
+    private Task refreshTask() {
+        LOG.info(" >> TerraformDockerDriver.runApplyTask() ...");
+        kubeJobConfig.put("commands", MutableList.of("terraform" , "apply", "-refresh-only", "-input=false", "-auto-approve"));
+        return new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                .summary("Refreshing Terraform state")
+                .configure(kubeJobConfig)
+                .newTask().asTask();
     }
 
     @Override
@@ -119,93 +182,81 @@ public class TerraformContainerDriver implements TerraformDriver {
         return runDestroyTask();
     }
 
-    @Override
-    public Map<String, Object> runJsonPlanTask() {
-        LOG.info(" >> TerraformDockerDriver.runJsonPlanTask() ...");
-        // TODO
-        ConfigBag configBag = null; //ConfigBag.newInstanceCopying(this.entity.config()).putAll(parameters);
-        //configBag -> commands:  plan -lock=false -input=false -no-color -json
-        Task<String> jsonPlanTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
-                .tag(entity.getId() + "-" + EFFECTOR_TAG)
-                .configure(configBag.getAllConfig())
-                .newTask();
-        // maybe reuse  jsonPlanCommand() inherited from TerraformDriver
-        return null;
-    }
-
+    // Needed for extracting pure Terraform output for the tf.plan sensor
     @Override
     public String runPlanTask() {
         LOG.info(" >> TerraformDockerDriver.runPlanTask() ...");
-        // TODO
-        ConfigBag configBag = null; //ConfigBag.newInstanceCopying(this.entity.config()).putAll(parameters);
-        //configBag -> commands:  plan -lock=false -input=false -no-color
-        Task<String> jsonPlanTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
-                .tag(entity.getId() + "-" + EFFECTOR_TAG)
-                .configure(configBag.getAllConfig())
-                .newTask();
-        // maybe reuse  planCommand() inherited from TerraformDriver
-        // needed just to populate a sensor
-        return null; // the output of the jsonPlanTask
-    }
-
-    @Override
-    public void runApplyTask() {
-        LOG.info(" >> TerraformDockerDriver.runApplyTask() ...");
-        // check if we still need this and implement it properly.
-        // TODO
-        Task<String> applyTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
-                .tag(entity.getId() + "-" + EFFECTOR_TAG)
-                //.configure(configBag.getAllConfig())
-                .newTask();
-        //
+        kubeJobConfig.put("commands", MutableList.of("terraform" , "plan", "-lock=false", "-input=false"));
+        Task<String> planTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                .summary("Inspecting terraform plan changes")
+                .configure(kubeJobConfig)
+                .newTask().asTask();
+        DynamicTasks.waitForLast();
+        try {
+            return planTask.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+        }
     }
 
     @Override
     public String runOutputTask() {
         LOG.info(" >> TerraformDockerDriver.runOutputTask() ...");
-        // TODO just create container task to run output command ...
-        return null;
+        kubeJobConfig.put("commands", MutableList.of("terraform" , "output", "-json"));
+        Task<String> outputTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                .summary("Retrieving terraform outputs")
+                .configure(kubeJobConfig)
+                .newTask().asTask();
+        DynamicTasks.waitForLast();
+        try {
+            return outputTask.get(); // TODO Should we allow this task to err ?
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+        }
     }
 
     @Override
     public String runShowTask() {
         LOG.info(" >> TerraformDockerDriver.runShowTask() ...");
-        // TODO just create container task to run output command ...
-        return null;
+        kubeJobConfig.put("commands", MutableList.of("terraform" , "show", "-json"));
+        Task<String> showTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                .summary("Retrieve the most recent state snapshot")
+                .configure(kubeJobConfig)
+                .newTask().asTask();
+        DynamicTasks.waitForLast();
+        try {
+            return showTask.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+        }
     }
 
     @Override
     public int runDestroyTask() {
         LOG.info(" >> TerraformDockerDriver.runDestroyTask() ...");
-        ConfigBag configBag = null; //ConfigBag.newInstanceCopying(this.entity.config()).putAll(parameters);
-        //configBag -> commands: terraform apply --destroy -no-color -input=false -auto-approve
-        Task<String> destroyTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
-                .tag(entity.getId() + "-" + EFFECTOR_TAG)
-                .configure(configBag.getAllConfig())
-                .newTask();
-        // check if user wants to keep the terraform workspace in the mounted volume  -> based on a config key that is not there yet
-        // keep.terraform.workspace: default:false
-        // if (!keep) {
-        // add this task to a queue
-        //configBag -> commands: rm -rf /tfws/entityID
-        Task deleteTfWorkspaceTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
-                .tag(entity.getId() + "-" + EFFECTOR_TAG)
-                .configure(configBag.getAllConfig())
-                .newTask();
-        //}
-        // intercept failure, fail this activity
+        kubeJobConfig.put("commands", MutableList.of("terraform" , "apply", "--destroy", "-input=false ", "-auto-approve"));
+        /*Task<String> destroyTask = */new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                .summary("Retrieve the most recent state snapshot")
+                .configure(kubeJobConfig)
+                .newTask().asTask();
+        DynamicTasks.waitForLast();
+
+        // TODO do we need this, should we make this a configuration ?
+        boolean destroyTerraformWorkspace = true;
+        if(destroyTerraformWorkspace) {
+            kubeJobConfig.put("commands", MutableList.of("/bin/bash", "-c", "rm -rf " + kubeJobConfig.get("workingDir")));
+            new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                    .summary("Delete Terraform workspace")
+                    .configure(kubeJobConfig)
+                    .newTask().asTask();
+            DynamicTasks.waitForLast();
+        }
         return 0;
     }
 
     @Override
     public String getRunDir() {
-        LOG.info(" >> TerraformDockerDriver.getRunDir() -- not needed");
-        return null;
+        throw new NotImplementedException("TerraformDockerDriver.getRunDir() -- not needed");
     }
 
     @Override
@@ -216,13 +267,12 @@ public class TerraformContainerDriver implements TerraformDriver {
 
     @Override
     public Location getLocation() {
-        LOG.info(" >> TerraformDockerDriver.getLocation() -- not needed");
+        LOG.info(" TerraformDockerDriver.getLocation() -- not needed");
         return null;
     }
 
     @Override
     public EntityLocal getEntity() {
-        LOG.info(" >> TerraformDockerDriver.getEntity() ...");
         return entity;
     }
 
@@ -246,6 +296,7 @@ public class TerraformContainerDriver implements TerraformDriver {
     public void start() {
         LOG.info(" >> TerraformDockerDriver.start() ...");
         prepare();
+        clean();
         customize();
         launch();
         postLaunch();

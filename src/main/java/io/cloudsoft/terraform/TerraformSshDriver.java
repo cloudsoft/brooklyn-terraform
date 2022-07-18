@@ -48,7 +48,6 @@ import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAs
 public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
     private static final Logger LOG = LoggerFactory.getLogger(TerraformSshDriver.class);
     public static final String WHICH_TERRAFORM_COMMAND = "which terraform";
-    private final String EMPTY_TF_CFG_WARN = "Terraform initialized in an empty directory!";
 
     private Boolean terraformAlreadyAvailable;
     private Boolean terraformInPath;
@@ -136,17 +135,14 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     private void clean() {
         final String runPath = getRunDir();
-        DynamicTasks.queue(Tasks.builder()
-                .displayName("Clean terraform workspace")
-                .add(SshTasks.newSshExecTaskFactory(getMachine(),
+        DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(),
                                 "rm -rf /tmp/backup; mkdir /tmp/backup; cd " +runPath +";" +
                                         " mv * /tmp/backup; mv /tmp/backup/*.tfstate .")
                         .environmentVariables(getShellEnvironment())
                         .summary("Moves existing configuration files to /tmp/backup.")
                         .returning(p -> p.getStdout())
                         .newTask()
-                        .asTask())
-                .build());
+                        .asTask());
         DynamicTasks.waitForLast();
     }
 

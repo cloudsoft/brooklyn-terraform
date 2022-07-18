@@ -14,6 +14,7 @@ import org.apache.brooklyn.util.core.json.ShellEnvironmentSerializer;
 import static java.lang.String.format;
 
 public interface TerraformDriver extends SoftwareProcessDriver {
+    String EMPTY_TF_CFG_WARN = "Terraform initialized in an empty directory!";
 
     String PLAN_STATUS = "tf.plan.status";
     String PLAN_PROVIDER = "tf.plan.provider";
