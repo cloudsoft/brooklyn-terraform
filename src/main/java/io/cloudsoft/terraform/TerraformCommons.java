@@ -1,10 +1,16 @@
 package io.cloudsoft.terraform;
 
+import com.google.common.collect.Sets;
+import com.google.common.reflect.TypeToken;
+import io.cloudsoft.terraform.util.Maps;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigConstraints;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
 import org.apache.brooklyn.util.time.Duration;
+import org.apache.commons.lang3.tuple.Pair;
+
+import java.util.Map;
 
 public interface TerraformCommons {
 
@@ -41,6 +47,25 @@ public interface TerraformCommons {
             .name("tf.execution.mode") // should be part of deployed the bundle
             .description("If Terraform should run in a location ('ssh'), or in a container managed by a Kubernetes instance('kube').")
             .defaultValue("kube")
+            .build();
+
+    ConfigKey<Map<String,Object>> VOLUMES = ConfigKeys.builder(new TypeToken<Map<String,Object>>()  {}, "kubejob.config")
+            .description("Configuration for the terraform job")
+            .defaultValue(
+                    Maps.newHashMap(
+                            Pair.of("image", "cloudsoft/terraform:1.0"),
+                            Pair.of("imagePullPolicy", "Never"),
+                            Pair.of("workingDir", "/tfws"),
+                            Pair.of("volumes", Sets.newHashSet(Maps.newHashMap(
+                                    Pair.of("name", "terraform-workspace"),
+                                    Pair.of("hostPath", Maps.newHashMap(Pair.of("path", "/tfws")))
+                            ))),
+                            Pair.of("volumeMounts", Sets.newHashSet(Maps.newHashMap(
+                                    Pair.of("name", "terraform-workspace"),
+                                    Pair.of("mountPath", "/tfws")
+                            )))
+                    )
+            )
             .build();
 
     String SSH_MODE = "ssh";

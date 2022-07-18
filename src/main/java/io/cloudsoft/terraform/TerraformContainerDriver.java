@@ -1,17 +1,15 @@
 package io.cloudsoft.terraform;
 
+import com.google.common.collect.Iterables;
 import com.google.common.reflect.TypeToken;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.api.mgmt.Task;
-import org.apache.brooklyn.config.ConfigKey;
-import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.config.SetConfigKey;
 import org.apache.brooklyn.core.entity.EntityInitializers;
 import org.apache.brooklyn.core.entity.EntityInternal;
-import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.tasks.kubectl.ContainerTaskFactory;
-import org.apache.brooklyn.util.collections.MutableMap;
+import org.apache.brooklyn.util.collections.MutableList;
 import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.time.Duration;
@@ -21,12 +19,10 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.brooklyn.core.mgmt.BrooklynTaskTags.EFFECTOR_TAG;
 import static org.apache.brooklyn.tasks.kubectl.ContainerCommons.CONTAINER_IMAGE;
-import static org.apache.brooklyn.tasks.kubectl.ContainerCommons.CONTAINER_NAME;
 
 /**
  *  Assume Terraform container has: { terraform, curl, unzip } installed
@@ -44,64 +40,62 @@ public class TerraformContainerDriver implements TerraformDriver {
     private static final Logger LOG = LoggerFactory.getLogger(TerraformContainerDriver.class);
     protected final EntityLocal entity;
 
-    private String workingDir ="";
+    private final Map<String, Object> kubeJobConfig = new HashMap<>();
 
     public TerraformContainerDriver(EntityLocal entity) {
         this.entity = entity;
     }
 
+    private void prepare(){
+        Map<String, String> env = getShellEnvironment((EntityInternal) entity);
+        String cfgUrl = entity.config().get(TerraformCommons.CONFIGURATION_URL);
+        env.put("TF_CFG_URL", cfgUrl);
+        Map<String, Object> jobCfg = entity.getConfig(SetConfigKey.builder(new TypeToken<Map<String,Object>>()  {}, "kubejob.config").build());
+        kubeJobConfig.putAll(jobCfg);
+        kubeJobConfig.put("shell.env", env);
+
+        String workdir = (String) jobCfg.get("workingDir"); // edit workingDir -> ${workingDir/entityID}, to have a common terraform workspace for all methods in the driver -> sensors and effectors won't need this
+        kubeJobConfig.put("workingDir", workdir+"/"+entity.getId());
+    }
 
     @Override
     public void customize() {
         LOG.info(" >> TerraformDockerDriver.customize() ...");
-        Map<String, String> env = getShellEnvironment((EntityInternal) entity);
-        String cfgUrl = entity.config().get(TerraformCommons.CONFIGURATION_URL);
-        env.put("TF_CFG", cfgUrl);
-        Map<String, Object> jobCfg = entity.getConfig(SetConfigKey.builder(new TypeToken<Map<String,Object>>()  {}, "kubejob.config").build());
-
-        Map<String, Object> configBagMap = new HashMap<>();
-        configBagMap.putAll(jobCfg);
-        configBagMap.put("shell.env", env);
-
-        // edit workingDir -> ${workingDir/entityID}
-        String workdir = (String) jobCfg.get("workingDir");
-        configBagMap.put("workingDir", workdir+"/"+entity.getId() + "-customize");
-        // TODO add flag to keep TF workDir
-        configBagMap.put("commands", "echo $TF_CFG_URL ; curl -L -k -f -o configuration.tf $TF_CFG_URL");
-        //configBag. -> commands = "wget $TF_CFG_URL ;  if zip(file) unpack else rename 'configuration.tf'"
+        kubeJobConfig.put("commands", MutableList.of("/bin/bash", "-c", "curl -L -f -o configuration.tf $TF_CFG_URL; " +
+                "if grep -q \"No errors detected\" <<< $(unzip -t configuration.tf ); then mv configuration.tf configuration.zip && unzip configuration.zip ; fi"));
         Task<String> downloadTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                .summary("Executing Container Image: " + jobCfg.get("image"))
+                .summary("Download and unpack configuration")
                 .tag("CUSTOMIZE")
-                .configure(configBagMap)
+                .configure(kubeJobConfig)
                 .newTask();
-        DynamicTasks.queueIfPossible(downloadTask).orSubmitAsync(entity);
-        Object result = downloadTask.getUnchecked(Duration.of(5, TimeUnit.MINUTES));
-        List<String> res = (List<String>) result;
-        // 2. download configuration if necessary,
-        //  2.1 if not consider the configuration is already present in *workdir*
-        //  2.2 once is downloaded to the workdir, check if unpacking is necessary
-        //configBag -> commands: terraform init
-       /* Task<String> initTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
-                .configure(configBagMap)
-                .newTask();*/
-        // 3. call initCommand()
-        // 4. retrieve result from init task, fail this activity if that failed
-        /// link them and run them.
-        LOG.debug("Here we are :D");
+        DynamicTasks.queueIfPossible(downloadTask).orSubmitAsync(entity);  // TODO - simulate failure  - if task fails an exception is thrown here
+
+        if(!downloadTask.isError()) {
+            kubeJobConfig.put("commands", MutableList.of("terraform" , "init", "-input=false"));
+            Task<String> initTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+                    .summary("Initialize terraform workspace")
+                    .configure(kubeJobConfig)
+                    .newTask();
+            DynamicTasks.queueIfPossible(initTask).orSubmitAsync(entity); // TODO - simulate failure  -   if task fails an exception is thrown here
+            Object result = initTask.getUnchecked();
+            List<String> res = (List<String>) result;
+            while(!res.isEmpty() && Iterables.getLast(res).matches("namespace .* deleted\\s*")) res = res.subList(0, res.size()-1);
+
+            String finalRes = res.isEmpty() ? "" : Iterables.getLast(res);
+            if(!finalRes.contains("You may now begin working with Terraform.")) {
+                throw new IllegalStateException("Terraform workspace initialization failed: " + finalRes);
+            }
+        }
     }
 
     @Override
     public void launch() {
         LOG.info(" >> TerraformDockerDriver.launch() ...");
-        // TODO
-        // Kube behaviour
-        ConfigBag configBag = null; //ConfigBag.newInstanceCopying(this.entity.config()).putAll(parameters);
-        //configBag -> commands: terraform apply -no-color -input=false -auto-approve
+        kubeJobConfig.put("commands", MutableList.of("terraform" , "apply", "-input=false", "-auto-approve"));
         Task<String> applyTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
                 .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
                 .tag(entity.getId() + "-" + EFFECTOR_TAG)
-                .configure(configBag.getAllConfig())
+                .configure(kubeJobConfig)
                 .newTask();
         // Execute task, inspect result, if apply failed, fail this activity -> throw exception
 
@@ -210,8 +204,8 @@ public class TerraformContainerDriver implements TerraformDriver {
 
     @Override
     public String getRunDir() {
-        LOG.info(" >> TerraformDockerDriver.getRunDir() ...");
-        return workingDir;
+        LOG.info(" >> TerraformDockerDriver.getRunDir() -- not needed");
+        return null;
     }
 
     @Override
@@ -251,6 +245,7 @@ public class TerraformContainerDriver implements TerraformDriver {
     @Override
     public void start() {
         LOG.info(" >> TerraformDockerDriver.start() ...");
+        prepare();
         customize();
         launch();
         postLaunch();
