@@ -4,7 +4,13 @@ services:
     brooklyn.config:
       # default value is 'kube'
       #tf.execution.mode: "kube"
-      shell.env:
+      tf.configuration.url: 'https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/instance-with-creds.tf'
+      # replace with aws credential values
+      tf_var.aws_identity: 1234
+      tf_var.aws_credential: 1234
+      kubejob.config:   # this will be the default
+        image: cloudsoft/terraform:1.0
+        imagePullPolicy: Never
         workingDir: /tfws
         volumeMounts:
           - name: tf-workspace
@@ -13,4 +19,3 @@ services:
           - name: tf-workspace
             hostPath:
               path: /tfws
-      tf.configuration.url: 'https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/instance-with-creds.tf'
