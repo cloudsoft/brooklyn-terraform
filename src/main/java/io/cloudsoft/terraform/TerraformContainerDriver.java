@@ -255,6 +255,12 @@ public class TerraformContainerDriver implements TerraformDriver {
     }
 
     @Override
+    public int runRemoveLockFileTask() {
+        // TODO implement this
+        return 0;
+    }
+
+    @Override
     public String getRunDir() {
         throw new NotImplementedException("TerraformDockerDriver.getRunDir() -- not needed");
     }

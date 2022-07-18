@@ -1,5 +1,6 @@
 package io.cloudsoft.terraform;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.EntityLocal;
@@ -16,18 +17,25 @@ import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.json.ShellEnvironmentSerializer;
+import org.apache.brooklyn.util.core.task.BasicTask;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
+import org.apache.brooklyn.util.core.task.TaskTags;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.ssh.SshTasks;
+import org.apache.brooklyn.util.core.task.ssh.internal.AbstractSshExecTaskFactory;
 import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
+import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.ssh.BashCommands;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
 import org.apache.brooklyn.util.text.Strings;
+import org.apache.brooklyn.util.time.Duration;
+import org.apache.brooklyn.util.time.Time;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.InputStream;
 import java.sql.Date;
@@ -37,6 +45,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import static io.cloudsoft.terraform.TerraformCommons.*;
@@ -59,23 +68,66 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     @Override
     public int runDestroyTask() {
-        DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), destroyCommand())
+        ProcessTaskWrapper<String> t = SshTasks.newSshExecTaskFactory(getMachine(), destroyCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Destroying terraform deployment.")
-                .returning(p -> p.getStdout()).newTask()
-                .asTask());
+                .requiringZeroAndReturningStdout()
+                .newTask();
+        DynamicTasks.queue(t.asTask());
         DynamicTasks.waitForLast();
-        return 0;
+        return t.getExitCode();
+    }
+
+    public int runRemoveLockFileTask() {
+        ProcessTaskWrapper<Boolean> t = SshTasks.newSshExecTaskFactory(getMachine(), "cd "+getRunDir()+" && rm .terraform.tfstate.lock.info")
+                .environmentVariables(getShellEnvironment())
+                .summary("Remove lock file")
+                .returningIsExitCodeZero()
+                .allowingNonZeroExitCode()
+                .newTask();
+        DynamicTasks.queue(t.asTask());
+        DynamicTasks.waitForLast();
+        if (t.get()) {
+            try {
+                // empirically, if lock file was just deleted, terraform complains about creating it
+                Tasks.withBlockingDetails("Waiting after forcibly deleting lock file", () -> {
+                    Time.sleep(Duration.FIVE_SECONDS);
+                    return null;
+                });
+            } catch (Exception e) {
+                throw Exceptions.propagate(e);
+            }
+        }
+        return t.getExitCode();
     }
 
     @Override
     public int destroy() {
-        return runDestroyTask();
+        int result = runDestroyTask();
+        ((TerraformConfiguration)entity).removeDiscoveredResources();
+        return result;
     }
 
     @Override
     public void stop() {
-        destroy();
+        clearCurrentTagInessential();
+
+        // see comments on clearLockFile effector (restarting Brooklyn might interrupt terraform, leaving lock files present)
+        retryUntilLockAvailable("destroying", () -> {
+            this.runRemoveLockFileTask();
+            this.destroy();
+            return null;
+        });
+    }
+
+    private void clearCurrentTagInessential() {
+        ((BasicTask<?>)Tasks.current()).applyTagModifier(new Function<Set<Object>, Void>() {
+            @Override
+            public Void apply(@Nullable Set<Object> input) {
+                input.remove(TaskTags.INESSENTIAL_TASK);
+                return null;
+            }
+        });
     }
 
     @Override
@@ -139,8 +191,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                                 "rm -rf /tmp/backup; mkdir /tmp/backup; cd " +runPath +";" +
                                         " mv * /tmp/backup; mv /tmp/backup/*.tfstate .")
                         .environmentVariables(getShellEnvironment())
-                        .summary("Moves existing configuration files to /tmp/backup.")
-                        .returning(p -> p.getStdout())
+                        .summary("Moves existing configuration files to /tmp/backup (if any present)")
+                        .returning(ProcessTaskWrapper::getStdout)
+                        .allowingNonZeroExitCode()
                         .newTask()
                         .asTask());
         DynamicTasks.waitForLast();
@@ -195,10 +248,14 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         DynamicTasks.waitForLast();
     }
 
+    private <T> T retryUntilLockAvailable(String summary, Callable<T> job) {
+        return ((TerraformConfigurationImpl)Entities.deproxy(entity)).retryUntilLockAvailable(summary, job);
+    }
+
     @Override
     public void launch() {
-        final Map<String,Object> planLog = runJsonPlanTask();
-        Task<Object> verifyPlanTask = Tasks.create("Verify Plan", () -> {
+        final Map<String,Object> planLog =  retryUntilLockAvailable("terraform plan -json", () -> runJsonPlanTask());
+        Task<Object> verifyPlanTask = Tasks.create("Verify plan", () -> {
             if (planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
                 throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
             }
@@ -212,24 +269,30 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
             }
         }).asTask();
 
-        DynamicTasks.queue(Tasks.builder()
-                .displayName("Creating the planned infrastructure")
-                .add(verifyPlanTask)
-                .add(checkAndApply)
-                .add(refreshTaskWithName("Refreshing Terraform state")).build());
-        DynamicTasks.waitForLast();
+        retryUntilLockAvailable("launch, various terraform commands", () -> {
+            DynamicTasks.queue(Tasks.builder()
+                    .displayName("Verify and apply terraform")
+                    .add(verifyPlanTask)
+                    .add(checkAndApply)
+                    .add(refreshTaskWithName("Refresh Terraform state", false)).build());
+            DynamicTasks.waitForLast();
+            return null;
+        });
+        // do a plan just after launch, to populate everything
+        ((TerraformConfiguration)entity).plan();
     }
 
     @Override // used for polling as well
     public Map<String, Object> runJsonPlanTask() {
-        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Creating the plan."));
+        DynamicTasks.queue(refreshTaskWithName("Refresh Terraform state", false));
+        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Analyse and create terraform plan"));
         DynamicTasks.waitForLast();
         String result;
         try {
             result = planTask.get();
             return StateParser.parsePlanLogEntries(result);
         } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Cannot retrieve result of command `terraform plan -json`!", e);
+            throw new IllegalStateException("Error running terraform plan (json)", e);
         }
     }
 
@@ -238,7 +301,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     public String runPlanTask() {
         Task<String> planTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), planCommand())
                 .environmentVariables(getShellEnvironment())
-                .summary("Inspecting terraform plan changes")
+                .summary("Analyse and create terraform plan (human readable change report)")
                 .returning(p -> p.getStdout())
                 .newTask()
                 .asTask());
@@ -246,12 +309,13 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         try {
             return planTask.get();
         } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+            throw new IllegalStateException("Error running terraform plan", e);
         }
     }
 
     @Override
     public String runOutputTask() {
+        DynamicTasks.queue(refreshTaskWithName("Gather terraform output", false));
         Task<String> outputTask = DynamicTasks.queue(SshTasks.newSshExecTaskFactory(getMachine(), outputCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary("Retrieving terraform outputs")
@@ -259,9 +323,9 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .asTask());
         DynamicTasks.waitForLast();
         try {
-           return outputTask.get(); // TODO Should we allow this task to err ?
+           return outputTask.get();
         } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Cannot retrieve result of command `terraform plan`!", e);
+            throw new IllegalStateException("Error gathering terraform output", e);
         }
     }
 
@@ -270,7 +334,8 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
        DynamicTasks.queue(applyTaskWithName("Applying terraform plan"));
        DynamicTasks.waitForLast();
        entity.sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
-       entity.getChildren().forEach(entity::removeChild);
+       // previously removed children here, but (1) there might be children we shouldn't remove; and (2) the synch should take care of that
+       // now _caller_ should force a new plan instead
     }
 
     /**
@@ -335,7 +400,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return SshTasks.newSshExecTaskFactory(getMachine(), jsonPlanCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary(name)
-                .returning(ProcessTaskWrapper::getStdout)
+                .requiringZeroAndReturningStdout()
                 .newTask()
                 .asTask();
     }
@@ -349,13 +414,15 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
                 .asTask();
     }
 
-    private Task refreshTaskWithName(final String name) {
-        return SshTasks.newSshExecTaskFactory(getMachine(), refreshCommand())
+    private Task refreshTaskWithName(final String name, boolean required) {
+        Task<String> t = SshTasks.newSshExecTaskFactory(getMachine(), refreshCommand())
                 .environmentVariables(getShellEnvironment())
                 .summary(name)
                 .requiringZeroAndReturningStdout()
                 .newTask()
                 .asTask();
+        if (!required) TaskTags.markInessential(t);
+        return t;
     }
 
     private boolean terraformAlreadyAvailable() {

@@ -79,11 +79,22 @@ public interface TerraformConfiguration extends SoftwareProcess {
     AttributeSensor<TerraformStatus> DRIFT_STATUS = Sensors.newSensor(TerraformStatus.class,"tf.drift.status",
             "Drift status of the configuration" );
 
+    void removeDiscoveredResources();
+
     @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
     void apply();
 
-    @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
-    void destroy();
+    @Effector(description="Performs the Terraform plan command to show what would change (and refresh sensors).")
+    void plan();
+
+    @Effector(description = "Force a re-discovery of resources (clearing all first)")
+    void rediscoverResources();
+
+    @Effector(description = "Delete any terraform lock file (may be needed if management server interrupted; done automatically for stop, as we manage mutex locking)")
+    public void clearTerraformLock();
+
+    @Effector(description="Performs the Terraform destroy command to destroy all of the infrastructure that has been previously created by the configuration.")
+    void destroyTerraform();
 
     @Effector(description="Performs Terraform apply again with the configuration provided via the provided URL. If an URL is not provided the original URL provided when this blueprint was deployed will be used." +
             "This is useful when the URL points to a GitHub or Artifactory release.")
