@@ -12,6 +12,7 @@ import io.cloudsoft.terraform.entity.TerraformResource;
 import io.cloudsoft.terraform.parser.EntityParser;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
+import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
@@ -28,6 +29,7 @@ import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
+import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.guava.Maybe;
@@ -42,7 +44,6 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import java.util.*;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
@@ -130,7 +131,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
      *  Since `terraform plan` is the only command reacting to changes, it makes sense entities to change according to its results.
      */
     private void updateDeploymentState() {
-        final String result = getDriver().runShowTask();
+        final String result = retryUntilLockAvailable("terraform show", () -> getDriver().runShowTask());
         Map<String, Object> state = StateParser.parseResources(result);
         sensors().set(TerraformConfiguration.STATE, state);
         Map<String, Object> resources = new HashMap<>(state);
@@ -228,6 +229,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 final boolean ignoreDrift = !getConfig(TerraformConfiguration.TERRAFORM_DRIFT_CHECK);
 
                 if (ignoreDrift || currentPlanStatus == TerraformStatus.SYNC) {
+                    LOG.debug("Clearing problems and refreshing state because "+"state is "+tfPlanStatus+(currentPlanStatus == TerraformStatus.SYNC ? "" : " and ignoring drift"));
                     // plan status is SYNC so no errors, no ASYNC resources OR drift is ignored
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
@@ -236,11 +238,15 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     updateDeploymentState();
 
                 } else if (TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
+                    LOG.debug("Setting problem because "+"state is "+tfPlanStatus);
+
                     ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                             tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
                     updateResourceStates(tfPlanStatus);
 
                 } else if (!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
+                    LOG.debug("Setting drift because "+"state is "+tfPlanStatus);
+
                     TerraformConfigurationImpl.this.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
                     if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
                         ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
@@ -251,6 +257,8 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     }
                     TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
                     TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
+                } else {
+                    LOG.debug("No action because "+"state is "+tfPlanStatus);
                 }
 
                 if (driftChanged || !sensors().getAll().containsKey(DRIFT_STATUS) || !sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get(PLAN_STATUS))) {
@@ -365,21 +373,42 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         return (TerraformDriver) super.getDriver();
     }
 
-    private <V> V retryUntilLockAvailable(String summary, Callable<V> runWithLock) {
+    <V> V retryUntilLockAvailable(String summary, Callable<V> runWithLock) {
         return retryUntilLockAvailable(summary, runWithLock, Duration.ONE_MINUTE, Duration.FIVE_SECONDS);
     }
 
-    private <V> V retryUntilLockAvailable(String summary, Callable<V> runWithLock, Duration timeout, Duration retryFrequency) {
+    <V> V retryUntilLockAvailable(String summary, Callable<V> runWithLock, Duration timeout, Duration retryFrequency) {
         CountdownTimer timer = timeout.countdownTimer();
         while(true) {
-            boolean hadLock = Thread.currentThread().equals(configurationChangeInProgress.get());
-            if (hadLock || configurationChangeInProgress.compareAndSet(null, Thread.currentThread())) {
+            Object hadLock = null;
+            Thread lockOwner = configurationChangeInProgress.get();
+            if (lockOwner!=null) {
+                if (lockOwner.equals(Thread.currentThread())) hadLock = Thread.currentThread();
+                Task task = Tasks.current();
+                while (hadLock==null && task != null) {
+                    if (lockOwner.equals(task.getThread())) hadLock = task+" / "+task.getThread();
+                    task = task.getSubmittedByTask();
+                }
+            }
+            boolean gotLock = false;
+            if (hadLock==null) {
+                gotLock = configurationChangeInProgress.compareAndSet(null, Thread.currentThread());
+            }
+            if (hadLock!=null || gotLock) {
+                if (gotLock) {
+                    LOG.debug("Acquired lock for '"+summary+"' (thread "+Thread.currentThread()+")");
+                } else {
+                    LOG.debug("Already had lock for '"+summary+"', from "+hadLock);
+                }
                 try {
                     return runWithLock.call();
                 } catch (Exception e) {
                     throw Exceptions.propagate(e);
                 } finally {
-                    if (!hadLock) configurationChangeInProgress.set(null);
+                    if (gotLock) {
+                        configurationChangeInProgress.set(null);
+                        LOG.debug("Cleared lock for '"+summary+"' (thread "+Thread.currentThread()+")");
+                    }
                 }
             } else {
                 if(timer.isExpired()) {
@@ -399,26 +428,48 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
     public void apply() {
         retryUntilLockAvailable("terraform apply", () -> { Objects.requireNonNull(getDriver()).runApplyTask(); return null; });
+        plan();
     }
 
     @Override
-    @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
+    @Effector(description="Performs the Terraform plan command to show what would change (and refresh sensors).")
     public void plan() {
-        retryUntilLockAvailable("terraform plan (and post-processing)", () -> {
-            getDriver().runPlanTask();
-            new PlanSuccessFunction().apply(new PlanProvider(this).get());
-            new OutputSuccessFunction().apply(new OutputProvider(this).get());
+        new OutputSuccessFunction().apply(new OutputProvider(this).get());
+        retryUntilLockAvailable("terraform plan", () -> getDriver().runPlanTask());
+        new PlanSuccessFunction().apply(new PlanProvider(this).get());
+    }
+
+    @Override
+    @Effector(description = "Force a re-discovery of resources (clearing all first)")
+    public void rediscoverResources() {
+        LOG.debug("Forcibly clearing children nodes of "+this+"; will re-discover from plan");
+        removeDiscoveredResources();
+
+        // now re-plan, which should re-populate if healthy
+        plan();
+    }
+
+    @Override
+    public void removeDiscoveredResources() {
+        Map<String, Object> resources = MutableMap.of();
+        updateResources(resources, this, ManagedResource.class);
+        updateDataResources(resources, DataResource.class);
+    }
+
+    @Override
+    @Effector(description = "Delete any terraform lock file (may be needed if AMP was interrupted; done automatically for stop, as we manage mutex locking)")
+    public void clearTerraformLock() {
+        retryUntilLockAvailable("clear terraform lock", () -> {
+            getDriver().runRemoveLockFileTask();
             return null;
-        });
+        }, Duration.seconds(-1), Duration.seconds(1));
     }
 
     @Override
     @Effector(description = "Destroy the Terraform configuration")
-    public void destroy() {
+    public void destroyTerraform() {
         retryUntilLockAvailable("terraform destroy", () -> {
-            preStop();
-            super.stop();
-            postStop();
+            getDriver().destroy();
             return null;
         }, Duration.seconds(-1), Duration.seconds(1));
     }

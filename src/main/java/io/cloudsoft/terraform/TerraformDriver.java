@@ -25,6 +25,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     String runOutputTask();
     String runShowTask();
     int runDestroyTask();
+    int runRemoveLockFileTask();
 
     // added these methods to underline the terraform possible commands
     default String initCommand() {
