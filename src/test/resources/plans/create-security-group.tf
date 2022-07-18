@@ -16,7 +16,7 @@ resource "aws_security_group" "allow_all" {
   }
 
   tags = {
-    Name = "TestSG-KillMePlease"
+    Name = "Test-Brooklyn-Terraform-KillMePlease"
   }
 }
 

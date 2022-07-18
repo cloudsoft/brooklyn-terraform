@@ -13,9 +13,9 @@ services:
         imagePullPolicy: Never
         workingDir: /tfws
         volumeMounts:
-          - name: tf-workspace
-            mountPath: /tfws
+        - name: tf-workspace
+          mountPath: /tfws
         volumes:
-          - name: tf-workspace
-            hostPath:
-              path: /tfws
+        - name: tf-workspace
+          hostPath:
+            path: /tfws

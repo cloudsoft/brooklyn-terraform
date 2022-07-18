@@ -1,18 +1,32 @@
 package io.cloudsoft.terraform;
 
+import com.google.common.reflect.TypeToken;
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.api.mgmt.Task;
+import org.apache.brooklyn.config.ConfigKey;
+import org.apache.brooklyn.core.config.ConfigKeys;
+import org.apache.brooklyn.core.config.SetConfigKey;
 import org.apache.brooklyn.core.entity.EntityInitializers;
+import org.apache.brooklyn.core.entity.EntityInternal;
+import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.tasks.kubectl.ContainerTaskFactory;
+import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.config.ConfigBag;
+import org.apache.brooklyn.util.core.task.DynamicTasks;
+import org.apache.brooklyn.util.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.brooklyn.core.mgmt.BrooklynTaskTags.EFFECTOR_TAG;
 import static org.apache.brooklyn.tasks.kubectl.ContainerCommons.CONTAINER_IMAGE;
+import static org.apache.brooklyn.tasks.kubectl.ContainerCommons.CONTAINER_NAME;
 
 /**
  *  Assume Terraform container has: { terraform, curl, unzip } installed
@@ -34,39 +48,47 @@ public class TerraformContainerDriver implements TerraformDriver {
 
     public TerraformContainerDriver(EntityLocal entity) {
         this.entity = entity;
-        // TODO
-        // check that the entityID is the generated one
-        // workingDir = entity.getConfig("workingDir") +  "/" + entity.getId();
-        // add new workingDir to entity.getConfig
     }
+
 
     @Override
     public void customize() {
         LOG.info(" >> TerraformDockerDriver.customize() ...");
-        // no clean needed
-        // TODO
-        ConfigBag configBag = null; //ConfigBag.newInstanceCopying(this.entity.config()).putAll(parameters);
-        // put this configuration as TF_CFG_URL env variable
+        Map<String, String> env = getShellEnvironment((EntityInternal) entity);
+        String cfgUrl = entity.config().get(TerraformCommons.CONFIGURATION_URL);
+        env.put("TF_CFG", cfgUrl);
+        Map<String, Object> jobCfg = entity.getConfig(SetConfigKey.builder(new TypeToken<Map<String,Object>>()  {}, "kubejob.config").build());
+
+        Map<String, Object> configBagMap = new HashMap<>();
+        configBagMap.putAll(jobCfg);
+        configBagMap.put("shell.env", env);
+
         // edit workingDir -> ${workingDir/entityID}
+        String workdir = (String) jobCfg.get("workingDir");
+        configBagMap.put("workingDir", workdir+"/"+entity.getId() + "-customize");
         // TODO add flag to keep TF workDir
+        configBagMap.put("commands", "echo $TF_CFG_URL ; curl -L -k -f -o configuration.tf $TF_CFG_URL");
         //configBag. -> commands = "wget $TF_CFG_URL ;  if zip(file) unpack else rename 'configuration.tf'"
         Task<String> downloadTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
-                .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
-                .tag(entity.getId() + "-" + EFFECTOR_TAG)
-                .configure(configBag.getAllConfig())
+                .summary("Executing Container Image: " + jobCfg.get("image"))
+                .tag("CUSTOMIZE")
+                .configure(configBagMap)
                 .newTask();
+        DynamicTasks.queueIfPossible(downloadTask).orSubmitAsync(entity);
+        Object result = downloadTask.getUnchecked(Duration.of(5, TimeUnit.MINUTES));
+        List<String> res = (List<String>) result;
         // 2. download configuration if necessary,
         //  2.1 if not consider the configuration is already present in *workdir*
         //  2.2 once is downloaded to the workdir, check if unpacking is necessary
         //configBag -> commands: terraform init
-        Task<String> initTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
+       /* Task<String> initTask = new ContainerTaskFactory.ConcreteContainerTaskFactory<String>()
                 .summary("Executing Container Image: " + EntityInitializers.resolve((ConfigBag) entity.config(), CONTAINER_IMAGE))
-                .tag(entity.getId() + "-" + EFFECTOR_TAG)
-                .configure(configBag.getAllConfig())
-                .newTask();
+                .configure(configBagMap)
+                .newTask();*/
         // 3. call initCommand()
         // 4. retrieve result from init task, fail this activity if that failed
         /// link them and run them.
+        LOG.debug("Here we are :D");
     }
 
     @Override
