@@ -48,7 +48,7 @@ public class TerraformContainerDriver implements TerraformDriver {
         Map<String, String> env = getShellEnvironment((EntityInternal) entity);
         String cfgUrl = entity.config().get(TerraformCommons.CONFIGURATION_URL);
         env.put("TF_CFG_URL", cfgUrl);
-        Map<String, Object> jobCfg = entity.getConfig(SetConfigKey.builder(new TypeToken<Map<String,Object>>()  {}, "kubejob.config").build());
+        Map<String, Object> jobCfg = entity.getConfig(TerraformCommons.KUBEJOB_CONFIG);
         kubeJobConfig.putAll(jobCfg);
         kubeJobConfig.put("shell.env", env);
 
@@ -96,7 +96,7 @@ public class TerraformContainerDriver implements TerraformDriver {
 
         DynamicTasks.queue(Tasks.builder()
                 .displayName("Initializing terraform workspace")
-                .add(downloadTask)
+                .add(downloadTask) // TODO fail ?
                 .add(initTask)
                 .add(verifyTask)
                 .build());

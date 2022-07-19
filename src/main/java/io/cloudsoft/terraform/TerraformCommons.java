@@ -6,11 +6,13 @@ import io.cloudsoft.terraform.util.Maps;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigConstraints;
 import org.apache.brooklyn.core.config.ConfigKeys;
+import org.apache.brooklyn.core.config.SetConfigKey;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.Map;
+import java.util.Set;
 
 public interface TerraformCommons {
 
@@ -49,7 +51,7 @@ public interface TerraformCommons {
             .defaultValue("kube")
             .build();
 
-    ConfigKey<Map<String,Object>> VOLUMES = ConfigKeys.builder(new TypeToken<Map<String,Object>>()  {}, "kubejob.config")
+    ConfigKey<Map<String,Object>> KUBEJOB_CONFIG = ConfigKeys.builder(new TypeToken<Map<String,Object>>()  {}, "kubejob.config")
             .description("Configuration for the terraform job")
             .defaultValue(
                     Maps.newHashMap(

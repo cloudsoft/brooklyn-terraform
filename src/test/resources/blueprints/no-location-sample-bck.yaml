@@ -8,3 +8,14 @@ services:
       # replace with aws credential values
       tf_var.aws_identity: 1234
       tf_var.aws_credential: 1234
+      kubejob.config:   # this will be the default
+        image: cloudsoft/terraform:1.0
+        imagePullPolicy: Never
+        workingDir: /tfws
+        volumeMounts:
+        - name: tf-workspace
+          mountPath: /tfws
+        volumes:
+        - name: tf-workspace
+          hostPath:
+            path: /tfws
