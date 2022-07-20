@@ -61,7 +61,7 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     }
 
     public String makeTerraformCommand(String argument) {
-        return format("cd %s && %s/terraform %s", getTerraformActiveDir(), getInstallDir(), argument);
+        return format("cd %s && %s %s", getTerraformActiveDir(), Os.mergePathsUnix(getInstallDir(), "terraform"), argument);
     }
 
     @Override

@@ -49,8 +49,12 @@ public final class StateParser {
         try {
             JsonNode root = objectMapper.readTree(state);
 
-            if(root.isEmpty() || !root.isContainerNode() || root.get("terraform_version") == null) {
+            if(root.isEmpty() || !root.isContainerNode()) {
                 throw new  IllegalArgumentException ("This is not a valid TF state!");
+            }
+            if (root.get("terraform_version") == null) {
+                // probably no data
+                return result;
             }
 
             if(!root.has("values")) {

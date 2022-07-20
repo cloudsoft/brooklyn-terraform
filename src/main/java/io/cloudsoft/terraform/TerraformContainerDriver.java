@@ -2,18 +2,19 @@ package io.cloudsoft.terraform;
 
 import org.apache.brooklyn.api.entity.EntityLocal;
 import org.apache.brooklyn.api.location.Location;
-import org.apache.brooklyn.core.config.MapConfigKey;
+import org.apache.brooklyn.api.mgmt.TaskAdaptable;
+import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.tasks.kubectl.ContainerCommons;
 import org.apache.brooklyn.tasks.kubectl.ContainerTaskFactory;
+import org.apache.brooklyn.tasks.kubectl.ContainerTaskResult;
 import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
-import org.apache.brooklyn.util.core.task.Tasks;
-import org.apache.brooklyn.util.core.task.system.ProcessTaskFactory;
+import org.apache.brooklyn.util.core.task.TaskTags;
 import org.apache.brooklyn.util.core.task.system.ProcessTaskStub;
 import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
-import org.apache.brooklyn.util.core.task.system.SimpleProcessTaskFactory;
 import org.apache.brooklyn.util.core.task.system.internal.SystemProcessTaskFactory;
+import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.text.Strings;
 import org.slf4j.Logger;
@@ -28,11 +29,11 @@ import java.util.Map;
  *  Not a {@code SoftwareProcessDriver}.
  *  Implementing {@code TerraformDriver} , which in turn extends {@code SoftwareProcessDriver}
  *  provides the same API  that {@code TerraformConfigurationImpl} already works with.
- *  Obs:
- *   - preInstall& install methods are not needed
- *   TODO
- *   [ ] Write tests
- *   [ ] Update documentation
+ *
+ *
+ *  NOTE: to debug, you can use the following (or launch a container with the tfws mounted)
+ *
+ *  Entities.submit(getEntity(), newCommandTaskFactory(false, "ls -al")).asTask().get()
  */
 public class TerraformContainerDriver implements TerraformDriver {
 
@@ -40,21 +41,22 @@ public class TerraformContainerDriver implements TerraformDriver {
 
     protected final EntityLocal entity;
 
-//    private final Map<String, Object> kubeJobConfig = new HashMap<>();
-
     public TerraformContainerDriver(EntityLocal entity) {
         this.entity = entity;
     }
 
     @Override
-    public SimpleProcessTaskFactory<?, ?, String, ?> newCommandTaskFactory(boolean withEnvVars, String command) {
+    public ContainerTaskFactory<?,String> newCommandTaskFactory(boolean withEnvVars, String command) {
         MutableMap<Object, Object> config = MutableMap.of()
                 .add(getEntity().getConfig(TerraformCommons.KUBEJOB_CONFIG))
                 .add(ConfigBag.newInstance().configure(ContainerCommons.WORKING_DIR, getTerraformActiveDir()).getAllConfig());
 
+        String namespace = "cloudsoft-"+getEntity().getApplicationId()+"-"+getEntity().getId()+"-terraform";
+        LOG.debug("Launching task in namespace "+namespace+" with config "+config+" for command "+command);
         ContainerTaskFactory<?,String> tf = ContainerTaskFactory.newInstance()
                 .bashScriptCommands(command)
                 .allowingNonZeroExitCode(false)
+                .useNamespace(namespace, null, false)
                 .configure(config)
                 .returningStdout();
         if (withEnvVars) tf.environmentVariables(getShellEnvironment());
@@ -68,21 +70,38 @@ public class TerraformContainerDriver implements TerraformDriver {
 
     @Override
     public String getTerraformActiveDir() {
+        // volume mount is not unique to entity but directory is
         Map<String, Object> kubecfg = getEntity().getConfig(TerraformCommons.KUBEJOB_CONFIG);
         String baseDir = null;
         if (kubecfg!=null) baseDir = Strings.toString(kubecfg.get(ContainerCommons.WORKING_DIR.getName()));
         if (baseDir==null) baseDir = ".";
         baseDir = Strings.removeAllFromEnd(baseDir, "/", "\\") + "/";
-        baseDir = "brooklyn-terraform/"+getEntity().getApplicationId()+"/"+getEntity().getId()+"/active/";
+        baseDir += "brooklyn-terraform/"+getEntity().getApplicationId()+"/"+getEntity().getId()+"/active/";
         return baseDir;
     }
 
     @Override
     public void copyTo(InputStream tfStream, String target) {
-        File f = Os.newTempFile("terraform-" + getEntity().getId(), "dat");
-        // TODO we need to get the namespace and pod
-        String namespace = "???";
-        String pod = "???";
+        File f = Os.writeToTempFile(tfStream, "terraform-" + getEntity().getId(), "dat");
+        TaskAdaptable<String> tc = Entities.submit(getEntity(), newCommandTaskFactory(false, "sleep 120")
+                .summary("sleeping container to allow files to be copied").newTask());
+        ContainerTaskResult ctr = (ContainerTaskResult) TaskTags.getTagsFast(tc.asTask()).stream().filter(x -> x instanceof ContainerTaskResult).findAny().orElseThrow(() -> new IllegalStateException("Cannot find namespace result on task " + tc));
+
+        synchronized (ctr) {
+            while (Strings.isBlank(ctr.getKubePodName()) && !tc.asTask().isDone()) {
+                try {
+                    ctr.wait();
+                } catch (InterruptedException e) {
+                    throw Exceptions.propagate(e);
+                }
+            }
+        }
+        if (tc.asTask().isDone()) throw new IllegalStateException("Unable to get pod name from task whenc copying to "+target);
+
+        String namespace = ctr.getNamespace();
+        String pod = ctr.getKubePodName();
+        if (Strings.isBlank(namespace) || Strings.isBlank(pod)) throw new IllegalStateException("Unable to get pod name from task whenc copying to "+target);
+
         // https://medium.com/@nnilesh7756/copy-directories-and-files-to-and-from-kubernetes-container-pod-19612fa74660
         ProcessTaskWrapper<Object> t = DynamicTasks.queue(new SystemProcessTaskFactory.ConcreteSystemProcessTaskFactory<String>(
                 "kubectl cp " + f.getAbsolutePath() + " " + namespace + "/" + pod + ":" + target)
@@ -92,11 +111,12 @@ public class TerraformContainerDriver implements TerraformDriver {
         t.block();
         f.delete();
         t.get();
+        // TODO ideally would now cancel tc
     }
 
     @Override
     public void customize() {
-        LOG.info(" >> TerraformDockerDriver.customize() ...");
+        LOG.trace(" >> TerraformDockerDriver.customize() ...");
         TerraformDriver.super.customize();
     }
 
@@ -104,11 +124,32 @@ public class TerraformContainerDriver implements TerraformDriver {
     public void launch() { TerraformDriver.super.launch(); }
 
     @Override
-    public void postLaunch() {}
+    public void postLaunch() {
+        lifecyclePostStartCustom();
+    }
+
+    private TerraformConfigurationImpl entity() { return (TerraformConfigurationImpl) Entities.deproxy(getEntity()); }
+
+    //@Override
+    protected void lifecyclePostStartCustom() {
+        // we don't need anything except connecting sensors (others come from SoftwareProcessLifecycle)
+
+//        entity().postDriverStart();
+//        if (entity().connectedSensors) {
+//            // many impls aren't idempotent - though they should be!
+//            log.debug("skipping connecting sensors for "+entity()+" in driver-tasks postStartCustom because already connected (e.g. restarting)");
+//        } else {
+//            log.debug("connecting sensors for "+entity()+" in driver-tasks postStartCustom because already connected (e.g. restarting)");
+            entity().connectSensors();
+//        }
+//        entity().waitForServiceUp();
+//        entity().postStart();
+//        super.postStartCustom(parameters);
+    }
 
     @Override
     public Location getLocation() {
-        // TODO can we throw here?
+        // can we make this not get invoked?
         LOG.trace(" TerraformDockerDriver.getLocation() -- not needed");
         return null;
     }
@@ -135,7 +176,7 @@ public class TerraformContainerDriver implements TerraformDriver {
      */
     @Override
     public void start() {
-        LOG.info(" >> TerraformDockerDriver.start() ...");
+        LOG.trace(" >> TerraformDockerDriver.start() ...");
         customize();
         launch();
         postLaunch();
@@ -143,7 +184,7 @@ public class TerraformContainerDriver implements TerraformDriver {
 
     @Override
     public void restart() {
-        LOG.info(" >> TerraformDockerDriver.restart() ... just doing apply");
+        LOG.trace(" >> TerraformDockerDriver.restart() ... just doing apply");
         ((TerraformConfiguration)getEntity()).apply();
     }
 
@@ -154,4 +195,10 @@ public class TerraformContainerDriver implements TerraformDriver {
         LOG.debug(" >> TerraformDockerDriver.kill() ... same as stop");
         stop();
     }
+
+    @Override
+    public void deleteFilesOnDestroy() {
+        runQueued(newCommandTaskFactory(false, "cd .. && rm -rf active backup").deleteNamespace(true));
+    }
+
 }

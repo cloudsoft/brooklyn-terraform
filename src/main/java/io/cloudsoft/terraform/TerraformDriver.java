@@ -32,6 +32,7 @@ import org.apache.brooklyn.util.core.task.ssh.SshTasks;
 import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.core.task.system.SimpleProcessTaskFactory;
 import org.apache.brooklyn.util.exceptions.Exceptions;
+import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
@@ -118,7 +119,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
 
     default <T> T runQueued(TaskFactory<? extends TaskAdaptable<T>> task) {
-        return DynamicTasks.queue(task.newTask().asTask()).getUnchecked();
+        return DynamicTasks.queue(task).asTask().getUnchecked();
     }
 
     default <T> T retryUntilLockAvailable(String summary, Callable<T> job) {
@@ -138,16 +139,16 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return getStateFilePath();
     }
     default String getConfigurationFilePath() {
-        return getTerraformActiveDir() + "/configuration.tf";
+        return Os.mergePathsUnix(getTerraformActiveDir(), "configuration.tf");
     }
     default String getTfVarsFilePath() {
-        return getTerraformActiveDir() + "/terraform.tfvars";
+        return Os.mergePathsUnix(getTerraformActiveDir(), "terraform.tfvars");
     }
     default String getStateFilePath() {
-        return getTerraformActiveDir() + "/terraform.tfstate";
+        return Os.mergePathsUnix(getTerraformActiveDir(), "terraform.tfstate");
     }
     default String getLockFilePath() {
-        return getTerraformActiveDir() + "/.terraform.tfstate.lock.info";
+        return Os.mergePathsUnix(getTerraformActiveDir(), ".terraform.tfstate.lock.info");
     }
 
     default void runTerraformInitAndVerifyTask() {
@@ -265,8 +266,8 @@ public interface TerraformDriver extends SoftwareProcessDriver {
                 "cd "+activePath,
                 "mv * "+backupPath,
                 "mv "+backupPath+"*.tfstate ."))
-            .summary("Moves existing configuration files to /tmp/backup (if any present)")
-            // .allowingNonZeroExitCode()  // previously we allowed non-zero but don't think we need to
+            .summary("Moves existing configuration files to backup folder")
+            .allowingNonZeroExitCode()  // working directory may be empty
         );
     }
 
@@ -350,6 +351,10 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     default void destroy() {
         runDestroyTask();
         ((TerraformConfiguration)getEntity()).removeDiscoveredResources();
+        // TODO delete files? also delete backup? maybe have a config key to prevent that?
+        deleteFilesOnDestroy();
     }
+
+    default void deleteFilesOnDestroy() {}
 
 }

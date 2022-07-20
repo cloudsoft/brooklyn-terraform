@@ -6,14 +6,12 @@ import io.cloudsoft.terraform.util.Maps;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigConstraints;
 import org.apache.brooklyn.core.config.ConfigKeys;
-import org.apache.brooklyn.core.config.SetConfigKey;
 import org.apache.brooklyn.tasks.kubectl.PullPolicy;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.Map;
-import java.util.Set;
 
 public interface TerraformCommons {
 
@@ -57,7 +55,7 @@ public interface TerraformCommons {
             .defaultValue(
                     Maps.newHashMap(
                             Pair.of("image", "cloudsoft/terraform:1.0"),
-//                            Pair.of("image", "hashicorp/terraform:latest"),
+//                            Pair.of("image", "hashicorp/terraform:latest"),   // this doesn't have unzip or even bash, so doesn't work with our bashScript approach
                             Pair.of("imagePullPolicy", PullPolicy.IF_NOT_PRESENT.val()),
                             Pair.of("workingDir", "/tfws"),
                             Pair.of("volumes", Sets.newHashSet(Maps.newHashMap(
