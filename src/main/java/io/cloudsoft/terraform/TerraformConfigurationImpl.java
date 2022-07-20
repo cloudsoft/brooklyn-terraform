@@ -135,20 +135,17 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         super.connectSensors();
         connectServiceUpIsRunning();
 
-        Maybe<SshMachineLocation> machine = Locations.findUniqueSshMachineLocation(getLocations());
-        if (machine.isPresent()) {
-            addFeed(FunctionFeed.builder()
-                    .uniqueTag("scan-terraform-plan-and-output")
-                    .entity(this)
-                    .period(getConfig(TerraformCommons.POLLING_PERIOD))
-                    .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(this))
-                            .onResult(new PlanSuccessFunction())
-                            .onFailure(new PlanFailureFunction()))
-                    .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(this))
-                            .onResult(new OutputSuccessFunction())
-                            .onFailure(new OutputFailureFunction()))
-                    .build());
-        }
+        addFeed(FunctionFeed.builder()
+                .uniqueTag("scan-terraform-plan-and-output")
+                .entity(this)
+                .period(getConfig(TerraformCommons.POLLING_PERIOD))
+                .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(this))
+                        .onResult(new PlanSuccessFunction())
+                        .onFailure(new PlanFailureFunction()))
+                .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(this))
+                        .onResult(new OutputSuccessFunction())
+                        .onFailure(new OutputFailureFunction()))
+                .build());
     }
 
     @Override
@@ -529,11 +526,15 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     getDriver().postLaunch();
                     connectSensors();
                 }
-                return null;
-            } finally {
                 sensors().set(Startable.SERVICE_UP, Boolean.TRUE);
-                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
                 sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
+                return null;
+            } catch (Exception e) {
+                sensors().set(Startable.SERVICE_UP, Boolean.FALSE);
+                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
+                throw e;
+            } finally {
+                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
                 ServiceStateLogic.setExpectedState(this, Lifecycle.RUNNING);
             }
         });

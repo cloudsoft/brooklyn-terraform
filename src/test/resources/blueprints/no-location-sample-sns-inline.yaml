@@ -10,8 +10,11 @@ services:
         }
 
         resource "aws_sns_topic" "my_first_sns_topic" {
-          name = "brooklyn-terraform-test-resource-sns-DELETE"
+          name = var.topic_name
         }
-        
+
         variable "aws_access_key" {}
         variable "aws_secret_key" {}
+        variable "topic_name" {
+          default = "brooklyn-terraform-test-resource-sns-DELETE"
+        }
