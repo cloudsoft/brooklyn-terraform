@@ -8,11 +8,19 @@ import org.apache.brooklyn.tasks.kubectl.ContainerTaskFactory;
 import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
+import org.apache.brooklyn.util.core.task.Tasks;
+import org.apache.brooklyn.util.core.task.system.ProcessTaskFactory;
+import org.apache.brooklyn.util.core.task.system.ProcessTaskStub;
+import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.core.task.system.SimpleProcessTaskFactory;
+import org.apache.brooklyn.util.core.task.system.internal.SystemProcessTaskFactory;
+import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.text.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.InputStream;
 import java.util.Map;
 
 /**
@@ -29,7 +37,6 @@ import java.util.Map;
 public class TerraformContainerDriver implements TerraformDriver {
 
     private static final Logger LOG = LoggerFactory.getLogger(TerraformContainerDriver.class);
-    public static final MapConfigKey<Object> KUBEJOB_CONFIG = new MapConfigKey.Builder(Object.class, "kubejob.config").build();
 
     protected final EntityLocal entity;
 
@@ -42,7 +49,7 @@ public class TerraformContainerDriver implements TerraformDriver {
     @Override
     public SimpleProcessTaskFactory<?, ?, String, ?> newCommandTaskFactory(boolean withEnvVars, String command) {
         MutableMap<Object, Object> config = MutableMap.of()
-                .add(getEntity().getConfig(KUBEJOB_CONFIG))
+                .add(getEntity().getConfig(TerraformCommons.KUBEJOB_CONFIG))
                 .add(ConfigBag.newInstance().configure(ContainerCommons.WORKING_DIR, getTerraformActiveDir()).getAllConfig());
 
         ContainerTaskFactory<?,String> tf = ContainerTaskFactory.newInstance()
@@ -61,7 +68,7 @@ public class TerraformContainerDriver implements TerraformDriver {
 
     @Override
     public String getTerraformActiveDir() {
-        Map<String, Object> kubecfg = getEntity().getConfig(KUBEJOB_CONFIG);
+        Map<String, Object> kubecfg = getEntity().getConfig(TerraformCommons.KUBEJOB_CONFIG);
         String baseDir = null;
         if (kubecfg!=null) baseDir = Strings.toString(kubecfg.get(ContainerCommons.WORKING_DIR.getName()));
         if (baseDir==null) baseDir = ".";
@@ -71,24 +78,26 @@ public class TerraformContainerDriver implements TerraformDriver {
     }
 
     @Override
+    public void copyTo(InputStream tfStream, String target) {
+        File f = Os.newTempFile("terraform-" + getEntity().getId(), "dat");
+        // TODO we need to get the namespace and pod
+        String namespace = "???";
+        String pod = "???";
+        // https://medium.com/@nnilesh7756/copy-directories-and-files-to-and-from-kubernetes-container-pod-19612fa74660
+        ProcessTaskWrapper<Object> t = DynamicTasks.queue(new SystemProcessTaskFactory.ConcreteSystemProcessTaskFactory<String>(
+                "kubectl cp " + f.getAbsolutePath() + " " + namespace + "/" + pod + ":" + target)
+                .summary("Copying data to " + target)
+                .returning(ProcessTaskStub.ScriptReturnType.STDOUT_STRING)
+                .requiringExitCodeZero().newTask());
+        t.block();
+        f.delete();
+        t.get();
+    }
+
+    @Override
     public void customize() {
         LOG.info(" >> TerraformDockerDriver.customize() ...");
-
-        moveConfigurationFilesToBackupDir();
-
-        // TODO what if URL is classpath (which it often is)
-
-        String cfgUrl = entity.config().get(TerraformCommons.CONFIGURATION_URL);
-        DynamicTasks.queue(newCommandTaskFactory(false, Strings.lines(
-                        "curl -L -f -o configuration.tf $TF_CFG_URL",
-                        "if grep -q \"No errors detected\" <<< $(unzip -t configuration.tf ); then",
-                        "  mv configuration.tf configuration.zip && unzip configuration.zip",
-                        "fi"))
-                .summary("Download and unpack configuration")
-                .environmentVariable("TF_CFG_URL", cfgUrl).newTask());
-
-        runTerraformInitAndVerifyTask();
-        DynamicTasks.waitForLast();
+        TerraformDriver.super.customize();
     }
 
     @Override

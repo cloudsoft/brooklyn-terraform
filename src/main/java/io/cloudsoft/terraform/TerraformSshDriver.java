@@ -51,6 +51,11 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         return tf;
     }
 
+    @Override
+    public void copyTo(InputStream tfStream, String target) {
+        getMachine().copyTo(tfStream, target);
+    }
+
     public String getTerraformActiveDir() {
         return getRunDir() + "/" + "active/";
     }
@@ -122,35 +127,11 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
     // Order of execution during AMP deploy: step 3 - zip up the current configuration files if any, unzip the new configuration files, run `terraform init -input=false`
     @Override
     public void customize() {
-        final String cfgPath = getConfigurationFilePath();
-
-        DynamicTasks.queue(Tasks.create("Copy configuration file(s)", () -> {
+        DynamicTasks.queue(Tasks.create("Standard customization", () -> {
             newScript(CUSTOMIZING).execute();
-            moveConfigurationFilesToBackupDir();
-            InputStream configuration = getConfiguration();
-            // copy terraform configuration file or zip
-            getMachine().copyTo(configuration, cfgPath);
-            copyTfVars();
         }));
 
-        DynamicTasks.queue(newCommandTaskFactory(true,
-                        "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
-                                + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getTerraformActiveDir() + " &&"
-                                + "unzip " + cfgPath + ".zip ; fi")
-                .summary("Preparing configuration (unzip if necessary)..."));
-
-        runTerraformInitAndVerifyTask();
-    }
-
-    /**
-     * If a `terraform.tfvars` file is present in the bundle is copied in the terraform workspace
-     */
-    private void  copyTfVars(){
-        final String varsURL = entity.getConfig(TFVARS_FILE_URL);
-        if (Strings.isNonBlank(varsURL)) {
-            InputStream tfStream =  new ResourceUtils(entity).getResourceFromUrl(varsURL);
-            getMachine().copyTo(tfStream, getTfVarsFilePath());
-        }
+        TerraformDriver.super.customize();
     }
 
     private boolean terraformAlreadyAvailable() {

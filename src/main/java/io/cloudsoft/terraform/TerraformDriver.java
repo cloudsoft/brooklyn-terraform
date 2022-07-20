@@ -41,8 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
-import static io.cloudsoft.terraform.TerraformCommons.CONFIGURATION_CONTENTS;
-import static io.cloudsoft.terraform.TerraformCommons.CONFIGURATION_URL;
+import static io.cloudsoft.terraform.TerraformCommons.*;
 import static java.lang.String.format;
 
 public interface TerraformDriver extends SoftwareProcessDriver {
@@ -56,7 +55,6 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     String PLAN_MESSAGE = "tf.plan.message";
     String PLAN_ERRORS = "tf.errors";
 
-    public void customize();
     public void postLaunch();
 
     /**
@@ -87,6 +85,8 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     }
 
     SimpleProcessTaskFactory<?,?,String,?> newCommandTaskFactory(boolean withEnvVars, String command);
+
+    void copyTo(InputStream tfStream, String target);
 
     String makeTerraformCommand(String argument);
 
@@ -271,6 +271,34 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     }
 
 
+    /**
+     * If a `terraform.tfvars` file is present in the bundle is copied in the terraform workspace
+     */
+    default void copyTfVars(){
+        final String varsURL = getEntity().getConfig(TFVARS_FILE_URL);
+        if (Strings.isNonBlank(varsURL)) {
+            InputStream tfStream =  new ResourceUtils(getEntity()).getResourceFromUrl(varsURL);
+            copyTo(tfStream, getTfVarsFilePath());
+        }
+    }
+    default void customize() {
+        final String cfgPath = getConfigurationFilePath();
+
+        DynamicTasks.queue(Tasks.create("Copy configuration file(s)", () -> {
+            moveConfigurationFilesToBackupDir();
+            // copy terraform configuration file or zip
+            copyTo(getConfiguration(), cfgPath);
+            copyTfVars();
+        }));
+
+        DynamicTasks.queue(newCommandTaskFactory(true,
+                "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
+                        + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getTerraformActiveDir() + " &&"
+                        + "unzip " + cfgPath + ".zip ; fi")
+                .summary("Preparing configuration (unzip if necessary)..."));
+
+        runTerraformInitAndVerifyTask();
+    }
 
     default void launch() {
         final Map<String,Object> planLog =  retryUntilLockAvailable("terraform plan -json", () -> runJsonPlanTask());
