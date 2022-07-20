@@ -10,7 +10,7 @@ import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.core.entity.Attributes;
-import org.apache.brooklyn.core.entity.Entities;
+import org.apache.brooklyn.core.entity.Dumper;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.entity.group.DynamicGroup;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
@@ -30,7 +30,9 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
     @Test(groups="Live")
     public void testCreateSecurityGroup() throws Exception {
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
-                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://plans/create-security-group.tf")
+                .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-security-group.tf")
+                .configure(TerraformCommons.TF_EXECUTION_MODE, TerraformCommons.SSH_MODE)
+                .configure("tf.search", true)
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
         app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
         assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
@@ -39,7 +41,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         Asserts.continually(new SensorSupplier<>(terraformConfiguration, TerraformConfiguration.STATE),
                 input -> input == null || !input.containsKey("ERROR"));
 
-        Entities.dumpInfo(app);
+        Dumper.dumpInfo(app);
         LOG.debug("Stopping application ...");
         app.stop();
     }
@@ -47,7 +49,9 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
     @Test(groups="Live")
     public void testCreateInstance() throws Exception {
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
-                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
+                .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
+                .configure(TerraformCommons.TF_EXECUTION_MODE, TerraformCommons.SSH_MODE)
+                .configure("tf.search", true)
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
         app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
 
@@ -55,8 +59,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_UP, true);
         assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
         assertAttributeEventuallyNonNull(terraformConfiguration, TerraformConfiguration.OUTPUT);
-
-        Entities.dumpInfo(app);
+        Dumper.dumpInfo(app);
 
         // Terraform can take more than thirty seconds to destroy the instance which
         // trips tearDown's timeout. Stop the application here instead.
@@ -67,12 +70,14 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
     @Test(groups="Live")
     public void testCreateInstanceWithDynamicGroups() throws Exception {
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
-                .configure(TerraformConfiguration.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
+                .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-instance.tf")
+                .configure(TerraformCommons.TF_EXECUTION_MODE, TerraformCommons.SSH_MODE)
+                .configure("tf.search", true)
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
-                terraformConfiguration
-                        .addChild(EntitySpec.create(DynamicGroup.class)
-                                .configure(DynamicGroup.ENTITY_FILTER,
-                                        ResourceType.resourceType("aws_instance")));
+        terraformConfiguration
+                .addChild(EntitySpec.create(DynamicGroup.class)
+                        .configure(DynamicGroup.ENTITY_FILTER,
+                                ResourceType.resourceType("aws_instance")));
         app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
 
         assertNotNull(terraformConfiguration.getAttribute(TerraformConfiguration.HOSTNAME));
@@ -83,8 +88,7 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         for (Entity child : terraformConfiguration.getChildren()) {
             System.out.println(child.getDisplayName());
         }
-
-        Entities.dumpInfo(app);
+        Dumper.dumpInfo(app);
 
         // Terraform can take more than thirty seconds to destroy the instance which
         // trips tearDown's timeout. Stop the application here instead.

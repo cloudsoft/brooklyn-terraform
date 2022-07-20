@@ -2,6 +2,8 @@ services:
   - type: terraform
     name: Terraform Configuration
     brooklyn.config:
+      tf.search: true
+      tf.execution.mode: "ssh"
       # requires aws cli + creds installed on the machine deploying this
       tf.configuration.contents: |
         provider "aws" {
@@ -12,6 +14,7 @@ services:
             ami = "ami-02df9ea15c1778c9c"
             instance_type = "t1.micro"
             tags = {
-              Name = "terraform-test-cfg-in-blueprint"
+                Name = "Test-Brooklyn-Terraform-KillMePlease"
+                Purpose = "terraform-test-cfg-in-blueprint"
             }
         }

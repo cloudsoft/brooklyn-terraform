@@ -49,8 +49,12 @@ public final class StateParser {
         try {
             JsonNode root = objectMapper.readTree(state);
 
-            if(root.isEmpty() || !root.isContainerNode() || root.get("terraform_version") == null) {
+            if(root.isEmpty() || !root.isContainerNode()) {
                 throw new  IllegalArgumentException ("This is not a valid TF state!");
+            }
+            if (root.get("terraform_version") == null) {
+                // probably no data
+                return result;
             }
 
             if(!root.has("values")) {
@@ -83,7 +87,7 @@ public final class StateParser {
                                 if((resourceBody.get("resource.address").toString().startsWith(GOOGLE.getPrefix()) && value.getKey().equals("cluster_config"))){
                                     parseClusterData(value.getValue(), "value.cluster_config", resourceBody);
                                 } else {
-                                    resourceBody.put("value." + value.getKey(), value.getValue().asText());
+                                    resourceBody.put("value." + value.getKey(), value.getValue() instanceof TextNode? value.getValue().asText() : value.getValue().toString());
                                 }
                             }
                         }
@@ -94,7 +98,7 @@ public final class StateParser {
                         while(it.hasNext()) {
                             Map.Entry<String,JsonNode> value =  it.next();
                             if(isNotBlankPredicate.test(value.getValue())) {
-                                resourceBody.put("sensitive.value." + value.getKey(), value.getValue().asText());
+                                resourceBody.put("sensitive.value." + value.getKey(),  value.getValue() instanceof TextNode? value.getValue().asText() : value.getValue().toString());
                             }
                         }
                     }
@@ -159,7 +163,7 @@ public final class StateParser {
                 LOG.warn("Unable to parse plan log entry: "+log, e);
             }
             return null;
-        }).filter(x -> x!=null).collect(Collectors.toList());
+        }).filter(Objects::nonNull).collect(Collectors.toList());
 
         Map<String, Object> result = new HashMap<>();
 

@@ -2,6 +2,8 @@ services:
   - type: terraform
     name: Terraform Configuration
     brooklyn.config:
+      tf.search: true
+      tf.execution.mode: "ssh"
       # Fetching archives over HTTP
       tf.configuration.url: 'https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/instance-with-creds.tf'
 
@@ -9,3 +11,4 @@ services:
       shell.env:
         TF_VAR_aws_identity: $brooklyn:external("vault", "aws_identity")
         TF_VAR_aws_credential: $brooklyn:external("vault", "aws_credential")
+
