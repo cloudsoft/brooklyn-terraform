@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tf-download
+spec:
+  backoffLimit: 1
+  completions: 1
+  parallelism: 1
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - command:
+            - terraform
+            - init
+            - -input=false
+          env:
+            - name: TF_CFG_URL
+              value: https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/instance-with-creds.tf
+            - name: TF_VAR_aws_credential
+              value: '1234'
+            - name: TF_VAR_aws_identity
+              value: '1234'
+          image: cloudsoft/terraform:1.0
+          imagePullPolicy: Never
+          name: test
+          volumeMounts:
+            - mountPath: /tfws
+              name: tf-workspace
+          workingDir: /tfws/download-location
+      restartPolicy: Never
+      volumes:
+        - name: tf-workspace
+          hostPath:
+            path: /tfws

@@ -1,0 +1,10 @@
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      # default value is 'kube'
+      #tf.execution.mode: "kube"
+      tf.configuration.url: 'https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/instance-with-creds.tf'
+      # replace with aws credential values
+      tf_var.aws_identity: 1234
+      tf_var.aws_credential: 1234

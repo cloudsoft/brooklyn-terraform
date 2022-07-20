@@ -45,12 +45,15 @@ public  final class EntityParser {
         int managedResourceNumber = managedResources.size();
 
         if(!dataResources.isEmpty()) {
-            Optional<Entity> groupOpt =  entity.getChildren().stream().filter(c -> c instanceof BasicGroup).findAny();
+            Optional<BasicGroup> groupOpt = getDataResourcesGroup(entity);
+            final BasicGroup dataGroup;
             if (!groupOpt.isPresent()) {
-                BasicGroup dataGroup = entity.addChild(EntitySpec.create(BasicGroup.class).configure(AbstractEntity.DEFAULT_DISPLAY_NAME, "Data Resources"));
-                dataResources.forEach(resource -> dataGroup.addChild(basicSpec(DataResource.class, resource, getIdPrefixFor(entity))));
+                dataGroup = entity.addChild(EntitySpec.create(BasicGroup.class).configure(AbstractEntity.DEFAULT_DISPLAY_NAME, "Data Resources"));
                 dataGroup.sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.CREATED);
+            } else {
+                dataGroup = groupOpt.get();
             }
+            dataResources.forEach(resource -> dataGroup.addChild(basicSpec(DataResource.class, resource, getIdPrefixFor(entity))));
         }
         if(!managedResources.isEmpty()) {
             managedResources.forEach(resource -> {
@@ -63,6 +66,10 @@ public  final class EntityParser {
                 }
             );
         }
+    }
+
+    public static Optional<BasicGroup> getDataResourcesGroup(Entity entity) {
+        return (Optional) entity.getChildren().stream().filter(c -> c instanceof BasicGroup && "Data Resources".equals(c.config().get(AbstractEntity.DEFAULT_DISPLAY_NAME))).findAny();
     }
 
     static Function<Object, String> extractMode =  obj -> (String)((Map<String, Object>)obj).getOrDefault("resource.mode", "other");

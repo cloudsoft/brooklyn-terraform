@@ -1,0 +1,22 @@
+kind: Job
+metadata:
+  name: tf-version
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - command:
+            - ./hello.sh
+          image: cloudsoft/terraform:1.0
+          imagePullPolicy: Never
+          name: test
+          workingDir: /tfws/scripts
+          volumeMounts:
+            - name: tf-workspace
+              mountPath: /tfws
+      volumes:
+        - name: tf-workspace
+          hostPath:
+            path: /tfws
+      restartPolicy: Never

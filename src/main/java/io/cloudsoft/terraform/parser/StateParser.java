@@ -35,11 +35,11 @@ public final class StateParser {
     public static final ImmutableList PROBLEMATIC_RESOURCES = ImmutableList.of("aws_emr_cluster.spark_cluster");
 
     private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
-    private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.CHANGE_SUMMARY;
-    private static  Predicate<? super PlanLogEntry> outputsPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.OUTPUTS;
-    private static  Predicate<? super PlanLogEntry> plannedChangedPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.PLANNED_CHANGE;
-    private static  Predicate<? super PlanLogEntry> driftPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.RESOURCE_DRIFT;
-    private static  Predicate<? super PlanLogEntry> errorPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC;
+    private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.CHANGE_SUMMARY;
+    private static  Predicate<? super PlanLogEntry> outputsPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.OUTPUTS;
+    private static  Predicate<? super PlanLogEntry> plannedChangedPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.PLANNED_CHANGE;
+    private static  Predicate<? super PlanLogEntry> driftPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.RESOURCE_DRIFT;
+    private static  Predicate<? super PlanLogEntry> errorPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.DIAGNOSTIC;
     private static Predicate<? super JsonNode> isNotBlankPredicate = node -> node != null && !BLANK_ITEMS.contains((node instanceof TextNode) ? node.asText() : node.toString());
 
 
@@ -49,8 +49,12 @@ public final class StateParser {
         try {
             JsonNode root = objectMapper.readTree(state);
 
-            if(root.isEmpty() || !root.isContainerNode() || root.get("terraform_version") == null) {
+            if(root.isEmpty() || !root.isContainerNode()) {
                 throw new  IllegalArgumentException ("This is not a valid TF state!");
+            }
+            if (root.get("terraform_version") == null) {
+                // probably no data
+                return result;
             }
 
             if(!root.has("values")) {
@@ -159,7 +163,7 @@ public final class StateParser {
                 e.printStackTrace();
             }
             return null;
-        }).collect(Collectors.toList());
+        }).filter(Objects::nonNull).collect(Collectors.toList());
 
         Map<String, Object> result = new HashMap<>();
 

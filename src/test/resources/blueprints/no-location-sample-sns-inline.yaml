@@ -1,0 +1,20 @@
+services:
+  - type: terraform
+    name: Terraform Configuration
+    brooklyn.config:
+      tf.configuration.contents: |
+        provider "aws" {
+          access_key = "${var.aws_access_key}"
+          secret_key = "${var.aws_secret_key}"
+          region = "eu-north-1"
+        }
+
+        resource "aws_sns_topic" "my_first_sns_topic" {
+          name = var.topic_name
+        }
+
+        variable "aws_access_key" {}
+        variable "aws_secret_key" {}
+        variable "topic_name" {
+          default = "brooklyn-terraform-test-resource-sns-DELETE"
+        }

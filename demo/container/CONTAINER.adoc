@@ -1,0 +1,87 @@
+== Set up Minikube for development
+
+[source]
+----
+minikube config set driver hyperkit
+----
+
+[source]
+----
+# check driver
+cat ~/.minikube/machines/minikube/config.json | grep DriverName
+----
+
+[source]
+----
+# check version
+cat ~/.minikube/machines/minikube/config.json | grep -i ISO
+----
+
+Obs about volume mounting:
+
+- cannot mount directories on your computer that are not owned completely by the user running minikube (e.g: cannot mount the /tmp directory)
+- cannot mount on in-existing mounting points with minikube mount <source directory>:<target directory| mounting point>  -> solution: minikube ssh; cd /; sudo mkdir mounting-point  then exist and run minikube mount <source directory>:<mounting-point>
+- stop minikube and restart with `minikube  start --memory=16384 --cpus=4 --mount --mount-string="$HOME/tfws:/tfws"`  results in a persistent mounting point
+
+[source]
+----
+# start minikube
+minikube  start --memory=16384 --cpus=4 --mount --mount-string="$HOME/.work-mine/jules-tools/tfws:/tfws"
+----
+
+[source]
+----
+# check out the containers in the cluster
+kubectl get po -A
+----
+
+[source]
+----
+# get the kubectl version appropriate for minikube
+minikube kubectl -- get po -A
+----
+
+[source]
+----
+# add alias to always use this version
+alias kubectl="minikube kubectl --"
+----
+
+[source]
+----
+# show WebUI
+minikube dashboard
+----
+
+=== Run jobs in their own namespace
+
+[source]
+----
+kubectl delete namespace tf-sample; kubectl create namespace tf-sample ; kubectl config set-context --current --namespace=tf-sample; kubectl apply -f jobHello.yaml
+----
+
+=== Minikube issues
+
+When minikube misbehaves, just delete it.
+
+[source]
+----
+minikube delete
+----
+
+== TODO - make a decision
+
+* the volume should be created previously by the user.
+* kubernetes task to create volume !?
+
+
+== Creating the Docker Image & pushing it to Minikube Docker
+
+The `docker-build` directory contains a `Dockerfile` describing a very small image containing the minimal tools needed to deploy and monitor applications using a Terraform Driver.
+
+[source]
+----
+eval $(minikube docker-env)
+docker build -t cloudsoft/terraform:1.0 .
+docker run --name local-alpine -d cloudsoft/terraform:1.0
+----

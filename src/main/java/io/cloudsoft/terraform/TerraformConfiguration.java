@@ -8,14 +8,12 @@ import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
-import org.apache.brooklyn.core.config.ConfigConstraints;
 import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.sensor.AttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
 import org.apache.brooklyn.core.sensor.Sensors;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
-import org.apache.brooklyn.util.time.Duration;
 
 import javax.annotation.Nullable;
 
@@ -39,36 +37,9 @@ public interface TerraformConfiguration extends SoftwareProcess {
     ConfigKey<String> SUGGESTED_VERSION = ConfigKeys
             .newConfigKeyWithDefault(SoftwareProcess.SUGGESTED_VERSION, "1.2.5");
 
-    @SetFromFlag("tfPollingPeriod")
-    ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
-            .name("tf.polling.period")
-            .description("Contents of the configuration file that will be applied by Terraform.")
-            .defaultValue(Duration.seconds(15))
-            .constraint(input -> !input.isShorterThan(Duration.seconds(15))) // if shorter than 30s difficulties of executing 'apply' appear
-            .build();
 
     @SetFromFlag("downloadUrl")
     AttributeSensorAndConfigKey<String,String> DOWNLOAD_URL = ConfigKeys.newSensorAndConfigKeyWithDefault(SoftwareProcess.DOWNLOAD_URL, TERRAFORM_DOWNLOAD_URL);
-
-    @SetFromFlag("tfConfigurationContents")
-    ConfigKey<String> CONFIGURATION_CONTENTS = ConfigKeys.builder(String.class)
-            .name("tf.configuration.contents")
-            .description("Contents of the configuration file that will be applied by Terraform.")
-            .constraint(ConfigConstraints.forbiddenIf("tf.configuration.url"))
-            .build();
-
-    @SetFromFlag("tfDeployment")
-    ConfigKey<String> CONFIGURATION_URL = ConfigKeys.builder(String.class)
-            .name("tf.configuration.url")
-            .description("URL of the configuration file that will be applied by Terraform.")
-            .constraint(ConfigConstraints.forbiddenIf("tf.configuration.contents"))
-            .build();
-
-    @SetFromFlag("tfVars")
-    ConfigKey<String> TFVARS_FILE_URL = ConfigKeys.builder(String.class)
-            .name("tf.tfvars.url") // should be part of deployed the bundle
-            .description("URL of the file containing values for the Terraform variables.")
-            .build();
 
     @SetFromFlag("tfPath")
     ConfigKey<String> TERRAFORM_PATH = ConfigKeys.builder(String.class)
@@ -108,11 +79,22 @@ public interface TerraformConfiguration extends SoftwareProcess {
     AttributeSensor<TerraformStatus> DRIFT_STATUS = Sensors.newSensor(TerraformStatus.class,"tf.drift.status",
             "Drift status of the configuration" );
 
+    void removeDiscoveredResources();
+
     @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
     void apply();
 
-    @Effector(description="Performs the Terraform destroy command which will destroy all of the infrastructure that has been previously created by the configuration.")
-    void destroy();
+    @Effector(description="Performs the Terraform plan command to show what would change (and refresh sensors).")
+    void plan();
+
+    @Effector(description = "Force a re-discovery of resources (clearing all first)")
+    void rediscoverResources();
+
+    @Effector(description = "Delete any terraform lock file (may be needed if management server interrupted; done automatically for stop, as we manage mutex locking)")
+    public void clearTerraformLock();
+
+    @Effector(description="Performs the Terraform destroy command to destroy all of the infrastructure that has been previously created by the configuration.")
+    void destroyTerraform();
 
     @Effector(description="Performs Terraform apply again with the configuration provided via the provided URL. If an URL is not provided the original URL provided when this blueprint was deployed will be used." +
             "This is useful when the URL points to a GitHub or Artifactory release.")
