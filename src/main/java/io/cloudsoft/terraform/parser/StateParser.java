@@ -34,12 +34,12 @@ public final class StateParser {
      */
     public static final ImmutableList PROBLEMATIC_RESOURCES = ImmutableList.of("aws_emr_cluster.spark_cluster");
 
-    private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) ple -> ple.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
-    private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.CHANGE_SUMMARY;
-    private static  Predicate<? super PlanLogEntry> outputsPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.OUTPUTS;
-    private static  Predicate<? super PlanLogEntry> plannedChangedPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.PLANNED_CHANGE;
-    private static  Predicate<? super PlanLogEntry> driftPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.RESOURCE_DRIFT;
-    private static  Predicate<? super PlanLogEntry> errorPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.DIAGNOSTIC;
+    private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
+    private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.CHANGE_SUMMARY;
+    private static  Predicate<? super PlanLogEntry> outputsPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.OUTPUTS;
+    private static  Predicate<? super PlanLogEntry> plannedChangedPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.PLANNED_CHANGE;
+    private static  Predicate<? super PlanLogEntry> driftPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.RESOURCE_DRIFT;
+    private static  Predicate<? super PlanLogEntry> errorPredicate = (Predicate<PlanLogEntry>) planLogEntry -> planLogEntry.type == PlanLogEntry.LType.DIAGNOSTIC;
     private static Predicate<? super JsonNode> isNotBlankPredicate = node -> node != null && !BLANK_ITEMS.contains((node instanceof TextNode) ? node.asText() : node.toString());
 
 
@@ -72,36 +72,36 @@ public final class StateParser {
                 Map<String, Object>  resourceBody = new LinkedHashMap<>();
 
                 //if (resource.has("mode") && "managed".equals(resource.get("mode").asText())) {
-                    result.put(resource.get("address").asText(), resourceBody);
+                result.put(resource.get("address").asText(), resourceBody);
 
-                    resourceBody.put("resource.address", resource.get("address").asText());
-                    resourceBody.put("resource.mode", resource.get("mode").asText());
-                    resourceBody.put("resource.type", resource.get("type").asText());
-                    resourceBody.put("resource.name", resource.get("name").asText());
-                    resourceBody.put("resource.provider", resource.get("provider_name").asText());
-                    if(resource.has("values")) {
-                        Iterator<Map.Entry<String, JsonNode>>  it = resource.get("values").fields();
-                        while(it.hasNext()) {
-                            Map.Entry<String,JsonNode> value =  it.next();
-                            if(isNotBlankPredicate.test(value.getValue())) {
-                                if((resourceBody.get("resource.address").toString().startsWith(GOOGLE.getPrefix()) && value.getKey().equals("cluster_config"))){
-                                    parseClusterData(value.getValue(), "value.cluster_config", resourceBody);
-                                } else {
-                                    resourceBody.put("value." + value.getKey(), value.getValue() instanceof TextNode? value.getValue().asText() : value.getValue().toString());
-                                }
+                resourceBody.put("resource.address", resource.get("address").asText());
+                resourceBody.put("resource.mode", resource.get("mode").asText());
+                resourceBody.put("resource.type", resource.get("type").asText());
+                resourceBody.put("resource.name", resource.get("name").asText());
+                resourceBody.put("resource.provider", resource.get("provider_name").asText());
+                if(resource.has("values")) {
+                    Iterator<Map.Entry<String, JsonNode>>  it = resource.get("values").fields();
+                    while(it.hasNext()) {
+                        Map.Entry<String,JsonNode> value =  it.next();
+                        if(isNotBlankPredicate.test(value.getValue())) {
+                            if((resourceBody.get("resource.address").toString().startsWith(GOOGLE.getPrefix()) && value.getKey().equals("cluster_config"))){
+                                parseClusterData(value.getValue(), "value.cluster_config", resourceBody);
+                            } else {
+                                resourceBody.put("value." + value.getKey(), value.getValue() instanceof TextNode? value.getValue().asText() : value.getValue().toString());
                             }
                         }
                     }
+                }
 
-                    if(resource.has("sensitive_values")) {
-                        Iterator<Map.Entry<String, JsonNode>>  it = resource.get("sensitive_values").fields();
-                        while(it.hasNext()) {
-                            Map.Entry<String,JsonNode> value =  it.next();
-                            if(isNotBlankPredicate.test(value.getValue())) {
-                                resourceBody.put("sensitive.value." + value.getKey(),  value.getValue() instanceof TextNode? value.getValue().asText() : value.getValue().toString());
-                            }
+                if(resource.has("sensitive_values")) {
+                    Iterator<Map.Entry<String, JsonNode>>  it = resource.get("sensitive_values").fields();
+                    while(it.hasNext()) {
+                        Map.Entry<String,JsonNode> value =  it.next();
+                        if(isNotBlankPredicate.test(value.getValue())) {
+                            resourceBody.put("sensitive.value." + value.getKey(),  value.getValue() instanceof TextNode? value.getValue().asText() : value.getValue().toString());
                         }
                     }
+                }
                 //}
 
             });
@@ -160,7 +160,7 @@ public final class StateParser {
             try {
                 return objectMapper.readValue(log, PlanLogEntry.class);
             } catch (JsonProcessingException e) {
-                LOG.warn("Unable to parse plan log entry: "+log, e);
+                e.printStackTrace();
             }
             return null;
         }).filter(Objects::nonNull).collect(Collectors.toList());

@@ -9,6 +9,8 @@ import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.util.text.Identifiers;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.commons.lang3.tuple.Pair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 
 public class TerraformContainerDriverTest extends AbstractYamlTest {
@@ -25,6 +27,7 @@ public class TerraformContainerDriverTest extends AbstractYamlTest {
         Dumper.dumpInfo(app);
         EntityAsserts.assertAttributeEqualsEventually(app, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
         EntityAsserts.assertAttributeEqualsEventually(app, Attributes.SERVICE_UP, true);
+
     }
 
     protected Pair<String,String> getAwsKey() {

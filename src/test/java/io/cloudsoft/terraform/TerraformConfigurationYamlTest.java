@@ -57,7 +57,6 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
         Assert.assertTrue(entity instanceof TerraformConfiguration);
         EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.applied"), Objects::nonNull);
 
-        Assert.assertTrue(((Integer) entity.getChildren().size()).equals(1));
         Entity resource = Iterables.getOnlyElement(entity.getChildren());
         EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.address"), v -> v.equals("aws_instance.web"));
         EntityAsserts.assertAttributeEventually(resource, Sensors.newStringSensor("tf.resource.mode"), v -> v.equals("managed"));
@@ -80,9 +79,9 @@ public class TerraformConfigurationYamlTest extends AbstractYamlTest {
         Application app = deploy("localhost_location", "classpath://blueprints/tf-cfg-in-blueprint.bom");
 
         Entity entity = Iterables.getOnlyElement(app.getChildren());
+
         Assert.assertTrue(entity instanceof TerraformConfiguration);
         EntityAsserts.assertAttributeEventually(entity, Sensors.newStringSensor("tf.configuration.applied"), Objects::nonNull);
-
         EntityAsserts.assertPredicateEventuallyTrue(entity, entity1 -> ((Integer) entity1.getChildren().size()).equals(1));
 
         Entity resource = Iterables.getOnlyElement(entity.getChildren());
