@@ -4,30 +4,26 @@ title: Brooklyn Terraform Integration
 layout: website-normal
 ---
 
-## How it Works
+The Apache Brooklyn - Terraform integration allows Terraform configurations, including modules,
+to be composed, deployed, managed and governed by Apache Brooklyn.
+Brooklyn is able to show, group, and attach sensors effectors and policies to all the
+resources created with Terraform.
 
-AMP executes various terraform commands and uses their output to decide resource statuses and populate sensors. The following image shows the commands executed by AMP.
+Popular use cases include:
 
-![](AMP_and_Terraform.png)
+* Day-Two management of estates including Terraform
+* Resilience and DR
+* Drift detection and notification or remediation
+* Using Terraform tactically (where large TF plans are hard to work with),
+  combined with AMP for cleaner lifecycle
 
 
-The entity requires a value for one of the `tf.configuration.contents` and `tf.configuration.url` configuration keys.
+## Quick Start Examples
 
-`tf.configuration.contents` allows you to include a plan directly in a blueprint.
+### AWS EC2 Instance using Terraform at the AMP Server
 
-`tf.configuration.url` has the entity load a remote resource at runtime. The resource must be accessible to the Brooklyn server. The resource can be a single `configuration.tf` file or a `*.zip` archive containing multiple `*.tf` files and `terraform.tfvars` file.
-
-Other useful configurations:
-
-* `tf.polling.period` : how often should AMP check the status of the Terraform deployment. Default value is 15s.
-* `tf.drift.check` : default value is `true` which means AMP reports drift if Terraform does. Set this to `false` (not recommended) to disable drift checking.
-* `tf_var.*` : all configurations prefixed with `tf_var.` are converted to Terraform variables. This is a practical way to avoid using `terraform.tfvars` files and inject the values  directly from the AMP blueprint. Just don't use special characters(e.g. ".") when naming your configurations!
-* `version` : set this with the version of Terraform you want AMP to use to manage your deployment. AMP downloads it and installs in a directory that gets deleted when the application is stopped. By default, the version used is the one configured in the current version of `brooklyn-terraform`.
-* `tf.search` : when set to `true` AMP looks for the terraform version installed on the location. If found, it uses it to manage the deployment. By default, it is set to `false`.
-* `tf.path` :  set this with the terraform cli path on the location to instruct AMP to use it to manage the deployment.
-
-When started the entity installs Terraform and applies the configured plan. For example, the following blueprint can be used to run
-Terraform on localhost with a plan that provisions an instance in Amazon EC2 us-east-1 and assigns it an elastic IP:
+For example, the following blueprint can be used to run
+Terraform on `localhost` with a plan that provisions an instance in Amazon EC2 us-east-1 and assigns it an elastic IP:
 
 ```yaml
 location: localhost
@@ -36,13 +32,8 @@ services:
 - type: terraform
   name: Terraform Configuration
   brooklyn.config:
+    tf.execution.mode: ssh
     tf.configuration.contents: |
-        provider "aws" {
-            access_key = "YOUR_ACCESS_KEY"
-            secret_key = "YOUR_SECRET_KEY"
-            region = "us-east-1"
-        }
-
         resource "aws_instance" "example" {
             ami = "ami-408c7f28"
             instance_type = "t1.micro"
@@ -56,10 +47,108 @@ services:
         }
 ```
 
-Instructions for declaring localhost as a location are given in the Brooklyn documentation for
-[configuring localhost as a location](https://brooklyn.apache.org/v/latest/locations/index.html#localhost).
+The above assumes your AWS credentials are configured in `~/.aws/` and the command-line `terraform`
+works to install them.
 
-**Note:** If you want to use a remote location, just make sure it is a Linux or Unix based, because currently the Brooklyn Terraform Drive does not work on Windows systems.
+
+### Even Quicker: SNS Topic in AWS using a Terraform Container
+
+If the `cloudsoft/terraform` container is installed and accessible from `kubectl`
+(as described below), it can be even easier, as there is no need to use a server:
+
+```yaml
+name: Brooklyn Terraform Deployment
+services:
+- type: terraform
+  name: Terraform Configuration
+  brooklyn.config:
+    tf.configuration.contents: |
+        variable "aws_access_key" {}
+        variable "aws_secret_key" {}
+        provider "aws" {
+            access_key = var.aws_access_key
+            secret_key = var.aws_secret_key
+            region = "us-east-1"
+        }
+
+        resource "aws_sns_topic" "my_topic" {
+          name = "test-sns-topic"
+        }
+    tf_var.aws_access_key: ACCESSKEY
+    tf_var.aws_secret_key: SECRETKEY
+```
+
+With containers of course it is necessary to inject all variables;
+this can be done as above, and of course the reference to `SECRETKEY`
+can refer to an externalized property (e.g. from Vault).
+
+Variable injection is a powerful way to parameterise and compose terraform blueprints
+with other terraform blueprints and other AMP blueprints, as described below.
+These can refer to outputs from other blueprints or any AMP sensor, and can be updated
+dynamically by policies or human users; drift will automatically be detected and reported. 
+
+The SNS topic is a popular choice simply because it is free and fast to create.  
+Typically blueprints are much more complicated, and referenced as a `tf.configuration.url`
+pointing at a ZIP, which might contain modules etc.
+
+
+## Reference
+
+AMP executes various terraform commands and uses their output to decide resource statuses and populate sensors. The following image shows the commands executed by AMP.
+
+![](AMP_and_Terraform.png)
+
+
+### Terraform Setup
+
+AMP needs to be able to run `terraform` to perform the applies and refreshes.
+This can be done either:
+
+* Using a container
+* Using a process at a server
+
+If using a container, `kubectl` must be accessible to AMP 
+[as described elsewhere in the docs](https://brooklyn.apache.org/v/latest/XXX TODO), 
+and the container `cloudsoft/terraform` available to it.
+That container should be able to run `terraform`, `curl`, and `unzip`;
+a sample [Dockerfile](docker-build/Dockerfile) is available
+(download it to its own directory and run `docker build -t cloudsoft/terraform .` in that directory).
+
+To use a process on a server, simply supply an SSH or cloud location.
+This should be a Linux or Mac server. If `terraform` is already installed, it will be used,
+otherwise it will be installed.
+The server where AMP is running can be used by declaring `localhost` as the location
+[per these docs](https://brooklyn.apache.org/v/latest/locations/index.html#localhost).
+
+In a production deployment, it is recommended either to ensure the persistent volumes 
+used by Kubernetes are backed up and shared across AMP failover targets
+(because Terraform state is stored on those volumes)
+or to configure Terraform to use a hosted service to store its state. 
+
+
+### Entity Configuration
+
+The entity requires a value for one of the `tf.configuration.contents` and `tf.configuration.url` configuration keys.
+
+* `tf.configuration.contents` allows you to include a plan directly in a blueprint.
+
+* `tf.configuration.url` has the entity load a remote resource at runtime. 
+  The resource must be accessible to the Brooklyn server. The resource can be a single `configuration.tf` file or a `*.zip` archive containing multiple `*.tf` files and `terraform.tfvars` file.
+  This can be an external URL (e.g. Artifactory or GitHub) or a `classpath://` URL to load from a catalog bundle. 
+
+Other useful configurations:
+
+* `tf.execution.mode` : either `kube` (the default) to use a container via `kubectl` at the AMP server,
+  or `ssh` to run `terraform` on a server that AMP will ssh to (such as `localhost` to run terraform at the AMP server)  
+* `tf.polling.period` : how often should AMP check the status of the Terraform deployment. Default value is 15s.
+* `tf.drift.check` : default value is `true` which means AMP reports drift if Terraform does. Set this to `false` (not recommended) to disable drift checking.
+* `tf_var.*` : all configurations prefixed with `tf_var.` are converted to Terraform variables. This is a practical way to avoid using `terraform.tfvars` files and inject the values  directly from the AMP blueprint. Just don't use special characters(e.g. ".") when naming your configurations!
+* `version` : set this with the version of Terraform you want AMP to use to manage your deployment. AMP downloads it and installs in a directory that gets deleted when the application is stopped. By default, the version used is the one configured in the current version of `brooklyn-terraform`.
+* `tf.search` : when set to `true` AMP looks for the terraform version installed on the location. If found, it uses it to manage the deployment. By default, it is set to `false`.
+* `tf.path` :  set this with the terraform cli path on the location to instruct AMP to use it to manage the deployment.
+
+When started the entity installs Terraform and applies the configured plan.
+
 
 ### Terraform Outputs
 
@@ -220,6 +309,7 @@ And configure the `terraform` provider in `brooklyn.properties`:
 ### Updating an Existing Deployment
 
 AMP facilitates modifying an existing Terraform deployment through effectors and mutable config keys.
+
 
 ### Terraform Backends
 

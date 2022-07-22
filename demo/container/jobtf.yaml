@@ -21,7 +21,7 @@ spec:
               value: '1234'
             - name: TF_VAR_aws_identity
               value: '1234'
-          image: cloudsoft/terraform:1.0
+          image: cloudsoft/terraform:latest
           imagePullPolicy: Never
           name: test
           volumeMounts:

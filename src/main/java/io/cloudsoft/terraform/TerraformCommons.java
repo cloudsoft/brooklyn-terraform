@@ -54,7 +54,7 @@ public interface TerraformCommons {
             .description("Configuration for the terraform job")
             .defaultValue(
                     Maps.newHashMap(
-                            Pair.of("image", "cloudsoft/terraform:1.0"),
+                            Pair.of("image", "cloudsoft/terraform:latest"),
 //                            Pair.of("image", "hashicorp/terraform:latest"),   // this doesn't have unzip or even bash, so doesn't work with our bashScript approach
                             Pair.of("imagePullPolicy", PullPolicy.IF_NOT_PRESENT.val()),
                             Pair.of("workingDir", "/tfws"),

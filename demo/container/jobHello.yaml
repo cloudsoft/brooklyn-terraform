@@ -8,7 +8,7 @@ spec:
       containers:
         - command:
             - ./hello.sh
-          image: cloudsoft/terraform:1.0
+          image: cloudsoft/terraform:latest
           imagePullPolicy: Never
           name: test
           workingDir: /tfws/scripts
