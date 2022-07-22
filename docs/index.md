@@ -108,7 +108,7 @@ This can be done either:
 * Using a process at a server
 
 If using a container, `kubectl` must be accessible to AMP 
-[as described elsewhere in the docs](https://brooklyn.apache.org/v/latest/XXX TODO), 
+[as described elsewhere](https://docs.cloudsoft.io/blueprints/syntax-effectors.html#containereffector),
 and the container `cloudsoft/terraform` available to it.
 That container should be able to run `terraform`, `curl`, and `unzip`;
 a sample [Dockerfile](docker-build/Dockerfile) is available
@@ -118,7 +118,7 @@ To use a process on a server, simply supply an SSH or cloud location.
 This should be a Linux or Mac server. If `terraform` is already installed, it will be used,
 otherwise it will be installed.
 The server where AMP is running can be used by declaring `localhost` as the location
-[per these docs](https://brooklyn.apache.org/v/latest/locations/index.html#localhost).
+[per these docs](https://docs.cloudsoft.io/locations/reference/#localhost).
 
 In a production deployment, it is recommended either to ensure the persistent volumes 
 used by Kubernetes are backed up and shared across AMP failover targets
@@ -153,7 +153,7 @@ When started the entity installs Terraform and applies the configured plan.
 ### Terraform Outputs
 
 The Terraform plan's [outputs](https://www.terraform.io/intro/getting-started/outputs.html) are published as Brooklyn sensors prefixed with `tf.output.`. Use this to communicate
-information about the infrastructure created by Terraform to other components of the blueprint via Brooklyn's [dependent configuration](https://brooklyn.apache.org/v/0.11.0/yaml/yaml-reference.html#dsl-commands).
+information about the infrastructure created by Terraform to other components of the blueprint via Brooklyn's [dependent configuration](https://docs.cloudsoft.io/blueprints/syntax-yaml-reference.html#dsl-commands).
 
 For example, to attach a `TomcatServer` to an AWS security group that was created by a Terraform plan:
 
@@ -174,7 +174,6 @@ services:
 
 - type: terraform
   id: tf
-  location: localhost
   brooklyn.config:
     tf.configuration.contents: |
         # Credentials are given here for a self-contained blueprint. In practice you
@@ -244,7 +243,6 @@ For example, the following blueprint describes a Terraform deployment with the c
 are provided by a Vault installation using Terraform environment variables. You can declare your own terraform variables like shown below:
 
 ```yaml
-location: localhost
 name: Brooklyn Terraform Deployment With Environment Variables
 services:
   - type: terraform
@@ -260,7 +258,6 @@ services:
 Or you can also use `tf_var.` prefixes Brooklyn configurations:
 
 ```yaml
-location: localhost
 name: Brooklyn Terraform Deployment With Environment Variables
 services:
   - type: terraform
@@ -274,7 +271,6 @@ services:
 Brooklyn also supports providing a `terraform.tfvars` as remote resource at runtime using `tf.tfvars.url`.
 
 ```yaml
-location: localhost
 name: Brooklyn Terraform Deployment With remote 'terraform.tfvars'
 services:
 - type: terraform
@@ -284,7 +280,7 @@ services:
     tf.tfvars.url: https://[secure-location]/vs-terraform.tfvars 
 ```
 
-Keep credentials out of your blueprint by using Brooklyn's [external configuration providers](https://brooklyn.apache.org/v/latest/ops/externalized-configuration.html).
+Keep credentials out of your blueprint by using Brooklyn's [external configuration providers](https://docs.cloudsoft.io/operations/externalized-configuration.html).
 For example, rather than including the `provider` block in the example above, you might write:
 ```yaml
     type: terraform
@@ -319,7 +315,6 @@ An example of a blueprint which uses an AWS S3 bucket to store the state file is
 
 ```yaml
 name: Brooklyn Terraform Deployment
-location: localhost
 services:
   - type: terraform
     name: Terraform Configuration
@@ -375,7 +370,6 @@ In this blueprint, it is used as a `Name` tag for the created `aws_instance`.
 
 ```yaml
 name: Brooklyn Terraform Deployment
-location: localhost
 services:
   - type: terraform
     name: Terraform Configuration
@@ -566,7 +560,6 @@ Below is a sample blueprint showing how the drift compliance check can be added 
 
 ```
 name: Brooklyn Terraform Deployment
-location: localhost
 services:
   - type: terraform
     name: Terraform Configuration
@@ -594,7 +587,6 @@ entity that groups all the VMs together.
 name: TF Single VM
 services:
 - type: terraform
-  location: localhost
   name: Terraform Configuration for VS Tomcat
   id: tf-vs-tomcat
   brooklyn.config:
