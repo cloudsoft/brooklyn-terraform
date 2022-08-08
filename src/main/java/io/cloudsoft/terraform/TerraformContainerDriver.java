@@ -51,6 +51,10 @@ public class TerraformContainerDriver implements TerraformDriver {
                 .add(getEntity().getConfig(TerraformCommons.KUBEJOB_CONFIG))
                 .add(ConfigBag.newInstance().configure(ContainerCommons.WORKING_DIR, getTerraformActiveDir()).getAllConfig());
 
+        // if image specified, use that
+        String image = getEntity().getConfig(TerraformConfiguration.CONTAINER_IMAGE);
+        if (Strings.isNonBlank(image)) config.put("image", image);
+
         String namespace = "cloudsoft-"+getEntity().getApplicationId()+"-"+getEntity().getId()+"-terraform";
         LOG.debug("Launching task in namespace "+namespace+" with config "+config+" for command "+command);
         ContainerTaskFactory<?,String> tf = ContainerTaskFactory.newInstance()

@@ -22,7 +22,7 @@ import javax.annotation.Nullable;
         description = "Brooklyn Terraform entity for lifecycle management of a Terraform configuration",
         iconUrl = "classpath://io/cloudsoft/terraform/logo.png")
 @ImplementedBy(TerraformConfigurationImpl.class)
-public interface TerraformConfiguration extends SoftwareProcess {
+public interface TerraformConfiguration extends SoftwareProcess, TerraformCommons {
     String TERRAFORM_DOWNLOAD_URL = "https://releases.hashicorp.com/terraform/${version}/terraform_${version}_${driver.osTag}.zip";
 
     enum TerraformStatus {

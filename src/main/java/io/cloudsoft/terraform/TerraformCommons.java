@@ -6,6 +6,7 @@ import io.cloudsoft.terraform.util.Maps;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigConstraints;
 import org.apache.brooklyn.core.config.ConfigKeys;
+import org.apache.brooklyn.tasks.kubectl.ContainerCommons;
 import org.apache.brooklyn.tasks.kubectl.PullPolicy;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
 import org.apache.brooklyn.util.time.Duration;
@@ -69,6 +70,8 @@ public interface TerraformCommons {
                     )
             )
             .build();
+
+    ConfigKey<String> CONTAINER_IMAGE = ContainerCommons.CONTAINER_IMAGE;
 
     String SSH_MODE = "ssh";
     /**
