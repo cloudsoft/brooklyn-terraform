@@ -601,3 +601,58 @@ services:
       config: tf.resource.type
       equals: vsphere_virtual_machine
 ```
+
+The `DynamicGroup` can also be used with the `org.apache.brooklyn.entity.group.GroupsChangePolicy`
+to attach locations, sensors, effectors, and policies to the resources collected by the dynamic group,
+and to invoke operations once the resource is up.
+For example:
+
+```
+  brooklyn.policies:
+    - type: org.apache.brooklyn.entity.group.GroupsChangePolicy
+      brooklyn.config:
+        member.locations:
+          - type: org.apache.brooklyn.location.ssh.SshMachineLocation
+            brooklyn.config:
+              user: $brooklyn:entity("tf-vs-tomcat").config("AMI-User")
+              address: $brooklyn:attributeWhenReady("tf.value.public_ip")
+              privateKeyData: $brooklyn:entity("tf-vs-tomcat").attributeWhenReady("tf.output.efs-server-private-key")
+
+        member.initializers:
+          # Periodic command to see when last updated
+          - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+            brooklyn.config:
+              name: web.content.lastUpdated
+              command: cat /mnt/efs/last-update.txt
+              period: 10s
+              targetType: timestamp
+
+          # Effector to update content
+          - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+            brooklyn.config:
+              name: update-web-files
+              description: Trigger a re-download of the latest web content
+              command: |
+                cd /mnt/efs
+                mkdir -p live
+                mkdir -p update
+                cd update
+                if ( ! curl -L https://github.com/repo/project/archive/refs/heads/main.tar.gz | tar xvfz - ) ; then
+                  echo Failed to download
+                  exit 1
+                fi
+                cd ..
+                mv live live-old
+                if ( mv update/* live ) ; then
+                  rm -rf live-old
+                  echo Updated live site
+                  date > last-update.txt
+                  exit 0
+                fi
+                echo Nothing downloaded
+                exit 1
+
+        # invoke this on join so that the data is populated initially
+        member.invoke:
+        - update-web-files                
+```
