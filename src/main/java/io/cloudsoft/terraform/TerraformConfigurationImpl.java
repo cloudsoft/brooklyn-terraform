@@ -34,9 +34,11 @@ import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.location.ssh.SshMachineLocation;
+import org.apache.brooklyn.tasks.kubectl.ContainerTaskFactory;
 import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.task.Tasks;
+import org.apache.brooklyn.util.core.task.system.SimpleProcessTaskFactory;
 import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.guava.Maybe;
 import org.apache.brooklyn.util.text.Strings;
@@ -504,9 +506,26 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Effector(description = "Destroy the Terraform configuration")
     public void destroyTerraform() {
         retryUntilLockAvailable("terraform destroy", () -> {
-            getDriver().destroy();
+            getDriver().destroy(false);
             return null;
         }, Duration.seconds(-1), Duration.seconds(1));
+    }
+
+    @Override
+    public void onManagementDestroying() {
+        super.onManagementDestroying();
+        SimpleProcessTaskFactory<?, ?, String, ?> command = getDriver().newCommandTaskFactory(false, "ignored");
+        if (command instanceof ContainerTaskFactory) {
+            try {
+                getExecutionContext().submit("ensuring container namespace is deleted", () -> {
+                    ((ContainerTaskFactory) command).doDeleteNamespace(true, false);
+                }).get();
+            } catch (Exception e) {
+                Exceptions.propagateIfFatal(e);
+                String ns = ((ContainerTaskFactory) command).getNamespace();
+                LOG.error("Unable to delete container namespace '"+ns+" for "+this+" (ignoring): "+e);
+            }
+        }
     }
 
     @Override

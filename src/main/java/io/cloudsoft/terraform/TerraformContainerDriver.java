@@ -11,6 +11,7 @@ import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.TaskTags;
+import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.system.ProcessTaskStub;
 import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.core.task.system.internal.SystemProcessTaskFactory;
@@ -67,6 +68,15 @@ public class TerraformContainerDriver implements TerraformDriver {
         return tf;
     }
 
+    transient String cachedHomeDir = null;
+    @Override
+    public String computeHomeDir(boolean clearCache) {
+        if (clearCache || cachedHomeDir==null) {
+            cachedHomeDir = DynamicTasks.queue(newCommandTaskFactory(false, "cd ~ && pwd").returningStdout()).getUnchecked().trim();
+        }
+        return cachedHomeDir;
+    }
+
     @Override
     public String makeTerraformCommand(String argument) {
         return "terraform "+argument;
@@ -87,7 +97,8 @@ public class TerraformContainerDriver implements TerraformDriver {
     @Override
     public void copyTo(InputStream tfStream, String target) {
         File f = Os.writeToTempFile(tfStream, "terraform-" + getEntity().getId(), "dat");
-        TaskAdaptable<String> tc = Entities.submit(getEntity(), newCommandTaskFactory(false, "sleep 120")
+        ContainerTaskFactory<?, String> cf = newCommandTaskFactory(false, "sleep 120");
+        TaskAdaptable<String> tc = Entities.submit(getEntity(), cf
                 .summary("sleeping container to allow files to be copied").newTask());
         ContainerTaskResult ctr = (ContainerTaskResult) TaskTags.getTagsFast(tc.asTask()).stream().filter(x -> x instanceof ContainerTaskResult).findAny().orElseThrow(() -> new IllegalStateException("Cannot find namespace result on task " + tc));
 
@@ -114,8 +125,12 @@ public class TerraformContainerDriver implements TerraformDriver {
                 .requiringExitCodeZero().newTask());
         t.block();
         f.delete();
+        ContainerTaskResult result = (ContainerTaskResult) TaskTags.getTagsFast(tc.asTask()).stream().filter(x -> x instanceof ContainerTaskResult).findAny().orElse(null);
+        if (result!=null && result.getKubeJobName()!=null) {
+            // deleting a job terminates the containers, but sometimes (eg Docker Desktop) this is not immediate, and can take 20s (!)
+            Entities.submit(getEntity(), cf.newDeleteJobTask(result.getKubeJobName()).allowingNonZeroExitCode().summary("cancel sleeping container used for file copy"));
+        }
         t.get();
-        // TODO ideally would now cancel tc
     }
 
     @Override

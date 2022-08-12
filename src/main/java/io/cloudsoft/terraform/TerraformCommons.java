@@ -6,6 +6,7 @@ import io.cloudsoft.terraform.util.Maps;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigConstraints;
 import org.apache.brooklyn.core.config.ConfigKeys;
+import org.apache.brooklyn.core.config.MapConfigKey;
 import org.apache.brooklyn.tasks.kubectl.ContainerCommons;
 import org.apache.brooklyn.tasks.kubectl.PullPolicy;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
@@ -42,6 +43,11 @@ public interface TerraformCommons {
     ConfigKey<String> TFVARS_FILE_URL = ConfigKeys.builder(String.class)
             .name("tf.tfvars.url") // should be part of deployed the bundle
             .description("URL of the file containing values for the Terraform variables.")
+            .build();
+
+    @SetFromFlag("tfTemplatesContents")
+    ConfigKey<Map<String,String>> EXTRA_TEMPLATES_CONTENTS = new MapConfigKey.Builder(String.class, "tf.extra.templates.contents")
+            .description("Freemarker templates for files to be installed, keyed by path (in working dir, absolute, or relative to ~/), value being contents or templates")
             .build();
 
     @SetFromFlag("tfExecutionMode")

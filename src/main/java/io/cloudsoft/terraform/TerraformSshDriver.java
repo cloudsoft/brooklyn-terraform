@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import static io.cloudsoft.terraform.TerraformCommons.TFVARS_FILE_URL;
 import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_DOWNLOAD_URL;
 import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_PATH;
 import static java.lang.String.format;
@@ -58,6 +57,15 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
 
     public String getTerraformActiveDir() {
         return getRunDir() + "/" + "active/";
+    }
+
+    transient String cachedHomeDir = null;
+    @Override
+    public String computeHomeDir(boolean clearCache) {
+        if (clearCache || cachedHomeDir==null) {
+            cachedHomeDir = DynamicTasks.queue(newCommandTaskFactory(false, "cd ~ && pwd").requiringZeroAndReturningStdout()).get();
+        }
+        return cachedHomeDir;
     }
 
     public String makeTerraformCommand(String argument) {

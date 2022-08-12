@@ -1,5 +1,6 @@
 package io.cloudsoft.terraform;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.sql.Date;
 import java.text.SimpleDateFormat;
@@ -9,7 +10,6 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
-import com.google.common.base.Function;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.mgmt.Task;
@@ -28,9 +28,8 @@ import org.apache.brooklyn.util.core.task.BasicTask;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.TaskTags;
 import org.apache.brooklyn.util.core.task.Tasks;
-import org.apache.brooklyn.util.core.task.ssh.SshTasks;
-import org.apache.brooklyn.util.core.task.system.ProcessTaskWrapper;
 import org.apache.brooklyn.util.core.task.system.SimpleProcessTaskFactory;
+import org.apache.brooklyn.util.core.text.TemplateProcessor;
 import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
@@ -39,8 +38,6 @@ import org.apache.brooklyn.util.time.Duration;
 import org.apache.brooklyn.util.time.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 
 import static io.cloudsoft.terraform.TerraformCommons.*;
 import static java.lang.String.format;
@@ -135,6 +132,8 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     /** path to active dir, with trailing slash */
     String getTerraformActiveDir();
+    String computeHomeDir(boolean clearCache);
+
     default String getLogFileLocation() {
         return getStateFilePath();
     }
@@ -282,6 +281,37 @@ public interface TerraformDriver extends SoftwareProcessDriver {
             copyTo(tfStream, getTfVarsFilePath());
         }
     }
+    /**
+     * If extra templates contents is specified, create those
+     */
+    default void copyTemplatesContents(){
+        final Map<String, String> templates = getEntity().getConfig(EXTRA_TEMPLATES_CONTENTS);
+        if (templates!=null && !templates.isEmpty()) {
+            DynamicTasks.queue("Install extra TF files", () -> {
+                templates.forEach((targetPath, template) -> {
+                    DynamicTasks.queue("Install "+targetPath, () -> {
+                        String remotePath;
+                        if (Os.isAbsolutish(targetPath)) {
+                            if (targetPath.startsWith("~/")) {
+                                remotePath = Os.mergePathsUnix(computeHomeDir(false), targetPath.substring(2));
+                            } else {
+                                remotePath = targetPath;
+                            }
+                        } else {
+                            remotePath = Os.mergePathsUnix(getTerraformActiveDir(), targetPath);
+                        }
+
+                        String templateResolved = TemplateProcessor.processTemplateContents(template, this, null);
+                        LOG.debug("Installing template to "+remotePath+":\n"+templateResolved);
+
+                        InputStream tfStream = new ByteArrayInputStream(templateResolved.getBytes());
+                        copyTo(tfStream, remotePath);
+                    });
+                });
+            });
+        }
+    }
+
     default void customize() {
         final String cfgPath = getConfigurationFilePath();
 
@@ -290,6 +320,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
             // copy terraform configuration file or zip
             copyTo(getConfiguration(), cfgPath);
             copyTfVars();
+            copyTemplatesContents();
         }));
 
         DynamicTasks.queue(newCommandTaskFactory(true,
@@ -338,7 +369,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         // see comments on clearLockFile effector (restarting Brooklyn might interrupt terraform, leaving lock files present)
         retryUntilLockAvailable("destroying", () -> {
             this.runRemoveLockFileTask();
-            this.destroy();
+            this.destroy(null);
             return null;
         });
     }
@@ -348,11 +379,20 @@ public interface TerraformDriver extends SoftwareProcessDriver {
                 .summary("Destroying terraform deployment.") );
     }
 
-    default void destroy() {
-        runDestroyTask();
-        ((TerraformConfiguration)getEntity()).removeDiscoveredResources();
-        // TODO delete files? also delete backup? maybe have a config key to prevent that?
-        deleteFilesOnDestroy();
+    default void destroy(Boolean alsoDestroyFiles) {
+        Exception error = null;
+        try {
+            runDestroyTask();
+            ((TerraformConfiguration) getEntity()).removeDiscoveredResources();
+        } catch (Exception e) {
+            Exceptions.propagateIfFatal(e);
+            error = e;
+        }
+        if (Boolean.TRUE.equals(alsoDestroyFiles) || (alsoDestroyFiles==null && error==null)) {
+            // delete files on stop if no error
+            deleteFilesOnDestroy();
+        }
+        if (error!=null) Exceptions.propagate(error);
     }
 
     default void deleteFilesOnDestroy() {}
