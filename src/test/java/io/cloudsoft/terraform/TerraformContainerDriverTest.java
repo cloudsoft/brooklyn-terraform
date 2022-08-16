@@ -104,19 +104,21 @@ public class TerraformContainerDriverTest extends AbstractYamlTest {
         }
 
         String salt = Strings.makeRandomId(8);
-        String key = "brooklyn-terraform-test/" + salt;
+        String keyPrefix = "brooklyn-terraform-test/";
+        String key = "brooklyn-terraform-test/Terraform Configuration - " + salt;
         LOG.info("Running s3 backend test with salt "+salt);
         Application app = doTest(Strings.lines(
                 "  shell.env:",
                 "    AWS_ACCESS_KEY_ID: "+getAwsKey().getLeft(),
                 "    AWS_SECRET_ACCESS_KEY: "+getAwsKey().getRight(),
-                "  bucket_path: "+key,
+                "  bucket_path: "+keyPrefix,
+                "  salt: "+salt,
                 "  tf.extra.templates.contents:",
                 "    backend.tf: |",
                 "      terraform {",
                 "        backend \"s3\" {",
                 "          bucket = \"" + S3_BUCKET_NAME + "\"",
-                "          key    = \"${config.bucket_path}\"",
+                "          key    = \"${config.bucket_path}${name} - ${config.salt}\"",
                 "          region = \"eu-west-1\"",
                 "        }",
                 "      }",
@@ -138,7 +140,9 @@ public class TerraformContainerDriverTest extends AbstractYamlTest {
     public Application doTest(String lines, boolean start) throws Exception {
         addCatalogItems(loadYaml("classpath://catalog.bom"));  // adding terraform type to the catalog
 
-        String blueprint = loadYaml("classpath://blueprints/no-location-sample-sns-inline.yaml")
+        String blueprint =
+                "name: root\n" +
+                loadYaml("classpath://blueprints/no-location-sample-sns-inline.yaml")
                 + Strings.lines("",
                 "brooklyn.config:",
                 "  tf_var.aws_access_key: " + getAwsKey().getLeft(),
