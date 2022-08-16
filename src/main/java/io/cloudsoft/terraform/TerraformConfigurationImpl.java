@@ -141,10 +141,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 .uniqueTag("scan-terraform-plan-and-output")
                 .entity(this)
                 .period(getConfig(TerraformCommons.POLLING_PERIOD))
-                .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(this))
+                .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(this)).name("refresh terraform plan")
                         .onResult(new PlanSuccessFunction())
                         .onFailure(new PlanFailureFunction()))
-                .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(this))
+                .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(this)).name("refresh terraform output")
                         .onResult(new OutputSuccessFunction())
                         .onFailure(new OutputFailureFunction()))
                 .build());
