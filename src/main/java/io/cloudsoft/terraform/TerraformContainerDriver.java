@@ -105,13 +105,13 @@ public class TerraformContainerDriver implements TerraformDriver {
         synchronized (ctr) {
             while (Strings.isBlank(ctr.getKubePodName()) && !tc.asTask().isDone()) {
                 try {
-                    ctr.wait();
+                    ctr.wait(100);
                 } catch (InterruptedException e) {
                     throw Exceptions.propagate(e);
                 }
             }
         }
-        if (tc.asTask().isDone()) throw new IllegalStateException("Unable to get pod name from task whenc copying to "+target);
+        if (tc.asTask().isDone()) throw new IllegalStateException("Unable to get pod name from task when copying to "+target);
 
         String namespace = ctr.getNamespace();
         String pod = ctr.getKubePodName();

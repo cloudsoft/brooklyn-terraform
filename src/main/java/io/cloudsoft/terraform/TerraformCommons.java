@@ -2,6 +2,7 @@ package io.cloudsoft.terraform;
 
 import com.google.common.collect.Sets;
 import com.google.common.reflect.TypeToken;
+import io.cloudsoft.terraform.util.Constraints;
 import io.cloudsoft.terraform.util.Maps;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.config.ConfigConstraints;
@@ -10,6 +11,7 @@ import org.apache.brooklyn.core.config.MapConfigKey;
 import org.apache.brooklyn.tasks.kubectl.ContainerCommons;
 import org.apache.brooklyn.tasks.kubectl.PullPolicy;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
+import org.apache.brooklyn.util.core.predicates.DslPredicates;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -21,8 +23,8 @@ public interface TerraformCommons {
     ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
             .name("tf.polling.period")
             .description("Contents of the configuration file that will be applied by Terraform.")
-            .defaultValue(Duration.seconds(15))
-            .constraint(input -> !input.isShorterThan(Duration.seconds(15))) // if shorter than 30s difficulties of executing 'apply' appear
+            .defaultValue(Duration.seconds(30))
+            //.constraint(Constraints.lessThan(Duration.seconds(15))) // if shorter than 15s difficulties of executing 'apply' appear
             .build();
 
     @SetFromFlag("tfConfigurationContents")

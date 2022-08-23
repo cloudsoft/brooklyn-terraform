@@ -263,9 +263,9 @@ public interface TerraformDriver extends SoftwareProcessDriver {
                 "rm -rf "+backupPath,
                 "mkdir -p "+backupPath,
                 "cd "+activePath,
-                "mv * "+backupPath,
-                "mv "+backupPath+"*.tfstate ."))
-            .summary("Moves existing configuration files to backup folder")
+                "mv * "+backupPath+" || echo nothing to backup",
+                "mv "+backupPath+"*.tfstate . || echo no tfstate to restore"))
+            .summary("Move existing configuration files to backup folder")
             .allowingNonZeroExitCode()  // working directory may be empty
         );
     }
