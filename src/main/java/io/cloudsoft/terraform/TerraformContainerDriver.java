@@ -103,7 +103,7 @@ public class TerraformContainerDriver implements TerraformDriver {
         ContainerTaskResult ctr = (ContainerTaskResult) TaskTags.getTagsFast(tc.asTask()).stream().filter(x -> x instanceof ContainerTaskResult).findAny().orElseThrow(() -> new IllegalStateException("Cannot find namespace result on task " + tc));
 
         synchronized (ctr) {
-            while (Strings.isBlank(ctr.getKubePodName()) && !tc.asTask().isDone()) {
+            while (!ctr.getContainerStarted() && !tc.asTask().isDone()) {
                 try {
                     ctr.wait(100);
                 } catch (InterruptedException e) {
@@ -111,11 +111,11 @@ public class TerraformContainerDriver implements TerraformDriver {
                 }
             }
         }
-        if (tc.asTask().isDone()) throw new IllegalStateException("Unable to get pod name from task when copying to "+target);
+        if (tc.asTask().isDone()) throw new IllegalStateException("Container for file upload failed prematurely, when copying to "+target);
 
         String namespace = ctr.getNamespace();
         String pod = ctr.getKubePodName();
-        if (Strings.isBlank(namespace) || Strings.isBlank(pod)) throw new IllegalStateException("Unable to get pod name from task whenc copying to "+target);
+        if (Strings.isBlank(namespace) || Strings.isBlank(pod)) throw new IllegalStateException("Unable to get pod name from task when copying to "+target);
 
         // https://medium.com/@nnilesh7756/copy-directories-and-files-to-and-from-kubernetes-container-pod-19612fa74660
         ProcessTaskWrapper<Object> t = DynamicTasks.queue(new SystemProcessTaskFactory.ConcreteSystemProcessTaskFactory<String>(

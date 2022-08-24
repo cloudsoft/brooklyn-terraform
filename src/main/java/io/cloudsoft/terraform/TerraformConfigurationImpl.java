@@ -514,12 +514,24 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void onManagementDestroying() {
         super.onManagementDestroying();
-        SimpleProcessTaskFactory<?, ?, String, ?> command = getDriver().newCommandTaskFactory(false, "ignored");
+        SimpleProcessTaskFactory<?, ?, String, ?> command = getDriver().newCommandTaskFactory(false, null);
         if (command instanceof ContainerTaskFactory) {
             try {
-                getExecutionContext().submit("ensuring container namespace is deleted", () -> {
-                    ((ContainerTaskFactory) command).doDeleteNamespace(true, false);
-                }).get();
+                // delete all files in the volume created for this
+                getExecutionContext().submit(
+                        ((ContainerTaskFactory)command).setDeleteNamespaceAfter(true).summary("Deleting files and namespace").bashScriptCommands(
+                            "cd ..",
+                            "rm -rf "+getId(),
+                            "cd ..",
+                            "rmdir "+getApplicationId()+" || echo other entities exist in this application, not deleting application folder")
+                                .newTask()
+                    ).get();
+
+                // previously we just deleted the namespace
+//                getExecutionContext().submit("ensuring container namespace is deleted", () -> {
+//                    ((ContainerTaskFactory) command).doDeleteNamespace(true, false);
+//                }).get();
+
             } catch (Exception e) {
                 Exceptions.propagateIfFatal(e);
                 String ns = ((ContainerTaskFactory) command).getNamespace();

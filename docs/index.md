@@ -656,3 +656,53 @@ For example:
         member.invoke:
         - update-web-files                
 ```
+
+## Low-Level Details
+
+### Containers
+
+The container-based Terraform driver uses a volume mount to run its terraform commands.
+To see what is actually going on within Kubernetes, it can be useful to connect to a container with that volume mounted.
+The following job spec creates a container for 20 minutes (replacing `APP_ID` and `ENTITY_ID`):
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: br-custom
+spec:
+  backoffLimit: 0
+  completions: 1
+  parallelism: 1
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - sleep 1200
+        command:
+        - /bin/bash
+        - -c
+        image: cloudsoft/terraform:latest
+        imagePullPolicy: IfNotPresent
+        name: test
+        volumeMounts:
+        - mountPath: /tfws
+          name: terraform-workspace
+        workingDir: /tfws/brooklyn-terraform/APP_ID/ENTITY_ID/active/
+      restartPolicy: Never
+      volumes:
+      - name: terraform-workspace
+        hostPath:
+          path: /tfws
+```
+
+Then to get a shell on that volume, run (replacing `POD_ID`):
+
+```shell
+kubectl apply -f /tmp/job.yaml   # the file above
+kubectl describe job br-custom
+kubectl describe pods
+kubectl exec --stdin --tty br-custom-POD_ID -- /bin/bash
+```
+

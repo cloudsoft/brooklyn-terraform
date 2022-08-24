@@ -70,7 +70,7 @@ public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigK
         }
     }
 
-    private static Predicate<Map<String,Object> > driftInfoCheck = d -> d.containsKey(PLAN_STATUS) && !(TerraformConfiguration.TerraformStatus.SYNC.equals(d.get(PLAN_STATUS))) && d.containsKey("tf.resource.changes");
+    private static Predicate<Map<String,Object> > driftInfoCheck = d -> d!=null && d.containsKey(PLAN_STATUS) && !(TerraformConfiguration.TerraformStatus.SYNC.equals(d.get(PLAN_STATUS))) && d.containsKey("tf.resource.changes");
 
     public class TerraformEntityDriftCheck implements SensorEventListener<TerraformStatus> {
 
@@ -103,8 +103,11 @@ public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigK
         }
 
         private String getSummaryForConfiguration(Map<String,Object> driftInfo){
-            String summary = "";
-            if (driftInfo.containsKey(PLAN_STATUS)){
+            String summary;
+            if (driftInfo==null) {
+                summary = "No drift info retrieved.";
+            } else if (driftInfo.containsKey(PLAN_STATUS)){
+                summary = "";
                 if (driftInfo.get(PLAN_STATUS).equals(TerraformStatus.SYNC)) {
                     summary += "The infrastructure matches the configuration. No changes required.";
                 } else {
@@ -115,7 +118,7 @@ public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigK
                     }
                 }
             } else {
-                summary += "There has been an error retrieving the current status of the configuration.";
+                summary = "Drift info does not contain "+PLAN_STATUS+": "+driftInfo;
             }
             return summary;
         }
@@ -130,7 +133,7 @@ public class DriftCheck extends EntityInitializers.InitializerPatternWithConfigK
                 }
                 notes = notes.substring(0,notes.length()-2);
             }
-            if (!Objects.isNull(driftInfo.get("errors"))){
+            if (driftInfo!=null && !Objects.isNull(driftInfo.get("errors"))){
                 notes += " - Errors: " + driftInfo.get("errors");
             }
             return notes;
