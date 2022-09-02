@@ -81,6 +81,9 @@ public interface TerraformCommons {
 
     ConfigKey<String> CONTAINER_IMAGE = ContainerCommons.CONTAINER_IMAGE;
 
+    ConfigKey<Duration> CONTAINER_TIMEOUT = ConfigKeys.newConfigKey(Duration.class, "container.timeout", "How long to wait for container-based Terraform commands (default 2 hours)", Duration.hours(2));
+
+
     String SSH_MODE = "ssh";
     /**
      * I added this because commands can also be used by directly calling {@code docker run ...},

@@ -50,6 +50,7 @@ public class TerraformContainerDriver implements TerraformDriver {
     public ContainerTaskFactory<?,String> newCommandTaskFactory(boolean withEnvVars, String command) {
         MutableMap<Object, Object> config = MutableMap.of()
                 .add(getEntity().getConfig(TerraformCommons.KUBEJOB_CONFIG))
+                .add(ContainerCommons.TIMEOUT, getEntity().getConfig(TerraformCommons.CONTAINER_TIMEOUT))
                 .add(ConfigBag.newInstance().configure(ContainerCommons.WORKING_DIR, getTerraformActiveDir()).getAllConfig());
 
         // if image specified, use that

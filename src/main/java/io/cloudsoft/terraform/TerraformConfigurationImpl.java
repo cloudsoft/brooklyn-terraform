@@ -415,7 +415,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     }
 
     <V> V retryUntilLockAvailable(String summary, Callable<V> runWithLock, Duration timeout, Duration retryFrequency) {
-        CountdownTimer timer = timeout.countdownTimer();
+        CountdownTimer timerO = timeout.isNegative() ? null : timeout.countdownTimer();
         while(true) {
             Object hadLock = null;
             Thread lockOwner = configurationChangeInProgress.get();
@@ -448,11 +448,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     }
                 }
             } else {
-                if(timer.isExpired()) {
+                if (timerO!=null && timerO.isExpired()) {
                     throw new IllegalStateException("Cannot perform "+summary+": operation timed out before lock available (is another change or refresh in progress?)");
                 }
                 try {
-                    Tasks.withBlockingDetails("Waiting on terraform lock (change or refresh in progress?), before retrying "+summary,
+                    Tasks.withBlockingDetails("Waiting on terraform lock (change or refresh in progress?), owned by "+configurationChangeInProgress.get()+"; sleeping then retrying "+summary,
                             () -> { Time.sleep(retryFrequency); return null; } );
                 } catch (Exception e) {
                     throw Exceptions.propagate(e);
