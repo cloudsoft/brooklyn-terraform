@@ -8,6 +8,7 @@ import com.google.common.base.Predicate;
 
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.core.sensor.Sensors;
+import org.apache.brooklyn.util.core.flags.TypeCoercions;
 import org.apache.brooklyn.util.guava.SerializablePredicate;
 import org.apache.brooklyn.util.text.StringPredicates;
 
@@ -30,8 +31,9 @@ public class SensorMatches implements SerializablePredicate<Entity> {
     @Override
     public boolean apply(@Nullable Entity entity) {
         if (entity == null) return false;
-        String value = entity.getAttribute(Sensors.newStringSensor(name));
-        return StringPredicates.matchesRegex(regex).apply(value);
+        Object value = entity.getAttribute(Sensors.newSensor(Object.class, name));
+        String vs = TypeCoercions.coerce(value, String.class);
+        return StringPredicates.matchesRegex(regex).apply(vs);
     }
 
     @Override

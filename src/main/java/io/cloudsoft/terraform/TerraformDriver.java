@@ -194,7 +194,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     default void runApplyTask() {
         DynamicTasks.queue(applyTaskWithName("Applying terraform plan"));
         DynamicTasks.waitForLast();
-        getEntity().sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, new SimpleDateFormat("EEE, d MMM yyyy, HH:mm:ss").format(Date.from(Instant.now())));
+        getEntity().sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, Instant.now());
         // previously removed children here, but (1) there might be children we shouldn't remove; and (2) the synch should take care of that
         // now _caller_ should force a new plan instead
     }

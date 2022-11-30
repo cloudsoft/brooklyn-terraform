@@ -19,7 +19,7 @@ public class StartableManagedResourceImpl extends ManagedResourceImpl implements
 
     protected void connectSensors() {
         Map<String, Object> resourceDetails = this.getConfig(StartableManagedResource.STATE_CONTENTS);
-        resourceDetails.forEach((k,v) -> sensors().set(Sensors.newStringSensor("tf." + k), v.toString()));
+        resourceDetails.forEach((k,v) -> sensors().set(Sensors.newSensor(Object.class, "tf." + k), v.toString()));
         if(!resourceDetails.containsKey("resource.status")) {
             sensors().set(RESOURCE_STATUS, "ok"); // the provider doesn't provide any property to let us know the state of the resource
         }
@@ -31,8 +31,8 @@ public class StartableManagedResourceImpl extends ManagedResourceImpl implements
     @Override
     public boolean refreshSensors(Map<String, Object> resource) {
         resource.forEach((k, v) -> {
-            if (!sensors().get(Sensors.newStringSensor("tf." + k)).equals(v)){
-                sensors().set(Sensors.newStringSensor("tf." + k), v.toString());
+            if (!sensors().get(Sensors.newSensor(Object.class, "tf." + k)).equals(v)){
+                sensors().set(Sensors.newSensor(Object.class, "tf." + k), v.toString());
             }
         });
 

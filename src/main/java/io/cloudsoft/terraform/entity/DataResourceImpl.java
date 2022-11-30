@@ -17,8 +17,8 @@ public class DataResourceImpl extends BasicEntityImpl  implements DataResource {
     @Override
     public boolean refreshSensors(Map<String, Object> resource) {
         resource.forEach((k, v) -> {
-            if (!Objects.equals(sensors().get(Sensors.newStringSensor("tf." + k)), v)) {
-                sensors().set(Sensors.newStringSensor("tf." + k), v.toString());
+            if (!Objects.equals(sensors().get(Sensors.newSensor(Object.class, "tf." + k)), v)) {
+                sensors().set(Sensors.newSensor(Object.class, "tf." + k), v.toString());
             }
         });
         return true;

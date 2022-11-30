@@ -1,5 +1,6 @@
 package io.cloudsoft.terraform;
 
+import java.time.Instant;
 import java.util.Map;
 
 import org.apache.brooklyn.api.catalog.Catalog;
@@ -62,7 +63,7 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
             .defaultValue(true)
             .build();
 
-    AttributeSensor<String> CONFIGURATION_APPLIED = Sensors.newStringSensor("tf.configuration.applied",
+    AttributeSensor<Instant> CONFIGURATION_APPLIED = Sensors.newSensor(Instant.class, "tf.configuration.applied",
             "The most recent time a Terraform configuration has been successfully applied.");
 
     @SuppressWarnings({"rawtypes", "unchecked"})
