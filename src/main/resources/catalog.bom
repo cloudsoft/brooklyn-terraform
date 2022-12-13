@@ -28,4 +28,4 @@ brooklyn.catalog:
   - id: terraform-predicate-resource-type
     name: "Terraform Resource Type Predicate"
     item:
-      type: io.cloudsoft.terraform.predicates.ResourceType
+      (type): io.cloudsoft.terraform.predicates.ResourceType
