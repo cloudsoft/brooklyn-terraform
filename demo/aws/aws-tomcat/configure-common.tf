@@ -6,7 +6,6 @@ provider "aws" {
 }
 
 resource "aws_key_pair" "ubuntu" {
-  key_name   = "ubuntu"
   public_key = file("key.pub")
 
   tags = {
