@@ -514,10 +514,13 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     public void onManagementDestroying() {
         super.onManagementDestroying();
-        SimpleProcessTaskFactory<?, ?, String, ?> command = getDriver().newCommandTaskFactory(false, null);
-        if (command instanceof ContainerTaskFactory) {
-            try {
+        SimpleProcessTaskFactory<?, ?, String, ?> command = null;
+        String ns = null;
+        try {
+            if( getDriver()!=null) command = getDriver().newCommandTaskFactory(false, null);
+            if (command instanceof ContainerTaskFactory) {
                 // delete all files in the volume created for this
+                ns = ((ContainerTaskFactory) command).getNamespace();
                 getExecutionContext().submit(
                         ((ContainerTaskFactory)command).setDeleteNamespaceAfter(true).summary("Deleting files and namespace").bashScriptCommands(
                             "cd ..",
@@ -532,11 +535,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 //                    ((ContainerTaskFactory) command).doDeleteNamespace(true, false);
 //                }).get();
 
-            } catch (Exception e) {
-                Exceptions.propagateIfFatal(e);
-                String ns = ((ContainerTaskFactory) command).getNamespace();
-                LOG.error("Unable to delete container namespace '"+ns+" for "+this+" (ignoring): "+e);
             }
+        } catch (Exception e) {
+            Exceptions.propagateIfFatal(e);
+            LOG.error("Unable to delete container namespace '"+ns+" for "+this+" (ignoring): "+e);
         }
     }
 
