@@ -4,8 +4,10 @@ import java.time.Instant;
 import java.util.Map;
 
 import org.apache.brooklyn.api.catalog.Catalog;
+import org.apache.brooklyn.api.catalog.CatalogConfig;
 import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
+import org.apache.brooklyn.config.ConfigInheritance;
 import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
@@ -13,6 +15,7 @@ import org.apache.brooklyn.core.config.ConfigKeys;
 import org.apache.brooklyn.core.sensor.AttributeSensorAndConfigKey;
 import org.apache.brooklyn.core.sensor.BasicAttributeSensor;
 import org.apache.brooklyn.core.sensor.Sensors;
+import org.apache.brooklyn.core.workflow.steps.CustomWorkflowStep;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.util.core.flags.SetFromFlag;
 
@@ -61,6 +64,31 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
             .name("tf.drift.check")
             .description("Allow to look skip drift checking for the deployment by setting it to 'false'")
             .defaultValue(true)
+            .build();
+
+    ConfigKey<CustomWorkflowStep> PRE_PLAN_WORKFLOW = ConfigKeys.builder(CustomWorkflowStep.class, "pre_plan.workflow")
+            .description("workflow to run prior to any plan")
+            .runtimeInheritance(ConfigInheritance.NONE)
+            .build();
+
+    ConfigKey<CustomWorkflowStep> PRE_APPLY_WORKFLOW = ConfigKeys.builder(CustomWorkflowStep.class, "pre_apply.workflow")
+            .description("workflow to run prior to any apply")
+            .runtimeInheritance(ConfigInheritance.NONE)
+            .build();
+
+    ConfigKey<CustomWorkflowStep> POST_APPLY_WORKFLOW = ConfigKeys.builder(CustomWorkflowStep.class, "post_apply.workflow")
+            .description("workflow to run after an apply")
+            .runtimeInheritance(ConfigInheritance.NONE)
+            .build();
+
+    ConfigKey<CustomWorkflowStep> PRE_DESTROY_WORKFLOW = ConfigKeys.builder(CustomWorkflowStep.class, "pre_destroy.workflow")
+            .description("workflow to run prior to destroy")
+            .runtimeInheritance(ConfigInheritance.NONE)
+            .build();
+
+    ConfigKey<CustomWorkflowStep> POST_DESTROY_WORKFLOW = ConfigKeys.builder(CustomWorkflowStep.class, "post_destroy.workflow")
+            .description("workflow to run after destroy")
+            .runtimeInheritance(ConfigInheritance.NONE)
             .build();
 
     AttributeSensor<Instant> CONFIGURATION_APPLIED = Sensors.newSensor(Instant.class, "tf.configuration.applied",

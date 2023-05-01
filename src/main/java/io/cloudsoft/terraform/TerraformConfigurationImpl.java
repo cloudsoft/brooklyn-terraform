@@ -18,6 +18,7 @@ import org.apache.brooklyn.api.location.MachineLocation;
 import org.apache.brooklyn.api.location.MachineProvisioningLocation;
 import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
+import org.apache.brooklyn.config.ConfigKey;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
 import org.apache.brooklyn.core.entity.Attributes;
@@ -27,6 +28,8 @@ import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.core.entity.trait.Startable;
 import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
+import org.apache.brooklyn.core.workflow.WorkflowExecutionContext;
+import org.apache.brooklyn.core.workflow.steps.CustomWorkflowStep;
 import org.apache.brooklyn.entity.group.BasicGroup;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessDriverLifecycleEffectorTasks;
@@ -37,6 +40,7 @@ import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.tasks.kubectl.ContainerTaskFactory;
 import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.collections.MutableMap;
+import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.system.SimpleProcessTaskFactory;
 import org.apache.brooklyn.util.exceptions.Exceptions;
@@ -461,16 +465,31 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
     }
 
+    protected Maybe<Object> runWorkflow(ConfigKey<CustomWorkflowStep> key) {
+        return workflowTask(key).transformNow(t ->
+                DynamicTasks.queueIfPossible(t).orSubmitAsync(this).getTask().getUnchecked() );
+    }
+
+    protected Maybe<Task<Object>> workflowTask(ConfigKey<CustomWorkflowStep> key) {
+        CustomWorkflowStep workflow = getConfig(key);
+        if (workflow==null) return Maybe.absent();
+        return workflow.newWorkflowExecution(this, key.getName().toLowerCase(),
+                null /* could getInput from workflow, and merge shell environment here */).getTask(true);
+    }
+
     @Override
     @Effector(description = "Apply the Terraform configuration to the infrastructure. Changes made outside terraform are reset.")
     public void apply() {
+        runWorkflow(PRE_APPLY_WORKFLOW);
         retryUntilLockAvailable("terraform apply", () -> { Objects.requireNonNull(getDriver()).runApplyTask(); return null; });
+        runWorkflow(POST_APPLY_WORKFLOW);
         plan();
     }
 
     @Override
     @Effector(description="Performs the Terraform plan command to show what would change (and refresh sensors).")
     public void plan() {
+        runWorkflow(PRE_PLAN_WORKFLOW);
         new OutputSuccessFunction().apply(new OutputProvider(this).get());
         retryUntilLockAvailable("terraform plan", () -> getDriver().runPlanTask());
         new PlanSuccessFunction().apply(new PlanProvider(this).get());

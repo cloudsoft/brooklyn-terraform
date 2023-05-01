@@ -1,15 +1,5 @@
 package io.cloudsoft.terraform;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.sql.Date;
-import java.text.SimpleDateFormat;
-import java.time.Instant;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.mgmt.Task;
@@ -24,10 +14,7 @@ import org.apache.brooklyn.entity.software.base.SoftwareProcessDriver;
 import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.core.ResourceUtils;
 import org.apache.brooklyn.util.core.json.ShellEnvironmentSerializer;
-import org.apache.brooklyn.util.core.task.BasicTask;
-import org.apache.brooklyn.util.core.task.DynamicTasks;
-import org.apache.brooklyn.util.core.task.TaskTags;
-import org.apache.brooklyn.util.core.task.Tasks;
+import org.apache.brooklyn.util.core.task.*;
 import org.apache.brooklyn.util.core.task.system.SimpleProcessTaskFactory;
 import org.apache.brooklyn.util.core.text.TemplateProcessor;
 import org.apache.brooklyn.util.exceptions.Exceptions;
@@ -39,8 +26,15 @@ import org.apache.brooklyn.util.time.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+
 import static io.cloudsoft.terraform.TerraformCommons.*;
-import static java.lang.String.format;
 
 public interface TerraformDriver extends SoftwareProcessDriver {
     static final Logger LOG = LoggerFactory.getLogger(TerraformDriver.class);
@@ -333,6 +327,9 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     }
 
     default void launch() {
+        ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.PRE_APPLY_WORKFLOW);
+        ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.PRE_PLAN_WORKFLOW);
+
         final Map<String,Object> planLog =  retryUntilLockAvailable("terraform plan -json", () -> runJsonPlanTask());
         Task<Object> verifyPlanTask = Tasks.create("Verify plan", () -> {
             if (planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
@@ -349,12 +346,16 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         }).asTask();
 
         retryUntilLockAvailable("launch, various terraform commands", () -> {
-            DynamicTasks.queue(Tasks.builder()
+            TaskBuilder<Object> tb = Tasks.builder()
                     .displayName("Verify and apply terraform")
                     .add(verifyPlanTask)
                     .add(checkAndApply)
-                    .add(refreshTaskWithName("Refresh Terraform state", false)).build());
+                    .add(refreshTaskWithName("Refresh Terraform state", false));
+            ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).workflowTask(TerraformConfiguration.POST_APPLY_WORKFLOW)
+                            .apply(t -> tb.add(t));
+            DynamicTasks.queue(tb.build());
             DynamicTasks.waitForLast();
+
             return null;
         });
         // do a plan just after launch, to populate everything
@@ -374,15 +375,16 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         });
     }
 
-    default String runDestroyTask() {
-        return runQueued( newCommandTaskFactory(true, destroyCommand())
-                .summary("Destroying terraform deployment.") );
-    }
-
     default void destroy(Boolean alsoDestroyFiles) {
         Exception error = null;
         try {
-            runDestroyTask();
+            ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.PRE_DESTROY_WORKFLOW);
+            DynamicTasks.queue( newCommandTaskFactory(true, destroyCommand())
+                    .summary("Destroying terraform deployment.") );
+            ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.POST_DESTROY_WORKFLOW);
+
+            DynamicTasks.waitForLast();
+
             ((TerraformConfiguration) getEntity()).removeDiscoveredResources();
         } catch (Exception e) {
             Exceptions.propagateIfFatal(e);
