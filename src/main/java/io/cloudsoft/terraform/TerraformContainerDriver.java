@@ -25,6 +25,8 @@ import java.io.File;
 import java.io.InputStream;
 import java.util.Map;
 
+import static java.lang.String.format;
+
 /**
  *  Assume Terraform container has: { terraform, curl, unzip } installed
  *  Not a {@code SoftwareProcessDriver}.
@@ -81,8 +83,13 @@ public class TerraformContainerDriver implements TerraformDriver {
     }
 
     @Override
-    public String makeTerraformCommand(String argument) {
-        return "terraform "+argument;
+    public String getTerraformExecutable() {
+        return "terraform";
+    }
+
+    @Override
+    public String makeCommandInTerraformActiveDir(String command) {
+        return command;
     }
 
     @Override

@@ -1,6 +1,5 @@
 package io.cloudsoft.terraform;
 
-import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.mgmt.Task;
 import org.apache.brooklyn.api.mgmt.TaskAdaptable;
@@ -20,6 +19,7 @@ import org.apache.brooklyn.util.core.text.TemplateProcessor;
 import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
+import org.apache.brooklyn.util.text.Identifiers;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.brooklyn.util.time.Time;
@@ -32,7 +32,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 
 import static io.cloudsoft.terraform.TerraformCommons.*;
@@ -81,36 +80,37 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     void copyTo(InputStream tfStream, String target);
 
-    String makeTerraformCommand(String argument);
+    default String prependTerraformExecutable(String argument) {
+        return getTerraformExecutable() + " " + argument;
+    }
+
+    String getTerraformExecutable();
+
+    String makeCommandInTerraformActiveDir(String command);
 
     // added these methods to underline the terraform possible commands
-    default String initCommand() {
-        return makeTerraformCommand("init -input=false"); // Prepare your working directory for other commands
+    default String initSubcommand() {
+        return "init -input=false"; // Prepare your working directory for other commands
     }
-    default String jsonPlanCommand() {
-        return makeTerraformCommand("plan -lock=false -input=false -no-color -json"); // Show changes required by the current configuration
+
+    default String planSubcommand(boolean refresh, boolean json) {
+        return "plan -lock=false -input=false -no-color"
+                + (json ? " -json" : "")
+                + (refresh ? "" : " -refresh=false");
     }
-    default String planCommand() {
-        return makeTerraformCommand("plan -lock=false -input=false -no-color"); // Show changes required by the current in the normal TF style, provides more info than the json version
+    default String applySubcommand() {
+        return "apply -no-color -input=false -auto-approve";
     }
-    default String applyCommand() {
-        return makeTerraformCommand("apply -no-color -input=false -auto-approve"); // Create or update infrastructure
-    }
-    default String refreshCommand() {
-        return makeTerraformCommand(" apply -refresh-only -auto-approve -no-color -input=false"); // Create or update infrastructure
-    }
-    default String showCommand() {
-        return makeTerraformCommand("show -no-color -json"); // Show the current state or a saved plan
-    }
-    default String outputCommand() {
-        return makeTerraformCommand("output -no-color -json"); // Show output values from your root module
-    }
-    default String destroyCommand() {
-        return makeTerraformCommand("apply -destroy -auto-approve -no-color");
+    default String applyRefreshOnlySubcommand(String args) {
+        return applySubcommand() + " -refresh-only" + (Strings.isNonBlank(args) ? " "+args : "");
     }
 
 
-    default <T> T runQueued(TaskFactory<? extends TaskAdaptable<T>> task) {
+    default <T> T runQueued(TaskFactory<? extends TaskAdaptable<T>> taskFactory) {
+        return runQueued(taskFactory.newTask());
+    }
+
+    default <T> T runQueued(TaskAdaptable<T> task) {
         TaskAdaptable<T> t = DynamicTasks.queue(task);
         DynamicTasks.waitForLast();
         return t.asTask().getUnchecked();
@@ -148,8 +148,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     }
 
     default void runTerraformInitAndVerifyTask() {
-        String initialized = runQueued(newCommandTaskFactory(true, initCommand())
-                .summary("Initializing terraform infrastructure"));
+        String initialized = runQueued(taskForTerraformSubCommand(initSubcommand(), "terraform init"));
         if (initialized.contains(EMPTY_TF_CFG_WARN)) {
             throw new IllegalStateException("Invalid or missing Terraform configuration: " + initialized);
         }
@@ -159,58 +158,79 @@ public interface TerraformDriver extends SoftwareProcessDriver {
      * @return {@code String} containing json state of the infrastructure
      */
     default String runShowTask() {
-        return runQueued( newCommandTaskFactory(true, showCommand())
-                .summary("Show (retrieve) the most recent state snapshot") );
+        return runQueued( taskForTerraformSubCommand("show -no-color -json", "terraform show"));
+    }
+
+    /**
+     * @return {@code String} containing tf state
+     */
+    default String runStatePullTask() {
+        return runQueued( taskForTerraformSubCommand("state pull") );
     }
 
     // Needed for extracting pure Terraform output for the tf.plan sensor
     default String runPlanTask() {
-        return runQueued( newCommandTaskFactory(true, planCommand())
-                .summary("Analyse and create terraform plan (human readable change report)") );
+        return runQueued( taskForTerraformSubCommand(planSubcommand(true, false), "terraform plan (human-readable output)") );
     }
 
-    default Map<String, Object> runJsonPlanTask() {
-        DynamicTasks.queue(refreshTaskWithName("Refresh Terraform state", false));
-        Task<String> planTask = DynamicTasks.queue(jsonPlanTaskWithName("Analyse and create terraform plan"));
-        DynamicTasks.waitForLast();
-        String result;
+    default String runJsonPlanTask(boolean doRefresh) {
         try {
-            result = planTask.get();
-            return StateParser.parsePlanLogEntries(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new IllegalStateException("Error running terraform plan (json)", e);
+            if (doRefresh) {
+                // `plan` does not update tf state, it just makes a plan that will include that if needed;
+                // but we can apply the plan as refresh-only to do the state-update only
+                // thus the following seems the fastest way to do a refresh and get the plan output
+
+                String filename = "../"+Identifiers.makeRandomId(8)+".plan";
+                String planResult = runQueued(newCommandTaskFactory(true,
+                        makeCommandInTerraformActiveDir(
+                                prependTerraformExecutable(planSubcommand(doRefresh /* true */, true) + " -out=" + filename)))
+                        .summary("terraform plan")
+                        .newTask().asTask());
+
+                runQueued(newCommandTaskFactory(true,
+                        makeCommandInTerraformActiveDir(
+                                prependTerraformExecutable(applyRefreshOnlySubcommand(filename))
+                                + " && " + "rm "+filename))
+                        .summary("terraform apply -refresh-only (state change) and clean up")
+                        .newTask().asTask());
+
+                return planResult;
+
+            } else {
+                // -refresh=false doesn't seem to speed up planning much at all (it still needs online access)
+                // but worth doing for good measure
+                return runQueued(taskForTerraformSubCommand(planSubcommand(false, true), "terraform plan (and update resources and drift)"));
+            }
+        } catch (Exception e) {
+            throw Exceptions.propagateAnnotated("Error running terraform plan (json)", e);
         }
     }
 
-    default String runOutputTask() {
-        DynamicTasks.queue(refreshTaskWithName("Gather terraform output", false));
-        return runQueued( newCommandTaskFactory(true, outputCommand())
-                .summary("Retrieving terraform outputs") );
+    default String runOutputTask(boolean doRefresh) {
+        if (doRefresh) DynamicTasks.queue(refreshTaskWithName("Refresh state to gather output", false));
+        return runQueued( taskForTerraformSubCommand("output -no-color -json", "terraform output") );
     }
 
     default void runApplyTask() {
-        DynamicTasks.queue(applyTaskWithName("Applying terraform plan"));
-        DynamicTasks.waitForLast();
+        runQueued(taskForTerraformSubCommand(applySubcommand(), "terraform apply"));
         getEntity().sensors().set(TerraformConfiguration.CONFIGURATION_APPLIED, Instant.now());
         // previously removed children here, but (1) there might be children we shouldn't remove; and (2) the synch should take care of that
         // now _caller_ should force a new plan instead
     }
 
-
-    default Task<String> jsonPlanTaskWithName(final String name){
-        return newCommandTaskFactory(true, jsonPlanCommand())
-                .summary(name)
-                .newTask().asTask();
+    default Task<String> taskForTerraformSubCommand(final String terraformSubCommand) {
+        return taskForTerraformSubCommand(terraformSubCommand, "terraform "+terraformSubCommand);
     }
 
-    default Task<String> applyTaskWithName(final String name) {
-        return newCommandTaskFactory(true, applyCommand())
+    default Task<String> taskForTerraformSubCommand(final String terraformSubCommand, String name) {
+        return newCommandTaskFactory(true,
+                makeCommandInTerraformActiveDir(prependTerraformExecutable(terraformSubCommand)))
                 .summary(name)
                 .newTask().asTask();
     }
 
     default Task<String> refreshTaskWithName(final String name, boolean required) {
-        Task<String> t = newCommandTaskFactory(true, refreshCommand()).summary(name).newTask().asTask();
+        Task<String> t = taskForTerraformSubCommand(applyRefreshOnlySubcommand(null), name);
         if (!required) TaskTags.markInessential(t);
         return t;
     }
@@ -337,36 +357,51 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.PRE_APPLY_WORKFLOW);
         ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.PRE_PLAN_WORKFLOW);
 
-        final Map<String,Object> planLog =  retryUntilLockAvailable("terraform plan -json", () -> runJsonPlanTask());
-        Task<Object> verifyPlanTask = Tasks.create("Verify plan", () -> {
-            if (planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
-                throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
-            }
-        }).asTask();
-        Task<Object> checkAndApply =Tasks.create("Apply (if no existing deployment is found)", () -> {
-            boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
-            if (deploymentExists) {
-                LOG.debug("Terraform plan exists!!");
-            } else {
-                runApplyTask();
-            }
-        }).asTask();
+//        final String planOutput =  retryUntilLockAvailable("terraform plan -json", () -> runJsonPlanTask(true));
+//        Map<String, Object> planLog = StateParser.parsePlanLogEntries(planOutput);
+//        Task<Object> verifyPlanTask = Tasks.create("Verify plan", () -> {
+//            if (planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
+//                throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
+//            }
+//        }).asTask();
+//
+//        Task<Object> checkAndApply =Tasks.create("Apply (if no existing deployment is found)", () -> {
+//            boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
+//            if (deploymentExists) {
+//                LOG.debug("Terraform plan exists!!");
+//            } else {
+//                runApplyTask();
+//            }
+//        }).asTask();
+//
+//        retryUntilLockAvailable("launch, various terraform commands", () -> {
+//            TaskBuilder<Object> tb = Tasks.builder()
+//                    .displayName("Verify and apply terraform")
+//                    .add(verifyPlanTask)
+//                    .add(checkAndApply)
+//                    .add(refreshTaskWithName("Refresh Terraform state", false));
+//            ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).workflowTask(TerraformConfiguration.POST_APPLY_WORKFLOW)
+//                            .apply(t -> tb.add(t));
+//            runQueued(tb.build());
+//
+//            return null;
+//        });
 
-        retryUntilLockAvailable("launch, various terraform commands", () -> {
-            TaskBuilder<Object> tb = Tasks.builder()
-                    .displayName("Verify and apply terraform")
-                    .add(verifyPlanTask)
-                    .add(checkAndApply)
-                    .add(refreshTaskWithName("Refresh Terraform state", false));
-            ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).workflowTask(TerraformConfiguration.POST_APPLY_WORKFLOW)
-                            .apply(t -> tb.add(t));
-            DynamicTasks.queue(tb.build());
-            DynamicTasks.waitForLast();
+        // previously we did extensive plan/checks before apply (above); but this was slow and noisy in the UI, so prefer below
+        retryUntilLockAvailable("apply", () -> { runApplyTask(); return null; });
+        ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.POST_APPLY_WORKFLOW);
 
-            return null;
-        });
+
         // do a plan just after launch, to populate everything
-        ((TerraformConfiguration)getEntity()).plan();
+        TaskBuilder<Object> tb = Tasks.builder()
+                .displayName("Update model and sensors after apply")
+                .body(() -> {
+                    // replan to update drift and populate the model, then set output;
+                    // this will use -refresh=false although that doesn't speed it up as much as we would hope
+                    ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).planInternal(false);
+                });
+        runQueued(tb.build());
+
     }
 
 
@@ -386,13 +421,11 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         Exception error = null;
         try {
             ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.PRE_DESTROY_WORKFLOW);
-            DynamicTasks.queue( newCommandTaskFactory(true, destroyCommand())
-                    .summary("Destroying terraform deployment.") );
+            runQueued( taskForTerraformSubCommand("apply -destroy -auto-approve -no-color", "terraform destroy") );
             ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.POST_DESTROY_WORKFLOW);
 
-            DynamicTasks.waitForLast();
-
             ((TerraformConfiguration) getEntity()).removeDiscoveredResources();
+
         } catch (Exception e) {
             Exceptions.propagateIfFatal(e);
             error = e;

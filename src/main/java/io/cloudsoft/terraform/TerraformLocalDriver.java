@@ -27,7 +27,7 @@ public class TerraformLocalDriver extends TerraformOnMachineDriver implements Te
         super(entity, null);
     }
 
-    private TerraformConfigurationImpl entity() { return (TerraformConfigurationImpl) Entities.deproxy(getEntity()); }
+    protected TerraformConfigurationImpl entity() { return (TerraformConfigurationImpl) Entities.deproxy(getEntity()); }
 
     @Override
     public ProcessTaskFactory<String> newCommandTaskFactory(boolean withEnvVars, String command) {

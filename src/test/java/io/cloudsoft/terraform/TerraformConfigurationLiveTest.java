@@ -56,10 +56,8 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         viewer.start();
     }
 
-
-
     @Test(groups="Live")
-    public void testCreateSecurityGroup() throws Exception {
+    public void testCreateSecurityGroupSsh() throws Exception {
         doTestCreateSecurityGroup(TerraformCommons.SSH_MODE, true);
     }
 

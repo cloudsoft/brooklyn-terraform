@@ -23,21 +23,18 @@ import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.annotation.EffectorParam;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Entities;
+import org.apache.brooklyn.core.entity.EntityInternal;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.core.entity.trait.Startable;
-import org.apache.brooklyn.core.location.Locations;
 import org.apache.brooklyn.core.sensor.Sensors;
-import org.apache.brooklyn.core.workflow.WorkflowExecutionContext;
 import org.apache.brooklyn.core.workflow.steps.CustomWorkflowStep;
 import org.apache.brooklyn.entity.group.BasicGroup;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
-import org.apache.brooklyn.entity.software.base.SoftwareProcessDriver;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessDriverLifecycleEffectorTasks;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
-import org.apache.brooklyn.location.ssh.SshMachineLocation;
 import org.apache.brooklyn.tasks.kubectl.ContainerTaskFactory;
 import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.collections.MutableMap;
@@ -61,7 +58,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
-import static io.cloudsoft.terraform.TerraformCommons.SSH_MODE;
 import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.entity.StartableManagedResource.RESOURCE_STATUS;
 import static io.cloudsoft.terraform.parser.EntityParser.processResources;
@@ -151,12 +147,14 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 .uniqueTag("scan-terraform-plan-and-output")
                 .entity(this)
                 .period(getConfig(TerraformCommons.POLLING_PERIOD))
-                .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(this)).name("refresh terraform plan")
-                        .onResult(new PlanSuccessFunction())
-                        .onFailure(new PlanFailureFunction()))
-                .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(this)).name("refresh terraform output")
-                        .onResult(new OutputSuccessFunction())
-                        .onFailure(new OutputFailureFunction()))
+                .poll(FunctionPollConfig.forMultiple().name("Refresh terraform")
+                        .supplier(new RefreshTerraformModelAndSensors(this, true)))
+//                .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(this, true)).name("refresh terraform plan")
+//                        .onResult(new PlanSuccessFunction())
+//                        .onFailure(new PlanFailureFunction()))
+//                .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(this, false)).name("terraform output")
+//                        .onResult(new OutputSuccessFunction())
+//                        .onFailure(new OutputFailureFunction()))
                 .build());
     }
 
@@ -173,9 +171,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
      *  Since `terraform plan` is the only command reacting to changes, it makes sense entities to change according to its results.
      */
     private void updateDeploymentState() {
-        final String statePull = retryUntilLockAvailable("terraform state pull", () -> getDriver().runShowTask());
+        final String statePull = retryUntilLockAvailable("terraform state pull", () -> getDriver().runStatePullTask());
         sensors().set(TerraformConfiguration.TF_STATE, statePull);
 
+        // TODO would be nice to deprecate this as 'show' is a bit more expensive than other things
         final String show = retryUntilLockAvailable("terraform show", () -> getDriver().runShowTask());
         Map<String, Map<String,Object>> state = StateParser.parseResources(show);
         sensors().set(TerraformConfiguration.STATE, state);
@@ -246,74 +245,95 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
         @Override
         public T get() {
-            return ((TerraformConfigurationImpl) Entities.deproxy(entity)).retryUntilLockAvailable(name==null ? getClass().getSimpleName() : name, this::getWhenHasLock);
+            return deproxied(entity).retryUntilLockAvailable(name==null ? getClass().getSimpleName() : name, this::getWhenHasLock);
         }
     }
 
-    public static class PlanProvider extends RetryingProvider<Map<String,Object>> {
-        public PlanProvider(TerraformConfiguration entity) {
-            super("terraform plan analysis", entity);
+    private static TerraformConfigurationImpl deproxied(TerraformConfiguration entity) {
+        return (TerraformConfigurationImpl) Entities.deproxy(entity);
+    }
+
+    public static class RefreshTerraformModelAndSensors extends RetryingProvider<Void> {
+        private final boolean doTerraformRefresh;
+
+        public RefreshTerraformModelAndSensors(TerraformConfiguration entity, boolean doTerraformRefresh) {
+            super("refresh terraform model and plan", entity);
+            this.doTerraformRefresh = doTerraformRefresh;
         }
 
         @Override
-        protected Map<String, Object> getWhenHasLock() {
-            return getDriver().runJsonPlanTask();
+        protected Void getWhenHasLock() {
+            entity.sensors().set(PLAN, new PlanProcessingFunction(entity).apply(getDriver().runJsonPlanTask(doTerraformRefresh)));
+            deproxied(entity).refreshOutput(false);
+            return null;
         }
     }
 
-    private final class PlanSuccessFunction implements Function<Map<String, Object>, Map<String, Object>>  {
+    private String refreshOutput(boolean refresh) {
+        return sensors().set(OUTPUT, new OutputSuccessFunction(this).apply(getDriver().runOutputTask(refresh)));
+    }
+
+    private static final class PlanProcessingFunction implements Function<String, Map<String, Object>>  {
+        private final TerraformConfiguration entity;
+
+        public PlanProcessingFunction(TerraformConfiguration entity) {
+            this.entity = entity;
+        }
+
         @Nullable
         @Override
-        public Map<String, Object> apply(@Nullable Map<String, Object> tfPlanStatus) {
+        public Map<String, Object> apply(@Nullable String tfPlanJson) {
             try {
+                Map<String, Object> tfPlanStatus = StateParser.parsePlanLogEntries(tfPlanJson);
                 boolean driftChanged = false;
-                if (sensors().getAll().containsKey(PLAN) && sensors().get(PLAN).containsKey(RESOURCE_CHANGES) &&
-                        !sensors().get(PLAN).get(RESOURCE_CHANGES).equals(tfPlanStatus.get(RESOURCE_CHANGES))) {
+                if (entity.sensors().getAll().containsKey(PLAN) && entity.sensors().get(PLAN).containsKey(RESOURCE_CHANGES) &&
+                        !entity.sensors().get(PLAN).get(RESOURCE_CHANGES).equals(tfPlanStatus.get(RESOURCE_CHANGES))) {
                     // we had drift previously, and now either we have different drift or we don't have drift
                     driftChanged = true;
                 }
 
                 final TerraformStatus currentPlanStatus = (TerraformStatus) tfPlanStatus.get(PLAN_STATUS);
-                final boolean ignoreDrift = !getConfig(TerraformConfiguration.TERRAFORM_DRIFT_CHECK);
+                final boolean ignoreDrift = !entity.getConfig(TerraformConfiguration.TERRAFORM_DRIFT_CHECK);
 
                 if (ignoreDrift || currentPlanStatus == TerraformStatus.SYNC) {
                     LOG.debug("Clearing problems and refreshing state because "+"state is "+tfPlanStatus+(currentPlanStatus == TerraformStatus.SYNC ? "" : " and ignoring drift"));
                     // plan status is SYNC so no errors, no ASYNC resources OR drift is ignored
-                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
-                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
-                    TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "compliance.drift"));
-                    TerraformConfigurationImpl.this.sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
-                    updateDeploymentState();
+                    ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
+                    ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
+                    ((EntityInternal)entity).sensors().remove(Sensors.newSensor(Object.class, "compliance.drift"));
+                    ((EntityInternal)entity).sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
+                    deproxied(entity).updateDeploymentState();
 
                 } else if (TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
                     LOG.debug("Setting problem because "+"state is "+tfPlanStatus);
 
-                    ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
+                    ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
                             tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
                     updateResourceStates(tfPlanStatus);
 
                 } else if (!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
                     LOG.debug("Setting drift because "+"state is "+tfPlanStatus);
 
-                    TerraformConfigurationImpl.this.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
+                    entity.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
                     if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
-                        ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
-                        updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
+                        ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
+                        deproxied(entity).updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
                         updateResourceStates(tfPlanStatus);
                     } else {
-                        ServiceStateLogic.updateMapSensorEntry(TerraformConfigurationImpl.this, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Outputs no longer match initial plan.This is not critical as the infrastructure is not affected. However you might want to invoke 'apply'.");
+                        ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Outputs no longer match initial plan.This is not critical as the infrastructure is not affected. However you might want to invoke 'apply'.");
                     }
-                    TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
-                    TerraformConfigurationImpl.this.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), getDriver().runPlanTask());
+                    entity.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
+                    entity.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), entity.getDriver().runPlanTask());
                 } else {
                     LOG.debug("No action because "+"state is "+tfPlanStatus);
                 }
 
-                if (driftChanged || !sensors().getAll().containsKey(DRIFT_STATUS) || !sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get(PLAN_STATUS))) {
-                    TerraformConfigurationImpl.this.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
+                if (driftChanged || !entity.sensors().getAll().containsKey(DRIFT_STATUS) || !entity.sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get(PLAN_STATUS))) {
+                    entity.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
                 }
-                lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
+                deproxied(entity).lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
                 return tfPlanStatus;
+
             } catch (Exception e) {
                 LOG.error("Unable to process terraform plan", e);
                 throw Exceptions.propagate(e);
@@ -326,7 +346,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             if (hasChanges!=null) {
                 ((List<Map<String, Object>>) hasChanges).forEach(changeMap -> {
                     String resourceAddr = changeMap.get("resource.addr").toString();
-                    TerraformConfigurationImpl.this.getChildren().stream()
+                    entity.getChildren().stream()
                             .filter(c -> c instanceof ManagedResource)
                             .filter(c -> resourceAddr.equals(c.config().get(TerraformResource.ADDRESS)))
                             .forEach(this::checkAndUpdateResource);
@@ -338,34 +358,29 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
             if (!c.sensors().get(RESOURCE_STATUS).equals("changed") && !c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC)) {
                 c.sensors().set(RESOURCE_STATUS, "changed");
             }
-            ((ManagedResource) c).updateResourceState(); // TODO this method gets called twice when updating resources and updating them accoring to the plan, maybe fix at some point!!
+            // this method gets called twice when updating resources and updating them accoring to the plan, maybe fix at some point
+            ((ManagedResource) c).updateResourceState();
         }
     }
 
-    private final class PlanFailureFunction implements Function<Map<String, Object>, Map<String, Object>> {
-        @Nullable
-        @Override
-        public Map<String, Object> apply(@Nullable Map<String, Object> input) {
-            if (lastCommandOutputs.containsKey(PLAN.getName())) {
-                return (Map<String, Object>) lastCommandOutputs.get(PLAN.getName());
-            } else {
-                return input;
-            }
-        }
-    }
+//    private final class PlanFailureFunction implements Function<String, Map<String, Object>> {
+//        @Nullable
+//        @Override
+//        public Map<String, Object> apply(@Nullable String input) {
+//            // TODO better handle failure; this just spits back a parse as best it can
+//            if (lastCommandOutputs.containsKey(PLAN.getName())) {
+//                return (Map<String, Object>) lastCommandOutputs.get(PLAN.getName());
+//            } else {
+//                return StateParser.parsePlanLogEntries(input);
+//            }
+//        }
+//    }
 
-    public static class OutputProvider extends RetryingProvider<String> {
-        public OutputProvider(TerraformConfiguration entity) {
-            super("terraform output analysis", entity);
+    private static final class OutputSuccessFunction implements Function<String, String> {
+        TerraformConfiguration entity;
+        private OutputSuccessFunction(TerraformConfiguration entity) {
+            this.entity = entity;
         }
-
-        @Override
-        protected String getWhenHasLock() {
-            return getDriver().runOutputTask();
-        }
-    }
-
-    private final class OutputSuccessFunction implements Function<String, String> {
         @Override
         public String apply(String output) {
             if (Strings.isBlank(output)) {
@@ -375,27 +390,27 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 Map<String, Map<String, Object>> result = new ObjectMapper().readValue(output, LinkedTreeMap.class);
                 // remove sensors that were removed in the configuration
                 List<AttributeSensor<?>> toRemove = new ArrayList<>();
-                sensors().getAll().forEach((sK, sV) -> {
+                entity.sensors().getAll().forEach((sK, sV) -> {
                     final String sensorName = sK.getName();
                     if(sensorName.startsWith(TF_OUTPUT_SENSOR_PREFIX+".") && !result.containsKey(sensorName.replace(TF_OUTPUT_SENSOR_PREFIX +".", ""))) {
                         toRemove.add(sK);
                     }
                 });
-                toRemove.forEach(os -> sensors().remove(os));
+                toRemove.forEach(os -> ((EntityInternal)entity).sensors().remove(os));
 
                 for (String name : result.keySet()) {
                     final String sensorName = String.format("%s.%s", TF_OUTPUT_SENSOR_PREFIX, name);
                     final AttributeSensor sensor = Sensors.newSensor(Object.class, sensorName);
-                    final Object currentValue = sensors().get(sensor);
+                    final Object currentValue = entity.sensors().get(sensor);
                     final Object newValue = result.get(name).get("value");
                     if (!Objects.equals(currentValue, newValue)) {
-                        sensors().set(sensor, newValue);
+                        entity.sensors().set(sensor, newValue);
                     }
                 }
             } catch (JsonProcessingException e) {
                 throw new IllegalStateException("Output does not have the expected format!");
             }
-            lastCommandOutputs.put(OUTPUT.getName(), output);
+            deproxied(entity).lastCommandOutputs.put(OUTPUT.getName(), output);
             return output;
         }
     }
@@ -504,7 +519,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     protected Maybe<Object> runWorkflow(ConfigKey<CustomWorkflowStep> key) {
         return workflowTask(key).transformNow(t ->
-                DynamicTasks.queueIfPossible(t).orSubmitAsync(this).getTask().getUnchecked() );
+                DynamicTasks.queueIfPossible(t).orSubmitAsync(this).andWaitForSuccess() );
     }
 
     protected Maybe<Task<Object>> workflowTask(ConfigKey<CustomWorkflowStep> key) {
@@ -526,10 +541,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     @Effector(description="Performs the Terraform plan command to show what would change (and refresh sensors).")
     public void plan() {
+        planInternal(true);
+    }
+
+    protected void planInternal(boolean refresh) {
         runWorkflow(PRE_PLAN_WORKFLOW);
-        new OutputSuccessFunction().apply(new OutputProvider(this).get());
-        retryUntilLockAvailable("terraform plan", () -> getDriver().runPlanTask());
-        new PlanSuccessFunction().apply(new PlanProvider(this).get());
+        new RefreshTerraformModelAndSensors(this, refresh).get();
     }
 
     @Override
@@ -607,24 +624,37 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         }
         retryUntilLockAvailable("reinstall configuration from "+configUrl, () -> {
             try {
-                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STARTING);
-                ServiceStateLogic.setExpectedState(this, Lifecycle.STARTING);
-                getDriver().customize();
+                DynamicTasks.queueIfPossible(Tasks.builder()
+                        .displayName("Prepare latest configuration files")
+                        .body(() -> {
+                            sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STARTING);
+                            ServiceStateLogic.setExpectedState(this, Lifecycle.STARTING);
+                            getDriver().customize();
+                        }).build()).orSubmitAsync(this).andWaitForSuccess();
+
                 getDriver().launch();
-                if (getChildren() == null || getChildren().isEmpty()) { // after a destroy
-                    getDriver().postLaunch();
-                    connectSensors();
-                }
-                sensors().set(Startable.SERVICE_UP, Boolean.TRUE);
-                sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
+
+                DynamicTasks.queueIfPossible(Tasks.builder()
+                        .displayName("Update service state sensors")
+                        .body(() -> {
+                            if (!connectedSensors) {
+                                connectSensors();
+                            }
+
+                            sensors().set(Startable.SERVICE_UP, Boolean.TRUE);
+                            sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
+                            ServiceStateLogic.setExpectedState(this, Lifecycle.RUNNING);
+                            sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
+                        }).build()).orSubmitAsync(this).andWaitForSuccess();
+
                 return null;
             } catch (Exception e) {
+                Exceptions.propagateIfFatal(e);
                 sensors().set(Startable.SERVICE_UP, Boolean.FALSE);
                 sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
+                ServiceStateLogic.setExpectedState(this, Lifecycle.RUNNING);
                 throw e;
             } finally {
-                sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
-                ServiceStateLogic.setExpectedState(this, Lifecycle.RUNNING);
             }
         });
     }

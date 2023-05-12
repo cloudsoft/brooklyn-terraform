@@ -60,6 +60,7 @@ public abstract class TerraformOnMachineDriver extends AbstractSoftwareProcessSs
         return cachedHomeDir;
     }
 
+    @Override
     public String getTerraformExecutable() {
         String terraformExplicitPath = entity.getConfig(TerraformConfiguration.TERRAFORM_PATH);
         if (Strings.isNonBlank(terraformExplicitPath)) return terraformExplicitPath;
@@ -68,8 +69,9 @@ public abstract class TerraformOnMachineDriver extends AbstractSoftwareProcessSs
 
     public abstract String getDefaultTerraformExecutable();
 
-    public String makeTerraformCommand(String argument) {
-        return format("cd %s && %s %s", getTerraformActiveDir(), getDefaultTerraformExecutable(), argument);
+    @Override
+    public String makeCommandInTerraformActiveDir(String command) {
+        return format("cd %s && %s", getTerraformActiveDir(), command);
     }
 
     @Override
