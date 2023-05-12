@@ -32,18 +32,14 @@ import static io.cloudsoft.terraform.TerraformConfiguration.TERRAFORM_PATH;
 import static java.lang.String.format;
 import static org.apache.brooklyn.util.ssh.BashCommands.commandsToDownloadUrlsAsWithMinimumTlsVersion;
 
-public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver implements TerraformDriver {
+public class TerraformSshDriver extends TerraformOnMachineDriver {
     private static final Logger LOG = LoggerFactory.getLogger(TerraformSshDriver.class);
-    public static final String WHICH_TERRAFORM_COMMAND = "which terraform";
-
-    private Boolean terraformAlreadyAvailable;
-    private Boolean terraformInPath;
 
     public TerraformSshDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
-        entity.sensors().set(Attributes.LOG_FILE_LOCATION, this.getLogFileLocation());
     }
 
+    @Override
     public ProcessTaskFactory<String> newCommandTaskFactory(boolean withEnvVars, String command) {
         ProcessTaskFactory<String> tf = SshTasks.newSshExecTaskFactory(getMachine(), command).requiringZeroAndReturningStdout();
         if (withEnvVars) tf.environmentVariables(getShellEnvironment());
@@ -55,142 +51,20 @@ public class TerraformSshDriver extends AbstractSoftwareProcessSshDriver impleme
         getMachine().copyTo(tfStream, target);
     }
 
-    public String getTerraformActiveDir() {
-        return getRunDir() + "/" + "active/";
-    }
-
-    transient String cachedHomeDir = null;
-    @Override
-    public String computeHomeDir(boolean clearCache) {
-        if (clearCache || cachedHomeDir==null) {
-            cachedHomeDir = DynamicTasks.queue(newCommandTaskFactory(false, "cd ~ && pwd").requiringZeroAndReturningStdout()).get();
-        }
-        return cachedHomeDir;
-    }
-
-    public String makeTerraformCommand(String argument) {
-        return format("cd %s && %s %s", getTerraformActiveDir(), Os.mergePathsUnix(getInstallDir(), "terraform"), argument);
-    }
-
-    @Override
-    public boolean isRunning() {
-        return true;
-    }
-
-
-    public String getOsTag() {
-        OsDetails os = getLocation().getOsDetails();
-        // If no details, assume 64-bit Linux
-        if (os == null) return "linux_amd64";
-        // If not Mac, assume Linux
-        String osType = os.isMac() ? "darwin" : "linux";
-        String archType = os.is64bit() ?
-                os.isArm() ? "arm64" : "amd64":
-                os.isArm() ? "arm" : "386";
-
-        return osType + "_" + archType;
-    }
-
-    @Override // the one from {@code AbstractSoftwareProcessSshDriver}
-    public Map<String, String> getShellEnvironment() {
-        return TerraformDriver.super.getShellEnvironment();
-    }
-
-    @Override public void launch() { TerraformDriver.super.launch(); }
-    @Override public void stop() { TerraformDriver.super.stop(); }
-
-    // Order of execution during AMP deploy: step 1 - set properties from the configuration on the entity and create terraform install directory
-    @Override
-    public void preInstall() {
-        if (terraformAlreadyAvailable()) return;
-        final String installFileName = format("terraform_%s_%s.zip", getVersion(), getOsTag());
-        resolver = Entities.newDownloader(this, ImmutableMap.of("filename", installFileName));
-        setExpandedInstallDir(Os.mergePaths(getInstallDir(), resolver.getUnpackedDirectoryName(format("terraform_%s_%s", getVersion(), getOsTag()))));
-        entity.sensors().set(Attributes.DOWNLOAD_URL, TERRAFORM_DOWNLOAD_URL
-                .replace("${version}", getVersion())
-                .replace("${driver.osTag}", getOsTag()));
-    }
-
-    // Order of execution during AMP deploy: step 2 - download and install (unzip) the terraform executable
-    @Override
-    public void install() {
-        if (terraformAlreadyAvailable()) return;
-        DynamicTasks.queue(Tasks.create("Downloading Terraform " + getVersion(), () -> {
-                        List<String> urls = resolver.getTargets();
-                        String saveAs = resolver.getFilename();
-
-                        List<String> commands = new LinkedList<>();
-                        commands.add(BashCommands.INSTALL_ZIP);
-                        commands.add(BashCommands.INSTALL_UNZIP);
-                        commands.add(BashCommands.INSTALL_CURL);
-                        // Hashicorp server requires at least TLSv1.2
-                        commands.addAll(commandsToDownloadUrlsAsWithMinimumTlsVersion(urls, saveAs, "1.2"));
-                        commands.add(format("unzip -o %s", saveAs));
-
-                        newScript(INSTALLING).body.append(commands).execute();
-                }).asTask());
-        DynamicTasks.waitForLast();
+    public String getDefaultTerraformExecutable() {
+        if (Strings.isBlank(getExpandedInstallDir())) return "terraform";  // don't use path, if expanded dir empty it was taken from path
+        // we installed it ourselves
+        return Os.mergePathsUnix(getInstallDir(), "terraform");
     }
 
     // Order of execution during AMP deploy: step 3 - zip up the current configuration files if any, unzip the new configuration files, run `terraform init -input=false`
     @Override
     public void customize() {
-        DynamicTasks.queue(Tasks.create("Standard customization", () -> {
+        DynamicTasks.queue(Tasks.create("Standard customization - create folders", () -> {
             newScript(CUSTOMIZING).execute();
         }));
 
-        TerraformDriver.super.customize();
+        super.customize();
     }
 
-    private boolean terraformAlreadyAvailable() {
-        if (terraformAlreadyAvailable == null) {
-            final String explicitPath = entity.getConfig(TerraformConfiguration.TERRAFORM_PATH);
-            if (Strings.isNonBlank(explicitPath)) {
-                // Check the explicit path provided
-                terraformAlreadyAvailable = new File(explicitPath).exists() || new File(explicitPath + File.pathSeparator + "terraform").exists();
-                if(!terraformAlreadyAvailable){
-                    throw new IllegalArgumentException("Terraform not found at location indicated in config key `"+ TERRAFORM_PATH.getName()+"`: "+explicitPath);
-                }
-                String terraformExecDir = removeCommandFromPathAndClean(entity.getConfig(TERRAFORM_PATH));
-                setExpandedInstallDir(terraformExecDir);
-                setInstallDir(terraformExecDir);
-            } else
-                // try to find Terraform in the system if the config allow it
-                terraformAlreadyAvailable = entity.getConfig(TerraformConfiguration.LOOK_FOR_TERRAFORM_INSTALLED) && terraformInPath();
-        }
-        return terraformAlreadyAvailable;
-    }
-
-    private boolean terraformInPath() {
-        if (terraformInPath == null) {
-            terraformInPath = false;
-            Task<String> terraformLocalPathTask = SshTasks.newSshExecTaskFactory(getMachine(), WHICH_TERRAFORM_COMMAND)
-                    .requiringZeroAndReturningStdout()
-                    .environmentVariables(getShellEnvironment())
-                    .summary("Searching for Terraform in the system.")
-                    .newTask()
-                    .asTask();
-            DynamicTasks.queue(terraformLocalPathTask);
-            DynamicTasks.waitForLast();
-            try {
-                String output = terraformLocalPathTask.get();
-                if (Strings.isNonEmpty(output) && output.toLowerCase().contains("terraform")) {
-                    output = removeCommandFromPathAndClean(output);
-                    setExpandedInstallDir(output);
-                    setInstallDir(output);
-                    terraformInPath = true;
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                LOG.debug("Terraform not found in path");
-            }
-        }
-        return terraformInPath;
-    }
-
-    private String removeCommandFromPathAndClean(String path) {
-        String cleanPath = StringUtils.removeEnd(path, "\n");
-        cleanPath = StringUtils.removeEnd(cleanPath, "terraform");
-        cleanPath = StringUtils.removeEnd(cleanPath, "/");
-        return cleanPath;
-    }
 }

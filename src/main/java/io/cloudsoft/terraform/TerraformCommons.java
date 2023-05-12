@@ -15,7 +15,9 @@ import org.apache.brooklyn.util.core.predicates.DslPredicates;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.commons.lang3.tuple.Pair;
 
+import java.io.InputStream;
 import java.util.Map;
+import java.util.function.Supplier;
 
 public interface TerraformCommons {
 
@@ -41,6 +43,13 @@ public interface TerraformCommons {
             .constraint(ConfigConstraints.forbiddenIf("tf.configuration.contents"))
             .build();
 
+    ConfigKey<Supplier<InputStream>> CONFIGURATION_STREAM_SOURCE = ConfigKeys.builder(new TypeToken<Supplier<InputStream>>() {})
+            .name("tf.configuration.stream_source")
+            .description("Implementation that provides an input stream of the Terraform TF or ZIP to be used")
+            .constraint(ConfigConstraints.forbiddenIf("tf.configuration.contents"))
+            .constraint(ConfigConstraints.forbiddenIf("tf.configuration.url"))
+            .build();
+
     @SetFromFlag("tfVars")
     ConfigKey<String> TFVARS_FILE_URL = ConfigKeys.builder(String.class)
             .name("tf.tfvars.url") // should be part of deployed the bundle
@@ -55,7 +64,7 @@ public interface TerraformCommons {
     @SetFromFlag("tfExecutionMode")
     ConfigKey<String> TF_EXECUTION_MODE = ConfigKeys.builder(String.class)
             .name("tf.execution.mode") // should be part of deployed the bundle
-            .description("If Terraform should run in a location ('ssh'), or in a container managed by a Kubernetes instance('kube').")
+            .description("If Terraform should run in a location ('ssh'), or in a container managed by a Kubernetes instance ('kube'), or on the 'local' machine where AMP is running.")
             .defaultValue("kube")
             .build();
 
@@ -83,7 +92,7 @@ public interface TerraformCommons {
 
     ConfigKey<Duration> CONTAINER_TIMEOUT = ConfigKeys.newConfigKey(Duration.class, "container.timeout", "How long to wait for container-based Terraform commands (default 2 hours)", Duration.hours(2));
 
-
+    String LOCAL_MODE = "local";
     String SSH_MODE = "ssh";
     /**
      * I added this because commands can also be used by directly calling {@code docker run ...},

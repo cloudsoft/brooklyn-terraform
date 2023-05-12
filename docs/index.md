@@ -139,12 +139,12 @@ The entity requires a value for one of the `tf.configuration.contents` and `tf.c
 Other useful configurations:
 
 * `tf.execution.mode` : either `kube` (the default) to use a container via `kubectl` at the AMP server,
-  or `ssh` to run `terraform` on a server that AMP will ssh to (such as `localhost` to run terraform at the AMP server)  
+  or `ssh` to run `terraform` on a server that AMP will ssh to (which should be set as the location),
+  or `local` to run locally at the AMP server (bypassing ssh and not requiring a location)
 * `tf.polling.period` : how often should AMP check the status of the Terraform deployment. Default value is 15s.
 * `tf.drift.check` : default value is `true` which means AMP reports drift if Terraform does. Set this to `false` (not recommended) to disable drift checking.
 * `tf_var.*` : all configurations prefixed with `tf_var.` are converted to Terraform variables. This is a practical way to avoid using `terraform.tfvars` files and inject the values  directly from the AMP blueprint. Just don't use special characters(e.g. ".") when naming your configurations!
 * `version` : set this with the version of Terraform you want AMP to use to manage your deployment. AMP downloads it and installs in a directory that gets deleted when the application is stopped. By default, the version used is the one configured in the current version of `brooklyn-terraform`.
-* `tf.search` : when set to `true` AMP looks for the terraform version installed on the location. If found, it uses it to manage the deployment. By default, it is set to `false`.
 * `tf.path` :  set this with the terraform cli path on the location to instruct AMP to use it to manage the deployment.
 
 When started the entity installs Terraform and applies the configured plan.

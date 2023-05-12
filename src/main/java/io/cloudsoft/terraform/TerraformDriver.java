@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 
 import static io.cloudsoft.terraform.TerraformCommons.*;
 
@@ -110,7 +111,9 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
 
     default <T> T runQueued(TaskFactory<? extends TaskAdaptable<T>> task) {
-        return DynamicTasks.queue(task).asTask().getUnchecked();
+        TaskAdaptable<T> t = DynamicTasks.queue(task);
+        DynamicTasks.waitForLast();
+        return t.asTask().getUnchecked();
     }
 
     default <T> T retryUntilLockAvailable(String summary, Callable<T> job) {
@@ -231,11 +234,14 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     }
 
     /**
-     * Converts text into configuration.tf file and wrap it in a {@code KnownSizeInputStream}.
+     * Converts text into a stream of TF text contents or ZIP contents, wrapped in a {@code KnownSizeInputStream}.
      * Or convert URL into  {@code InputStream}.
      * @return
      */
     default InputStream getConfiguration() {
+        Supplier<InputStream> streamSource = getEntity().getConfig(CONFIGURATION_STREAM_SOURCE);
+        if (streamSource!=null) return streamSource.get();
+
         final String configurationUrl = getEntity().getConfig(CONFIGURATION_URL);
         if (Strings.isNonBlank(configurationUrl)) {
             return new ResourceUtils(getEntity()).getResourceFromUrl(configurationUrl);
@@ -324,6 +330,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
                 .summary("Preparing configuration (unzip if necessary)..."));
 
         runTerraformInitAndVerifyTask();
+        DynamicTasks.waitForLast();
     }
 
     default void launch() {

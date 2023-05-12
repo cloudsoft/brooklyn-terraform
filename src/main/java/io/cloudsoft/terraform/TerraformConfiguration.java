@@ -51,13 +51,6 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
             .description("Path to the Terraform executable")
             .defaultValue("")
             .build();
-    @SetFromFlag("tfSearch")
-    ConfigKey<Boolean> LOOK_FOR_TERRAFORM_INSTALLED = ConfigKeys.builder(Boolean.class)
-            .name("tf.search")
-            .description("Allow to look for the terraform binary in the system if not fount in explicit path" +
-                    " (`" + TERRAFORM_PATH.getName() + "` config key) or the property wasn't supplied")
-            .defaultValue(false)
-            .build();
 
     @SetFromFlag("tfDriftCheck")
     ConfigKey<Boolean> TERRAFORM_DRIFT_CHECK = ConfigKeys.builder(Boolean.class)

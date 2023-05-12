@@ -2,8 +2,7 @@ services:
   - type: terraform
     name: Terraform Configuration
     brooklyn.config:
-      tf.search: true
-      tf.execution.mode: "ssh"
+      tf.execution.mode: ssh
       # requires aws cli + creds installed on the machine deploying this
       # Fetching archives over HTTP
       tf.configuration.url: classpath://plans/create-instance.tf

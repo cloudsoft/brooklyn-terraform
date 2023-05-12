@@ -46,6 +46,8 @@ public class TerraformContainerDriver implements TerraformDriver {
         this.entity = entity;
     }
 
+    private TerraformConfigurationImpl entity() { return (TerraformConfigurationImpl) Entities.deproxy(getEntity()); }
+
     @Override
     public ContainerTaskFactory<?,String> newCommandTaskFactory(boolean withEnvVars, String command) {
         MutableMap<Object, Object> config = MutableMap.of()
@@ -147,8 +149,6 @@ public class TerraformContainerDriver implements TerraformDriver {
     public void postLaunch() {
         lifecyclePostStartCustom();
     }
-
-    private TerraformConfigurationImpl entity() { return (TerraformConfigurationImpl) Entities.deproxy(getEntity()); }
 
     //@Override
     protected void lifecyclePostStartCustom() {

@@ -32,6 +32,7 @@ import org.apache.brooklyn.core.workflow.WorkflowExecutionContext;
 import org.apache.brooklyn.core.workflow.steps.CustomWorkflowStep;
 import org.apache.brooklyn.entity.group.BasicGroup;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
+import org.apache.brooklyn.entity.software.base.SoftwareProcessDriver;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessDriverLifecycleEffectorTasks;
 import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
@@ -84,8 +85,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Override
     protected SoftwareProcessDriverLifecycleEffectorTasks getLifecycleEffectorTasks() {
         String executionMode = getConfig(TerraformCommons.TF_EXECUTION_MODE);
-        if(Objects.equals(SSH_MODE, executionMode)) {
+
+        if (Objects.equals(SSH_MODE, executionMode)) {
             return getConfig(LIFECYCLE_EFFECTOR_TASKS);
+
         } else {
             return new SoftwareProcessDriverLifecycleEffectorTasks(){
                 @Override
@@ -100,9 +103,12 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
                 @Override
                 protected void startInLocations(Collection<? extends Location> locations, ConfigBag parameters) {
-                    entity().getDriver().start(); // TODO look at logic around starting children
+                    upsertDriver(false).start();
+                    // TODO look at logic around starting children
                 }
-                // TODO stop might work, but if not check and implement
+
+                // stop and other things should simply be inherited
+
             };
         }
     }
@@ -406,11 +412,36 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     @Override
     public TerraformDriver getDriver() {
-        String executionMode = getConfig(TerraformCommons.TF_EXECUTION_MODE);
-        if(Objects.equals(SSH_MODE, executionMode)) {
-            return (TerraformDriver) super.getDriver();
-        } else {
-            return new TerraformContainerDriver(this);
+        return upsertDriver(false);
+    }
+
+    private transient TerraformDriver terraformDriver;
+    private transient Object terraformDriverCreationLock = new Object();
+
+    protected TerraformDriver upsertDriver(boolean replace) {
+        if (terraformDriver!=null && !replace) return terraformDriver;
+
+        synchronized (terraformDriverCreationLock) {
+            if (terraformDriver!=null && !replace) return terraformDriver;
+
+            String executionMode = getConfig(TerraformCommons.TF_EXECUTION_MODE);
+
+            if (Objects.equals(SSH_MODE, executionMode)) {
+                terraformDriver = (TerraformDriver) super.getDriver();
+
+            } else if (Objects.equals(LOCAL_MODE, executionMode)) {
+                terraformDriver = new TerraformLocalDriver(this);
+
+            } else if (Objects.equals(KUBE_MODE, executionMode)) {
+                terraformDriver = new TerraformContainerDriver(this);
+
+            } else {
+                // shouldn't happen as config has a default
+                LOG.warn("Config '" + TerraformCommons.TF_EXECUTION_MODE.getName() + "' returned null " + this + "; using default kubernetes");
+                terraformDriver = new TerraformContainerDriver(this);
+            }
+
+            return terraformDriver;
         }
     }
 
