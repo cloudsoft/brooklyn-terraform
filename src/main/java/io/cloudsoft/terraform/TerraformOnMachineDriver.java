@@ -38,7 +38,6 @@ public abstract class TerraformOnMachineDriver extends AbstractSoftwareProcessSs
 
     public TerraformOnMachineDriver(EntityLocal entity, SshMachineLocation machine) {
         super(entity, machine);
-        entity.sensors().set(Attributes.LOG_FILE_LOCATION, this.getLogFileLocation());
     }
 
     public abstract ProcessTaskFactory<String> newCommandTaskFactory(boolean withEnvVars, String command);
@@ -144,6 +143,7 @@ public abstract class TerraformOnMachineDriver extends AbstractSoftwareProcessSs
 
     @Override
     public void customize() {
+        entity.sensors().set(Attributes.LOG_FILE_LOCATION, this.getLogFileLocation());
         TerraformDriver.super.customize();
     }
 

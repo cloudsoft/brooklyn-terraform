@@ -173,29 +173,35 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
      *  Since `terraform plan` is the only command reacting to changes, it makes sense entities to change according to its results.
      */
     private void updateDeploymentState() {
-        final String result = retryUntilLockAvailable("terraform show", () -> getDriver().runShowTask());
-        Map<String, Object> state = StateParser.parseResources(result);
+        final String statePull = retryUntilLockAvailable("terraform state pull", () -> getDriver().runShowTask());
+        sensors().set(TerraformConfiguration.TF_STATE, statePull);
+
+        final String show = retryUntilLockAvailable("terraform show", () -> getDriver().runShowTask());
+        Map<String, Map<String,Object>> state = StateParser.parseResources(show);
         sensors().set(TerraformConfiguration.STATE, state);
-        Map<String, Object> resources = new HashMap<>(state);
-        updateResources(resources, this, ManagedResource.class);
-        updateDataResources(resources, DataResource.class);
-        if (!resources.isEmpty()) { // new resource, new child must be created
-            processResources(resources,this);
+
+        if (!Boolean.FALSE.equals(config().get(TERRAFORM_RESOURCE_ENTITIES_ENABLED))) {
+            Map<String, Map<String, Object>> resources = MutableMap.copyOf(state);
+            updateResources(resources, this, ManagedResource.class);
+            updateDataResources(resources, DataResource.class);
+            if (!resources.isEmpty()) { // new resource, new child must be created
+                processResources(resources, this);
+            }
         }
     }
 
     private static Predicate<? super Entity> runningOrSync = c -> !c.sensors().getAll().containsKey(RESOURCE_STATUS) || (!c.sensors().get(RESOURCE_STATUS).equals("running") &&
             c.getParent().sensors().get(DRIFT_STATUS).equals(TerraformStatus.SYNC));
 
-    private void updateResources(Map<String, Object> resources, Entity parent, Class<? extends TerraformResource> clazz) {
+    private void updateResources(Map<String, Map<String,Object>> resourcesToSensors, Entity parent, Class<? extends TerraformResource> clazz) {
         List<Entity> childrenToRemove = new ArrayList<>();
         parent.getChildren().stream().filter(c -> clazz.isAssignableFrom(c.getClass())).forEach(c -> {
             if (runningOrSync.test(c)){
                 c.sensors().set(RESOURCE_STATUS, "running");
             }
-            if (resources.containsKey(c.getConfig(TerraformResource.ADDRESS))) { //child in resource set, update sensors
-                ((TerraformResource) c).refreshSensors((Map<String, Object>) resources.get(c.getConfig(TerraformResource.ADDRESS)));
-                resources.remove(c.getConfig(TerraformResource.ADDRESS));
+            if (resourcesToSensors.containsKey(c.getConfig(TerraformResource.ADDRESS))) { //child in resource set, update sensors
+                ((TerraformResource) c).refreshSensors(resourcesToSensors.get(c.getConfig(TerraformResource.ADDRESS)));
+                resourcesToSensors.remove(c.getConfig(TerraformResource.ADDRESS));
             } else {
                 childrenToRemove.add(c);
             }
@@ -209,7 +215,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     /**
      * Updates Data resources
      */
-    private void updateDataResources(Map<String, Object> resources, Class<? extends TerraformResource> clazz) {
+    private void updateDataResources(Map<String, Map<String,Object>> resources, Class<? extends TerraformResource> clazz) {
         EntityParser.getDataResourcesGroup(this).ifPresent(c -> updateResources(resources, c, clazz));
     }
 
@@ -538,7 +544,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     @Override
     public void removeDiscoveredResources() {
-        Map<String, Object> resources = MutableMap.of();
+        Map<String, Map<String,Object>> resources = MutableMap.of();
         updateResources(resources, this, ManagedResource.class);
         updateDataResources(resources, DataResource.class);
     }

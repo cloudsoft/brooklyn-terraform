@@ -39,7 +39,7 @@ public  final class EntityParser {
         return Strings.isNonBlank(prefix)? prefix+"." : entity.getId()+".";
     }
 
-    public static void processResources(Map<String, Object> resources, Entity entity) {
+    public static void processResources(Map<String, Map<String,Object>> resources, Entity entity) {
         List<Map<String, Object>> dataResources = getDataResources(resources);
         List<Map<String, Object>> managedResources = getManagedResources(resources);
         int managedResourceNumber = managedResources.size();
@@ -74,19 +74,17 @@ public  final class EntityParser {
 
     static Function<Object, String> extractMode =  obj -> (String)((Map<String, Object>)obj).getOrDefault("resource.mode", "other");
 
-    public static List<Map<String, Object>> getDataResources (Map<String, Object> resources) {
+    public static List<Map<String, Object>> getDataResources (Map<String, Map<String,Object>> resources) {
         return resources.entrySet().stream()
                 .map(Map.Entry::getValue)
                 .filter(resObject -> "data".equals(extractMode.apply(resObject)))
-                .map(resObject -> (Map<String, Object>) resObject)
                 .collect(Collectors.toList());
     }
 
-    public static List<Map<String, Object>> getManagedResources (Map<String, Object> resources) {
+    public static List<Map<String, Object>> getManagedResources (Map<String, Map<String,Object>> resources) {
         return resources.entrySet().stream()
                 .map(Map.Entry::getValue)
                 .filter(resObject -> !"data".equals(extractMode.apply(resObject)))
-                .map(resObject -> (Map<String, Object>) resObject)
                 .collect(Collectors.toList());
     }
 

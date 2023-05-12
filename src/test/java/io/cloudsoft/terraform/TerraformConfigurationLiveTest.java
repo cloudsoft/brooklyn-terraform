@@ -76,8 +76,10 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
                 .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-security-group.tf")
                 .configure(TerraformCommons.TF_EXECUTION_MODE, mode)
                 .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
-        app.start(
-                needsLocation ? ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()) : null);
+
+        if (needsLocation) app.start(ImmutableList.<Location>of(app.newLocalhostProvisioningLocation()));
+        else terraformConfiguration.reinstallConfig(null);
+
         assertAttributeEqualsEventually(terraformConfiguration, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
 
         Asserts.continually(new SensorSupplier<>(terraformConfiguration, TerraformConfiguration.STATE),

@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.Map;
 
 import org.apache.brooklyn.api.catalog.Catalog;
-import org.apache.brooklyn.api.catalog.CatalogConfig;
 import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
 import org.apache.brooklyn.config.ConfigInheritance;
@@ -59,6 +58,12 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
             .defaultValue(true)
             .build();
 
+    ConfigKey<Boolean> TERRAFORM_RESOURCE_ENTITIES_ENABLED = ConfigKeys.builder(Boolean.class)
+            .name("tf.resource_entities_enabled")
+            .description("Create and update entities corresponding to Terraform resources and data")
+            .defaultValue(true)
+            .build();
+
     ConfigKey<CustomWorkflowStep> PRE_PLAN_WORKFLOW = ConfigKeys.builder(CustomWorkflowStep.class, "pre_plan.workflow")
             .description("workflow to run prior to any plan")
             .runtimeInheritance(ConfigInheritance.NONE)
@@ -95,18 +100,24 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
             "The contents of the Terraform output command which inspects Terraform state or plan.");
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    AttributeSensor<Map<String, Object>> STATE = new BasicAttributeSensor(Map.class, "tf.state",
-            "A map constructed from the state file on disk which contains the state of all managed infrastructure.");
+    AttributeSensor<Map<String, Map<String,Object>>> STATE = new BasicAttributeSensor(Map.class, "tf.state",
+            "A map of resource state constructed from the state file on disk which contains the state of all managed infrastructure.");
+
+    AttributeSensor<String> TF_STATE = new BasicAttributeSensor(Map.class, "tf.tf_state",
+            "Output from terraform state pull.");
 
     AttributeSensor<TerraformStatus> DRIFT_STATUS = Sensors.newSensor(TerraformStatus.class,"tf.drift.status",
             "Drift status of the configuration" );
 
     void removeDiscoveredResources();
 
-    @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration.")
+    @Effector(description="Performs the Terraform apply command which will create all of the infrastructure specified by the configuration. " +
+            "Variables are refreshed but the configuration files are not. Use 'reinstallConfig' to update configuration files.")
     void apply();
 
-    @Effector(description="Performs the Terraform plan command to show what would change (and refresh sensors).")
+    @Effector(description="Performs the Terraform plan command to show what would change, updating the relevant sensors, but not applying the changes. " +
+            "Variables are refreshed but the configuration files are not. " +
+            "Use 'reinstallConfig' to update configuration files and apply, or 'customize' to update configuration on its own.")
     void plan();
 
     @Effector(description = "Force a re-discovery of resources (clearing all first)")
@@ -118,7 +129,8 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
     @Effector(description="Performs the Terraform destroy command to destroy all of the infrastructure that has been previously created by the configuration.")
     void destroyTerraform();
 
-    @Effector(description="Performs Terraform apply again with the configuration provided via the provided URL. If an URL is not provided the original URL provided when this blueprint was deployed will be used." +
+    @Effector(description="Performs Terraform apply again with the configuration provided via the provided URL. " +
+            "If a URL is not provided the original URL provided when this blueprint was deployed will be refreshed. " +
             "This is useful when the URL points to a GitHub or Artifactory release.")
     void reinstallConfig(@EffectorParam(name = "configUrl", description = "URL pointing to the terraform configuration") @Nullable String configUrl);
 

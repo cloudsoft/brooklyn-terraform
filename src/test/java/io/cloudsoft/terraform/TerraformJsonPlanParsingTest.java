@@ -2,7 +2,6 @@ package io.cloudsoft.terraform;
 
 import io.cloudsoft.terraform.parser.PlanLogEntry;
 import io.cloudsoft.terraform.parser.StateParser;
-
 import org.testng.annotations.Test;
 
 import java.io.File;
@@ -12,9 +11,8 @@ import java.util.List;
 import java.util.Map;
 
 import static io.cloudsoft.terraform.TerraformDriver.*;
-
-import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 public class TerraformJsonPlanParsingTest {
     @Test
@@ -31,7 +29,7 @@ public class TerraformJsonPlanParsingTest {
     public void readGcpManagedResources() throws IOException {
         final String state = loadTestData("state/gcp-cluster-state.json");
 
-        Map<String,Object> resources = StateParser.parseResources(state);
+        Map<String, Map<String, Object>> resources = StateParser.parseResources(state);
         assertEquals(resources.size(), 7);
         assertTrue(resources.containsKey("google_dataproc_cluster.spark_cluster"));
     }
@@ -41,7 +39,7 @@ public class TerraformJsonPlanParsingTest {
     public void readManagedResources() throws IOException {
         final String state = loadTestData("state/state.json");
 
-        Map<String,Object> resources = StateParser.parseResources(state);
+        Map<String, Map<String, Object>> resources = StateParser.parseResources(state);
         assertEquals(resources.size(), 1);
         assertTrue(resources.containsKey("aws_instance.example1"));
     }
@@ -50,18 +48,18 @@ public class TerraformJsonPlanParsingTest {
     public void checkAWSTags() throws IOException {
         final String state = loadTestData("state/aws-instance-state.json");
 
-        Map<String,Object> resources = StateParser.parseResources(state);
+        Map<String, Map<String, Object>> resources = StateParser.parseResources(state);
         assertEquals(resources.size(), 1);
         assertTrue(resources.containsKey("aws_instance.example1"));
-        assertTrue(((Map<String,Object>)resources.get("aws_instance.example1")).containsKey("value.tags"));
-        assertTrue(((Map<String,Object>)resources.get("aws_instance.example1")).containsKey("value.tags_all"));
+        assertTrue(resources.get("aws_instance.example1").containsKey("value.tags"));
+        assertTrue(resources.get("aws_instance.example1").containsKey("value.tags_all"));
     }
 
     @Test
     public void readVSManagedResources() throws IOException {
         final String state = loadTestData("state/vs-state.json");
 
-        Map<String,Object> resources = StateParser.parseResources(state);
+        Map<String, Map<String, Object>> resources = StateParser.parseResources(state);
         assertEquals(resources.size(), 9);
         long dataCount = resources.entrySet().stream().filter(e -> e.getKey().startsWith("data")).count();
         assertEquals(dataCount,6);

@@ -60,6 +60,25 @@ public class TerraformLocalDriver extends TerraformOnMachineDriver implements Te
     public void install() {
         // for local driver we have to correctly set install and run dirs
         // set on box
+        fixRunDir();
+
+        //not used, but for good measure avoid bogus install dirs
+        setInstallDir(getRunDir());
+        setExpandedInstallDir(getRunDir());
+
+        super.install();
+
+        DynamicTasks.queue(newCommandTaskFactory(false, "mkdir -p "+getTerraformActiveDir()).newTask());
+        DynamicTasks.waitForLast();
+    }
+
+    @Override
+    public String getRunDir() {
+        fixRunDir();
+        return super.getRunDir();
+    }
+
+    protected void fixRunDir() {
         String base = getEntity().getConfig(BrooklynConfigKeys.ONBOX_BASE_DIR);
         if (base==null) {
             setRunDir(null);
@@ -71,15 +90,6 @@ public class TerraformLocalDriver extends TerraformOnMachineDriver implements Te
             );
             getRunDir();
         }
-
-        //not used
-        setInstallDir(getRunDir());
-        setExpandedInstallDir(getRunDir());
-
-        super.install();
-
-        DynamicTasks.queue(newCommandTaskFactory(false, "mkdir -p "+getTerraformActiveDir()).newTask());
-        DynamicTasks.waitForLast();
     }
 
     protected void downloadTerraform() {

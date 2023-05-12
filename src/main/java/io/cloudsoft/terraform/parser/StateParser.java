@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.cloudsoft.terraform.TerraformConfiguration;
+import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,8 +44,8 @@ public final class StateParser {
     private static Predicate<? super JsonNode> isNotBlankPredicate = node -> node != null && !BLANK_ITEMS.contains((node instanceof TextNode) ? node.asText() : node.toString());
 
 
-    public static Map<String, Object> parseResources(final String state){
-        Map<String, Object> result  = new HashMap<>();
+    public static Map<String, Map<String,Object>> parseResources(final String state){
+        Map<String, Map<String,Object>> result  = MutableMap.of();
         ObjectMapper objectMapper = new ObjectMapper();
         try {
             JsonNode root = objectMapper.readTree(state);
