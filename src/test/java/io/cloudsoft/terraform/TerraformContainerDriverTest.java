@@ -10,9 +10,11 @@ import org.apache.brooklyn.core.entity.Dumper;
 import org.apache.brooklyn.core.entity.EntityAsserts;
 import org.apache.brooklyn.core.entity.StartableApplication;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
+import org.apache.brooklyn.launcher.BrooklynViewerLauncher;
 import org.apache.brooklyn.location.jclouds.BlobStoreContextFactoryImpl;
 import org.apache.brooklyn.location.jclouds.JcloudsLocation;
 import org.apache.brooklyn.test.Asserts;
+import org.apache.brooklyn.util.collections.MutableList;
 import org.apache.brooklyn.util.stream.Streams;
 import org.apache.brooklyn.util.text.Identifiers;
 import org.apache.brooklyn.util.text.Strings;
@@ -24,13 +26,24 @@ import org.jclouds.blobstore.domain.StorageMetadata;
 import org.jclouds.blobstore.options.ListContainerOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
+
+import java.util.Collection;
 
 public class TerraformContainerDriverTest extends AbstractYamlTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(TerraformContainerDriverTest.class);
 
     String S3_BUCKET_NAME = "terraform-backend-test-cloudsoft1";
+    private Collection<BrooklynViewerLauncher> viewers = MutableList.of();
+
+    @AfterMethod(alwaysRun = true)
+    @Override
+    public void tearDown() throws Exception {
+        TerraformConfigurationLiveTest.tearDownViewers(mgmt(), viewers);
+        super.tearDown();
+    }
 
     @Override
     protected boolean useDefaultProperties() {
@@ -60,6 +73,8 @@ public class TerraformContainerDriverTest extends AbstractYamlTest {
 
     @Test(groups="Live") // requires access to a Kubernetes cluster via kubectl
     public void simpleBackendTest() throws Exception {
+        TerraformConfigurationLiveTest.attachViewerForNonRebind(mgmt(), viewers);
+
         BlobStore blobstore = getS3Access();
         if (!blobstore.containerExists(S3_BUCKET_NAME)) {
             throw new IllegalStateException("This test requires a container to exist in S3: "+S3_BUCKET_NAME);

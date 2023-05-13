@@ -5,9 +5,11 @@ import io.cloudsoft.terraform.predicates.ResourceType;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.api.entity.EntitySpec;
 import org.apache.brooklyn.api.location.Location;
+import org.apache.brooklyn.api.mgmt.ManagementContext;
 import org.apache.brooklyn.core.entity.Attributes;
 import org.apache.brooklyn.core.entity.Dumper;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
+import org.apache.brooklyn.core.mgmt.internal.ManagementContextInternal;
 import org.apache.brooklyn.core.mgmt.persist.PersistMode;
 import org.apache.brooklyn.core.mgmt.rebind.RebindManagerImpl;
 import org.apache.brooklyn.entity.group.DynamicGroup;
@@ -20,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
+import java.util.Collection;
 import java.util.List;
 
 import static org.apache.brooklyn.core.entity.EntityAsserts.assertAttributeEqualsEventually;
@@ -37,13 +40,16 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
     @AfterMethod(alwaysRun = true, timeOut = 30000L)
     @Override
     public void tearDown() throws Exception {
-        viewers.forEach(BrooklynViewerLauncher::terminate);
-        viewers.clear();
+        tearDownViewers(mgmt, viewers);
         super.tearDown();
     }
 
     // method can be used in a test to add a REST API endpoint to which a UI can be attached
     protected void attachViewerForNonRebind() {
+        attachViewerForNonRebind(mgmt, viewers);
+    }
+
+    public static void attachViewerForNonRebind(ManagementContext mgmt, Collection<BrooklynViewerLauncher> viewers) {
         // required for REST access - otherwise it is viewed as not yet ready
         mgmt.getHighAvailabilityManager().disabled(true);
         //mgmt.getHighAvailabilityManager().getNodeState();
@@ -54,6 +60,11 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
         viewer.managementContext(mgmt);
         viewer.persistMode(PersistMode.DISABLED);
         viewer.start();
+    }
+
+    public static void tearDownViewers(ManagementContext mgmt, Collection<BrooklynViewerLauncher> viewers) {
+        viewers.forEach(BrooklynViewerLauncher::terminate);
+        viewers.clear();
     }
 
     @Test(groups="Live")
