@@ -103,7 +103,7 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
     AttributeSensor<Map<String, Map<String,Object>>> STATE = new BasicAttributeSensor(Map.class, "tf.state",
             "A map of resource state constructed from the state file on disk which contains the state of all managed infrastructure.");
 
-    AttributeSensor<String> TF_STATE = new BasicAttributeSensor(Map.class, "tf.tf_state",
+    AttributeSensor<String> TF_STATE = Sensors.newSensor(String.class, "tf.tf_state",
             "Output from terraform state pull.");
 
     AttributeSensor<TerraformStatus> DRIFT_STATUS = Sensors.newSensor(TerraformStatus.class,"tf.drift.status",
