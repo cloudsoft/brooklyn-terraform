@@ -96,14 +96,6 @@
         </dependency>
     </dependencies>
 
-    <distributionManagement>
-        <snapshotRepository>
-            <id>sonatype-nexus-snapshots</id>
-            <name>Sonatype Nexus Snapshots</name>
-            <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
-        </snapshotRepository>
-    </distributionManagement>
-
     <pluginRepositories>
         <pluginRepository>
             <id>sonatype-nexus-snapshots</id>
@@ -143,10 +135,15 @@
                 <enabled>true</enabled>
             </snapshots>
         </repository>
-        <!-- Cloudsoft repo, for early custom releases of jclouds vcloud-director etc -->
         <repository>
             <id>cloudsoft-releases</id>
             <url>https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
         </repository>
         <repository>
             <id>cloudsoft-snapshots</id>
@@ -238,4 +235,27 @@
         </plugins>
     </build>
 
+    <profiles>
+        <profile>
+            <id>deploy-cloudsoft</id>
+            <activation> <activeByDefault>true</activeByDefault> </activation>
+            <distributionManagement>
+                <snapshotRepository>
+                    <id>cloudsoft-snapshots</id>
+                    <name>Cloudsoft Artifactory for Snapshots</name>
+                    <url>https://artifactory.cloudsoftcorp.com/artifactory/libs-snapshot-local/</url>
+                </snapshotRepository>
+            </distributionManagement>
+        </profile>
+        <profile>
+            <id>deploy-sonatype</id>
+            <distributionManagement>
+                <snapshotRepository>
+                    <id>sonatype-nexus-snapshots</id>
+                    <name>Sonatype Nexus Snapshots</name>
+                    <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
+                </snapshotRepository>
+            </distributionManagement>
+        </profile>
+    </profiles>
 </project>

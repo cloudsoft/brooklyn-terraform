@@ -82,46 +82,74 @@ commands: # re-usable as steps in any job in this config
     - slack/notify:
         <<: *job-failed-notification
 
-  deploy:
+  deploy-cloudsoft:
     steps:
     - checkout
     - run:
-        name: Build And Deploy
+        name: Build And Deploy Cloudsoft
         command: mvn -s .circleci/circleci-m2-settings.xml deploy
     - slack/notify:
         <<: *job-failed-notification
+
+  deploy-sonatype:
+    steps:
+      - checkout
+      - run:
+          name: Build And Deploy Sonatype
+          command: mvn -s .circleci/circleci-m2-settings.xml deploy -Pdeploy-sonatype
+      - slack/notify:
+          <<: *job-failed-notification
 
 jobs:
   # Below is the definition of your job to build and test your app, you can rename and customize it as you want.
   build-and-test:
     executor: tf-executor
     steps:
-    - build
+      - build
 
-  build-and-deploy:
+  deploy-cloudsoft:
     executor: tf-executor
     steps:
-    - deploy
+      - deploy-cloudsoft
+
+  deploy-sonatype:
+    executor: tf-executor
+    steps:
+      - deploy-sonatype
 
 workflows:
-  terraform-build: # This is the name of the workflow, feel free to change it to better match your workflow.
-    # Inside the workflow, you define the jobs you want to run.
+  terraform-build-publish-cloudsoft:
     jobs:
     - build-and-test: # this builds everytime something changes on this repo
         context:
         - cloudsoft-artifactory
         - cloudsoft-sonatype
-
-  terraform-publish: # this builds everytime something changes on the main branch and user has manually approved deployment, this could be a different workflow if needed
-    triggers:
-    - schedule:
-        cron: "0 0 28 * *" # Fire at 00:00 on day-of-month 28.
+    - deploy-cloudsoft:
         filters:
           branches:
             only: [ main ] # trigger only on main
-    jobs:
-    - build-and-deploy:
         context:
-        - cloudsoft-artifactory
-        - cloudsoft-sonatype
+          - cloudsoft-artifactory
+          - cloudsoft-sonatype
+
+  terraform-publish-all:
+    triggers:
+      - schedule:
+          cron: "0 0 28 * *" # Fire at 00:00 on day-of-month 28.
+          filters:
+            branches:
+              only: [ main ] # trigger only on main
+    jobs:
+      - build-and-test: # this builds everytime something changes on this repo
+          context:
+            - cloudsoft-artifactory
+            - cloudsoft-sonatype
+      - deploy-cloudsoft:
+          context:
+            - cloudsoft-artifactory
+            - cloudsoft-sonatype
+      - deploy-sonatype:
+          context:
+            - cloudsoft-artifactory
+            - cloudsoft-sonatype
 
