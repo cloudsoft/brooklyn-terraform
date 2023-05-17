@@ -125,6 +125,8 @@ workflows:
         - cloudsoft-artifactory
         - cloudsoft-sonatype
     - deploy-cloudsoft:
+        requires:
+          - build-and-test
         filters:
           branches:
             only: [ main ] # trigger only on main
@@ -145,10 +147,14 @@ workflows:
             - cloudsoft-artifactory
             - cloudsoft-sonatype
       - deploy-cloudsoft:
+          requires:
+            - build-and-test
           context:
             - cloudsoft-artifactory
             - cloudsoft-sonatype
       - deploy-sonatype:
+          requires:
+            - build-and-test
           context:
             - cloudsoft-artifactory
             - cloudsoft-sonatype
