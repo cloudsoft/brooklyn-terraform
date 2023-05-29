@@ -4,8 +4,9 @@ import com.google.common.collect.ImmutableList;
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.core.annotation.Effector;
 import org.apache.brooklyn.core.entity.Attributes;
+import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
-import org.apache.brooklyn.core.sensor.Sensors;
+import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.util.net.UserAndHostAndPort;
 
@@ -14,34 +15,17 @@ import java.util.Map;
 
 public class StartableManagedResourceImpl extends ManagedResourceImpl implements StartableManagedResource {
 
-    public static final ImmutableList<String> ACCEPTED_STATE = ImmutableList.of("ok", "running", "up", "online");
-
-
     protected void connectSensors() {
-        Map<String, Object> resourceDetails = this.getConfig(StartableManagedResource.STATE_CONTENTS);
-        resourceDetails.forEach((k,v) -> sensors().set(Sensors.newSensor(Object.class, "tf." + k), v.toString()));
-        if(!resourceDetails.containsKey("resource.status")) {
-            sensors().set(RESOURCE_STATUS, "ok"); // the provider doesn't provide any property to let us know the state of the resource
-        }
-        sensors().set(SERVICE_UP, Boolean.TRUE);
-        this.setDisplayName(getConfig(StartableManagedResource.ADDRESS));
-        updateResourceState();
+        super.connectSensors();
     }
 
     @Override
     public boolean refreshSensors(Map<String, Object> resource) {
-        resource.forEach((k, v) -> {
-            if (!sensors().get(Sensors.newSensor(Object.class, "tf." + k)).equals(v)){
-                sensors().set(Sensors.newSensor(Object.class, "tf." + k), v.toString());
-            }
-        });
-
         if (resource.containsKey(IP_SENSOR_NAME)) {
             String ip = resource.get(IP_SENSOR_NAME).toString();
             sensors().set(Attributes.SSH_ADDRESS, UserAndHostAndPort.fromParts("tbd", ip, 22));
         }
-        updateResourceState();
-        return true;
+        return super.refreshSensors(resource);
     }
 
     @Effector(description = "[TBD]Stop the resource based on the type.")
@@ -65,20 +49,45 @@ public class StartableManagedResourceImpl extends ManagedResourceImpl implements
         connectSensors();
     }
 
+    private static final ImmutableList<String> HEALTHY_RESOURCE_STATES = ImmutableList.of("ok", "running",
+            // not used currently
+            "up", "online"
+        );
+
     public void updateResourceState(){
         final String resourceStatus = sensors().get(RESOURCE_STATUS);
-        if (ACCEPTED_STATE.contains(resourceStatus)) {
+
+        if (HEALTHY_RESOURCE_STATES.contains(resourceStatus)) {
+            sensors().set(SERVICE_UP, Boolean.TRUE);
             sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
+
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
-        } else if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPING.name())) {
-            sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
-            sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING);
-        } else if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPED.name())) {
-            sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
-            sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
+
+            ServiceStateLogic.updateMapSensorEntry(this, Attributes.SERVICE_PROBLEMS,
+                    "TF-ASYNC", Entities.REMOVE);
+
+//          // could try to intercept stopping / etc
+//        } else if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPING.name())) {
+//            sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
+//            sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPING);
+//
+//        } else if (resourceStatus.equalsIgnoreCase(Lifecycle.STOPPED.name())) {
+//            sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
+//            sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.STOPPED);
+
         } else  {
-            sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.TRUE);
+            sensors().set(SERVICE_UP, Boolean.FALSE);
+            sensors().set(SoftwareProcess.SERVICE_PROCESS_IS_RUNNING, Boolean.FALSE);
+
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
+
+            if ("changed".equals(resourceStatus)) {
+                ServiceStateLogic.updateMapSensorEntry(this, Attributes.SERVICE_PROBLEMS,
+                        "TF-ASYNC", "Resource changed outside terraform.");
+            } else {
+                ServiceStateLogic.updateMapSensorEntry(this, Attributes.SERVICE_PROBLEMS,
+                        "TF-ASYNC", "Resource has unexpected status: "+resourceStatus);
+            }
         }
     }
 }

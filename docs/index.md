@@ -149,6 +149,8 @@ Other useful configurations:
 * `tf_var.*` : all configurations prefixed with `tf_var.` are converted to Terraform variables. This is a practical way to avoid using `terraform.tfvars` files and inject the values  directly from the AMP blueprint. Just don't use special characters(e.g. ".") when naming your configurations!
 * `version` : set this with the version of Terraform you want AMP to use to manage your deployment. AMP downloads it and installs in a directory that gets deleted when the application is stopped. By default, the version used is the one configured in the current version of `brooklyn-terraform`.
 * `tf.path` :  set this with the terraform cli path on the location to instruct AMP to use it to manage the deployment.
+* `tf.resources_ignored_for_drift` : a list of resource addresses that will be ignored for the purposes of drift detection and replanning
+
 
 When started the entity installs Terraform and applies the configured plan.
 
@@ -447,91 +449,33 @@ Thus,we recommend not using it, unless the Terraform configuration contains a st
 When the infrastructure is in the configured state, the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 The `tf.plan.status=SYNC` means the plan that was executed (based on the provided configuration) is in sync with the infrastructure, so the plan and the infrastructure are in sync.
 
-#### Resource is Changed Outside Terraform
+#### Infrastructure Resource Drift and Plan Changes
 
-When a resource is changed outside Terraform (e.g. the tag of an AWS instance is changed) the `tf.plan` sensor displays `{tf.plan.status=DRIFT, <resource change details>}`. This is known as an `update drift`.
-The `tf.plan.status=DRIFT` means the plan that was executed (based on the provided configuration) no longer matches the managed infrastructure. Based on the information provided by the `tf.plan` sensor the affected entities are shown as being `ON_FIRE`.
-The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`.
-In this situation manual intervention is required, and there are two possible actions:
+If a resource is changed outside Terraform (e.g. the tag of an AWS instance is changed),
+or if a new resource or output declaration is manually added to the Terraform configuration,
+the `tf.plan` sensor displays `{tf.plan.status=DRIFT, <resource change details>}`.
 
-- Invoking the `apply` effector of the Terraform Configuration entity resets the resources to their initial configuration (e.g. the tag of an AWS instance is reverted to the value declared in the configuration)
-- Manually edit the Terraform configuration file(s) to include the infrastructure updates and then invoke the `apply` effector
+More information about what has changed, whether it is a drift or a plan change, is contained in other fields.
+Specifically, Terraform differentiates between resources whose state in the real world does not match the state Terraform expected to see based on previous actions ("drift")
+and resources whose state in the real world does not match what the Terraform configuration says should be the case ("planned changes").
+This can be tricky:  if you tell Terraform to `refresh`, then it will no longer have any such drift
+(because it now expects the refreshed value), but there are still "planned changes" (to reconverge the infrastructure).
 
-In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+To simplify things, the Apache Brooklyn integration does not distinguish the above cases and treats any such difference as drift,
+with one exception. If the changes are compatible with the plan, i.e. there are no planned changes needed to resolve them, 
+then Brooklyn will simply update the local state model. This means only changes that require a reapply will trigger drift and associated problems.
+Any changes that are not classed as drift will cause the local model to update and sensors to be published;
+if these changes are interesting, create policies that are triggered by those changes.
+(Changes to outputs might not be reflected if there are planned changes detected, due to how Terraform detects output changes.
+In the presence of planned changes, it is recommended to do one of the two actions suggested below.)
 
-#### Resource and Output Declaration is Added to the Configuration File(s)
+If you see `ON_FIRE` due to drift (or planned changes), you have two possible actions:
 
-When a new resource or output declaration is manually added to the configuration file the `tf.plan` sensor displays `{tf.plan.status=DESYNCHRONIZED, <configuration change details>}`.
-The `tf.plan.status=DESYNCHRONIZED` means the plan that was executed (based on the most recent configuration) no longer matches the infrastructure, so the plan and the infrastructure are not in sync.
-The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`.
-In this situation manual intervention is required, and the only possible action is to invoke the `apply` effector of the Terraform Configuration entity. This triggers Terraform to execute the updated plan, create the new resources and outputs.
+- Invoking the `apply` effector of the Terraform Configuration entity resets the resources to their intended configuration (e.g. the tag of an AWS instance is reverted to the value declared in the configuration)
+- Manually edit the Terraform configuration file(s) to include the infrastructure updates and `reinstallConfig` the configuration; now Brooklyn will detect that what was "drift" needing a "planned change" to revert it is simply "drift" that is compatible with the intended configuration, will update local state, and then have no errors, even without any new `apply`
 
-In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, new entities corresponding the newly created resources are added, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
+In either case, after about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
 
-#### Resource and Output Declaration is Removed to the Configuration File(s)
-
-This situation is 99% to the previous one, with the exception being that at the next AMP inspection, entities matching deleted resources are removed.
-
-#### Only Output Declarations are Added/Removed to/from the Configuration File(s)
-
-This situation is quite special since output configuration changing is not affecting the infrastructure in any way so Terraform is not that sensitive about it.
-However, AMP is a stricter about this and any output configuration changes cause the `tf.plan` sensor to display `{tf.plan.status=DESYNCHRONIZED, <output change details>}`.
-In this case the `tf.plan.status=DESYNCHRONIZED` means the plan that was executed had different outputs than the ones currently in the configuration, so the plan and configuration are not in sync.
-The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The rest of the entities are not affected in any way.
-
-In this situation manual intervention is required, and the only possible action is to invoke the `apply` effector of the Terraform Configuration entity. This triggers Terraform to execute the updated plan, create/remove the new  outputs.
-
-In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, new `tf.output.*` sensors are created, the ones that no longer match a Terraform output declaration are removed,
-and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
-
-#### Resource is Destroyed Outside Terraform
-
-When a resource is destroyed outside Terraform (e.g. an AWS instance is terminated) the `tf.plan` sensor displays `{tf.plan.status=DRIFT, <resource change details>}`. This is known as an `delete drift`.
-The `tf.plan.status=DRIFT` means the plan that was executed (based on the provided configuration) no longer matches the managed infrastructure.
-
-Based on the information provided by the `tf.plan` sensor the affected entities are shown as being `ON_FIRE`.
-The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`.
-In this situation manual intervention is required, and there are two possible actions:
-
-- Invoking the `apply` effector of the Terraform Configuration entity resets the resources to their initial configuration (e.g. the missing resource is re-created with the details from the configuration)
-- Manually edit the Terraform configuration file(s) to remove the configuration for the destroyed resource and then invoke the `apply` effector
-
-In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, all entities are shown as `RUNNING` and the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
-If the choice was to re-create the destroyed resource, an entity matching the new resource appears under the  Terraform Configuration entity, otherwise the entity without a matching resource is removed.
-
-#### Resource State is Not as Expected
-
-This is a special situation when a resource is changed outside terraform, but the characteristic that changed is not something that Terraform manages. For example,
-let's consider a Terraform configuration declaring an AWS instance to be created. The plan is executed and the resource is created. What happens if the AWS instance is stopped?
-
-This resource state change is reported as an `update drift` by Terraform.
-Based on the information provided by the `tf.plan` sensor the affected entity are shown as being `ON_FIRE`.
-The `tf.plan` sensor displays:
-
-```
-{
-    tf.plan.message=Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration.Plan: 0 to add, 0 to change, 0 to destroy., 
-    tf.plan.status=DRIFT, 
-    tf.resource.changes=[
-        {
-          resource.addr=aws_instance.example,
-          resource.action=update
-        }
-    ]
-}
-```
-The Terraform Configuration entity managing it is reported to be `ON_FIRE`, so is the application. The entities that are not affected by the drift are shown as `RUNNING`.
-The `tf.plan` contents are somewhat conflicting because although there are resource changes, its message says `Plan: 0 to add, 0 to change, 0 to destroy.`
-This is because the resource is unreachable, but none of its configurations as known by terraform are changed.
-
-In this situation there are two possible actions:
-
-- Invoke the `apply` effector of the Terraform Configuration entity, this will apply the configuration, conclude there is nothing to apply because nothing has changed. The resource state will be refreshed, and the new instance state of 'stopped' will be recorded.
-- Manually start the instance and then invoke the `apply` effector,  this will apply the configuration, conclude there is nothing to apply because nothing has changed. The resource state will be refreshed, and the new instance state of 'running' will be recorded.
-
-In about 15-30 seconds, at the next AMP inspection, if the `apply` effector executed correctly, the `tf.plan` sensor displays  `{tf.plan.message=No changes. Your infrastructure matches the configuration., tf.plan.status=SYNC}`.
-If the instance was not started manually, the matching entity is shown as stopped (grey bubble). If the instance was started the matching entity is shown as running(green bubble).
-The Terraform Configuration entity managing and unaffected entities are shown as `RUNNING`.
 
 ### Recovering from an Error state
 

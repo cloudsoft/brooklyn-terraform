@@ -28,7 +28,8 @@ import static io.cloudsoft.terraform.entity.TerraformResource.*;
 
 public  final class EntityParser {
 
-    private static Predicate<Map<String,Object>> isRunnable = resource -> resource.get("resource.type").toString().endsWith("_instance") ||
+    private static Predicate<Map<String,Object>> IS_RUNNABLE = resource ->
+            resource.get("resource.type").toString().endsWith("_instance") ||
             resource.get("resource.type").toString().endsWith("_virtual_machine") ||
             resource.get("resource.type").toString().endsWith("_cluster");
 
@@ -61,7 +62,7 @@ public  final class EntityParser {
                 resource.put("drift-compliance", ((TerraformConfiguration) entity).isApplyDriftComplianceToResources());
 
                 resource.put("total-resource-number", managedResourceNumber);
-                if (isRunnable.test(resource)){
+                if (IS_RUNNABLE.test(resource)){
                     entity.addChild(basicSpec(StartableManagedResource.class, resource, getIdPrefixFor(entity)));
                 } else
                     entity.addChild(basicSpec(ManagedResource.class, resource, getIdPrefixFor(entity)));

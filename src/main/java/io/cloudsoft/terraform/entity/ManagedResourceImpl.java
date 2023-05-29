@@ -1,6 +1,7 @@
 package io.cloudsoft.terraform.entity;
 
 import org.apache.brooklyn.core.entity.Attributes;
+import org.apache.brooklyn.core.entity.Entities;
 import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.entity.lifecycle.ServiceStateLogic;
 import org.apache.brooklyn.core.sensor.Sensors;
@@ -8,7 +9,7 @@ import org.apache.brooklyn.entity.stock.BasicEntityImpl;
 
 import java.util.Map;
 
-public class ManagedResourceImpl extends BasicEntityImpl implements  ManagedResource {
+public class ManagedResourceImpl extends BasicEntityImpl implements ManagedResource {
 
     @Override
     public void init() {
@@ -20,7 +21,7 @@ public class ManagedResourceImpl extends BasicEntityImpl implements  ManagedReso
         Map<String, Object> resourceDetails = this.getConfig(StartableManagedResource.STATE_CONTENTS);
         resourceDetails.forEach((k,v) -> sensors().set(Sensors.newSensor(Object.class, "tf." + k), v.toString()));
         if(!resourceDetails.containsKey("resource.status")) {
-            sensors().set(RESOURCE_STATUS, "ok"); // the provider doesn't provide any property to let us know the state of the resource
+            sensors().set(ManagedResource.RESOURCE_STATUS, "ok"); // the provider doesn't provide any property to let us know the state of the resource
         }
         this.setDisplayName(getConfig(StartableManagedResource.ADDRESS));
         updateResourceState();
@@ -37,15 +38,17 @@ public class ManagedResourceImpl extends BasicEntityImpl implements  ManagedReso
         return true;
     }
 
-    @Override
     public void updateResourceState() {
-        final String resourceStatus = sensors().get(RESOURCE_STATUS);
+        final String resourceStatus = sensors().get(ManagedResource.RESOURCE_STATUS);
         if(resourceStatus.equals("changed")) {
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.ON_FIRE);
             ServiceStateLogic.updateMapSensorEntry(this, Attributes.SERVICE_PROBLEMS,
                     "TF-ASYNC", "Resource changed outside terraform.");
         } else {
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.CREATED);
+            ServiceStateLogic.updateMapSensorEntry(this, Attributes.SERVICE_PROBLEMS,
+                    "TF-ASYNC", Entities.REMOVE);
         }
     }
+
 }
