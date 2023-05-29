@@ -8,17 +8,14 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import io.cloudsoft.terraform.TerraformConfiguration;
-import org.apache.brooklyn.core.resolve.jackson.BeanWithTypeUtils;
-import org.apache.brooklyn.core.resolve.jackson.BrooklynJacksonSerializationUtils;
+import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -32,15 +29,6 @@ import static io.cloudsoft.terraform.parser.PlanLogEntry.Provider.GOOGLE;
 public final class StateParser {
     private static final Logger LOG = LoggerFactory.getLogger(StateParser.class);
     public static final ImmutableList BLANK_ITEMS = ImmutableList.of("[]", "", "null", "\"\"", "{}", "[{}]");
-
-    /**
-     * Resources phantom drift is reported for
-     */
-    public static final ImmutableSet IGNORE_PHANTOM_DRIFT_FOR_RESOURCES = ImmutableSet.of(
-            // this is known always to report drift;
-            // however TODO we should default to none and let user configure it, either in terraform, or on the entity rather than a static list
-            "aws_emr_cluster.spark_cluster"
-             );
 
     private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) ple -> ple.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
     private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.CHANGE_SUMMARY;
@@ -159,7 +147,15 @@ public final class StateParser {
         }
     }
 
-    public static Map<String, Object> parsePlanLogEntries(final String planLogEntriesAsStr){
+    public static Map<String, Object> parsePlanLogEntries(Entity entity, final String planLogEntriesAsStr) {
+        return parsePlanLogEntries(planLogEntriesAsStr, entity.config().get(TerraformConfiguration.TERRAFORM_RESOURCES_IGNORED_FOR_DRIFT));
+    }
+
+    public static Map<String, Object> parsePlanLogEntriesForTest(final String planLogEntriesAsStr) {
+        return parsePlanLogEntries(planLogEntriesAsStr, null);
+    }
+
+    public static Map<String, Object> parsePlanLogEntries(final String planLogEntriesAsStr, Collection<String> resourcesToIgnoreForDrift) {
         String[] planLogEntries = planLogEntriesAsStr.split(System.lineSeparator());
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -233,7 +229,7 @@ public final class StateParser {
             planLogs.stream().filter(driftPredicate).forEach(ple -> {
                 if (!"noop".equals(ple.change.get("action"))) {
 
-                    boolean isDriftIgnoredHere = IGNORE_PHANTOM_DRIFT_FOR_RESOURCES.contains(((Map<String, String>) ple.change.get("resource")).get("addr"));
+                    boolean isDriftIgnoredHere = resourcesToIgnoreForDrift!=null && resourcesToIgnoreForDrift.contains(((Map<String, String>) ple.change.get("resource")).get("addr"));
                     if (isDriftIgnoredHere) {
                         LOG.debug("Ignoring drift detected at known phantom drifter: "+ple);
                     } else {

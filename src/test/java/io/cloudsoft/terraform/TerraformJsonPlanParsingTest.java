@@ -1,5 +1,6 @@
 package io.cloudsoft.terraform;
 
+import com.google.common.collect.ImmutableSet;
 import io.cloudsoft.terraform.parser.PlanLogEntry;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.testng.annotations.Test;
@@ -19,8 +20,7 @@ public class TerraformJsonPlanParsingTest {
     public void readAwsEmrPhantomDrift() throws IOException {
         final String logs = loadTestData("state/aws-phantom-drift.json");
 
-
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntries(logs, ImmutableSet.of("aws_emr_cluster.spark_cluster"));
         assertEquals(result.size(), 3);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.SYNC);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
@@ -78,7 +78,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseNoChanges() throws IOException {
         final String logs = loadTestData("state/plan-nothing.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals(result.size(), 3);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.SYNC);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
@@ -93,7 +93,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseCreate() throws IOException {
         final String logs = loadTestData("state/plan-create.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
         assertEquals(result.get(PLAN_MESSAGE), "Configuration and infrastructure do not match. Plan: 2 to add, 0 to change, 0 to destroy.");
@@ -121,7 +121,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseUpdateDrift() throws IOException {
         final String logs = loadTestData("state/plan-drift-update.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DRIFT);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
         assertEquals(result.size(), 4);
@@ -144,7 +144,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseAddDrift() throws IOException {
         final String logs = loadTestData("state/plan-drift-create.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals( result.size(), 5);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
@@ -172,7 +172,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseRemoveDrift() throws IOException {
         final String logs = loadTestData("state/plan-drift-remove.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals( result.size(), 5);
         assertEquals(result.get(PLAN_MESSAGE), "Configuration and infrastructure do not match. Plan: 0 to add, 0 to change, 1 to destroy.");
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
@@ -201,7 +201,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseShutdownDrift() throws IOException {
         final String logs = loadTestData("state/plan-drift-shutdown.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals( result.size(), 4);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.STATE_CHANGE);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
@@ -224,7 +224,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseTerminateDrift() throws IOException {
         final String logs = loadTestData("state/plan-drift-terminate.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals( result.size(), 5);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DRIFT);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
@@ -247,7 +247,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseRemoveOutputConfig() throws IOException {
         final String logs = loadTestData("state/plan-remove-output.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals(result.size(),4);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
@@ -266,7 +266,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseFatalError() throws IOException {
         final String logs = loadTestData("state/deleted-tag.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals(result.size(), 5);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.ERROR);
         assertEquals(result.get(PLAN_PROVIDER),PlanLogEntry.Provider.VSPHERE );
@@ -281,7 +281,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseBadConfig() throws IOException {
         final String logs = loadTestData("state/plan-bad-config.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals(3, result.size());
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.ERROR);
         assertEquals(result.get(PLAN_PROVIDER), null);
@@ -305,7 +305,7 @@ public class TerraformJsonPlanParsingTest {
     public void parseVsCreate() throws IOException {
         final String logs = loadTestData("state/vs-plan-create.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.VSPHERE);
         assertEquals(result.get(PLAN_MESSAGE), "Configuration and infrastructure do not match. Plan: 3 to add, 0 to change, 0 to destroy.");
@@ -323,7 +323,7 @@ public class TerraformJsonPlanParsingTest {
     public void readTerraformV125Drift() throws IOException {
         final String logs = loadTestData("state/plan-drift-tf125.json");
 
-        Map<String, Object> result = StateParser.parsePlanLogEntries(logs);
+        Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals(result.size(), 5);
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);

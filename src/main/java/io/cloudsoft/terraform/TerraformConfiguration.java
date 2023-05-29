@@ -1,8 +1,10 @@
 package io.cloudsoft.terraform;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Map;
 
+import com.google.common.reflect.TypeToken;
 import org.apache.brooklyn.api.catalog.Catalog;
 import org.apache.brooklyn.api.entity.ImplementedBy;
 import org.apache.brooklyn.api.sensor.AttributeSensor;
@@ -63,6 +65,11 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
             .name("tf.resource_entities_enabled")
             .description("Create and update entities corresponding to Terraform resources and data")
             .defaultValue(true)
+            .build();
+
+    ConfigKey<Collection<String>> TERRAFORM_RESOURCES_IGNORED_FOR_DRIFT = ConfigKeys.builder(new TypeToken<Collection<String>>() {})
+            .name("tf.resources_ignored_for_drift")
+            .description("Optionally ignore specified resource addresses when considering drift, supplied as a list or set of resource addresses")
             .build();
 
     ConfigKey<CustomWorkflowStep> PRE_PLAN_WORKFLOW = ConfigKeys.builder(CustomWorkflowStep.class, "pre_plan.workflow")

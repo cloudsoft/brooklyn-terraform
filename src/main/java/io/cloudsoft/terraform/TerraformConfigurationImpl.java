@@ -297,7 +297,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         @Override
         public Map<String, Object> apply(@Nullable String tfPlanJson) {
             try {
-                Map<String, Object> tfPlanStatus = StateParser.parsePlanLogEntries(tfPlanJson);
+                Map<String, Object> tfPlanStatus = StateParser.parsePlanLogEntries(entity, tfPlanJson);
                 boolean driftChanged = false;
                 if (entity.sensors().getAll().containsKey(PLAN) && entity.sensors().get(PLAN).containsKey(RESOURCE_CHANGES) &&
                         !entity.sensors().get(PLAN).get(RESOURCE_CHANGES).equals(tfPlanStatus.get(RESOURCE_CHANGES))) {
