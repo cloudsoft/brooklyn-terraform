@@ -149,6 +149,8 @@ Other useful configurations:
 * `tf_var.*` : all configurations prefixed with `tf_var.` are converted to Terraform variables. This is a practical way to avoid using `terraform.tfvars` files and inject the values  directly from the AMP blueprint. Just don't use special characters(e.g. ".") when naming your configurations!
 * `version` : set this with the version of Terraform you want AMP to use to manage your deployment. AMP downloads it and installs in a directory that gets deleted when the application is stopped. By default, the version used is the one configured in the current version of `brooklyn-terraform`.
 * `tf.path` :  set this with the terraform cli path on the location to instruct AMP to use it to manage the deployment.
+* `tf.resources_ignored_for_drift` : a list of resource addresses that will be ignored for the purposes of drift detection and replanning
+
 
 When started the entity installs Terraform and applies the configured plan.
 

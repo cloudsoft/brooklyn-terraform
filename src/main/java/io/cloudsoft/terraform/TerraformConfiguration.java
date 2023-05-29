@@ -32,9 +32,8 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
 
     enum TerraformStatus {
         SYNC, // plan and configuration match
-        DESYNCHRONIZED, // plan and configuration to not match,
-        DRIFT,  // resources have changed outside terraform
-        STATE_CHANGE,  // resource state has changed, but it doesn't qualify as drift that needs correction
+        DRIFT,  // resources in AWS do not match the plan (either because resources have changed or plan has changed)
+        STATE_CHANGE,  // resource state has changed, but it doesn't qualify as drift that needs correction because a simple refresh will fix it
         ERROR // configuration was edited manually and it is incorrect
     }
 

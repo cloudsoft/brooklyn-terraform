@@ -46,7 +46,6 @@ public class ManagedResourceImpl extends BasicEntityImpl implements  ManagedReso
                     "TF-ASYNC", "Resource changed outside terraform.");
         } else {
             sensors().set(Attributes.SERVICE_STATE_ACTUAL, Lifecycle.CREATED);
-            ServiceStateLogic.updateMapSensorEntry(this, Attributes.SERVICE_PROBLEMS, null, null);
         }
     }
 }

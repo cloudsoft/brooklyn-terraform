@@ -19,7 +19,6 @@ import org.apache.brooklyn.util.core.text.TemplateProcessor;
 import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.os.Os;
 import org.apache.brooklyn.util.stream.KnownSizeInputStream;
-import org.apache.brooklyn.util.text.Identifiers;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.Duration;
 import org.apache.brooklyn.util.time.Time;
@@ -43,7 +42,18 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     String PLAN_STATUS = "tf.plan.status";
     String PLAN_PROVIDER = "tf.plan.provider";
+    String PLAN_PROVIDERS = "tf.plan.providers";
     String RESOURCE_CHANGES = "tf.resource.changes";
+    /** resources that terraform has found needs changes made to it to conform to the plan, mapped to the change object */
+    String RESOURCE_CHANGES_PLANNED = "tf.resources.changes_planned";
+    /** resources that terraform has found no longer matches the known state, mapped to the change object */
+    String RESOURCE_DRIFT_DETECTED = "tf.resources.drift_detected";
+    /** resources that terraform has found no longer matches the known state but does _not_ need changes made (e.g. simple refresh will update it), mapped to the change object;
+     * this is not uncommon, e.g. where tags are null but then become {} later, or some aspect of state is allowed to change frequently */
+    String RESOURCE_DRIFT_DETECTED_STATE_ONLY = "tf.resources.drift_detected.state_only";
+    /** resources that terraform has found no longer matches the known state _and_ needs changes made, mapped to the change object */
+    String RESOURCE_DRIFT_DETECTED_CHANGES_NEEDED = "tf.resources.drift_detected.changes_needed";
+
     String PLAN_MESSAGE = "tf.plan.message";
     String PLAN_ERRORS = "tf.errors";
 
@@ -101,8 +111,12 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     default String applySubcommand() {
         return "apply -no-color -input=false -auto-approve";
     }
-    default String applyRefreshOnlySubcommand(String args) {
-        return applySubcommand() + " -refresh-only -auto-approve" + (Strings.isNonBlank(args) ? " "+args : "");
+    default String applyRefreshOnly() {
+        return applySubcommand("-refresh-only");
+    }
+    /** runs apply with the given subcommand; but note that -refresh-only is ignored if a plan is supplied */
+    default String applySubcommand(String args) {
+        return applySubcommand() + (Strings.isNonBlank(args) ? " "+args : "");
     }
 
 
@@ -173,25 +187,17 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return runQueued( taskForTerraformSubCommand(planSubcommand(true, false), "terraform plan (human-readable output)") );
     }
 
-    default String runJsonPlanTask(boolean doRefresh) {
+    default String runJsonPlanTask(boolean doRefresh, String filename) {
         try {
             if (doRefresh) {
                 // `plan` does not update tf state, it just makes a plan that will include that if needed;
                 // but we can apply the plan as refresh-only to do the state-update only
                 // thus the following seems the fastest way to do a refresh and get the plan output
 
-                String filename = "../"+Identifiers.makeRandomId(8)+".plan";
                 String planResult = runQueued(newCommandTaskFactory(true,
                         makeCommandInTerraformActiveDir(
                                 prependTerraformExecutable(planSubcommand(doRefresh /* true */, true) + " -out=" + filename)))
                         .summary("terraform plan")
-                        .newTask().asTask());
-
-                runQueued(newCommandTaskFactory(true,
-                        makeCommandInTerraformActiveDir(
-                                prependTerraformExecutable(applyRefreshOnlySubcommand(filename))
-                                + " && " + "rm "+filename))
-                        .summary("terraform apply -refresh-only (state change) and clean up")
                         .newTask().asTask());
 
                 return planResult;
@@ -230,7 +236,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     }
 
     default Task<String> refreshTaskWithName(final String name, boolean required) {
-        Task<String> t = taskForTerraformSubCommand(applyRefreshOnlySubcommand(null), name);
+        Task<String> t = taskForTerraformSubCommand(applyRefreshOnly(), name);
         if (!required) TaskTags.markInessential(t);
         return t;
     }
@@ -356,36 +362,6 @@ public interface TerraformDriver extends SoftwareProcessDriver {
     default void launch() {
         ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.PRE_APPLY_WORKFLOW);
         ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).runWorkflow(TerraformConfiguration.PRE_PLAN_WORKFLOW);
-
-//        final String planOutput =  retryUntilLockAvailable("terraform plan -json", () -> runJsonPlanTask(true));
-//        Map<String, Object> planLog = StateParser.parsePlanLogEntries(planOutput);
-//        Task<Object> verifyPlanTask = Tasks.create("Verify plan", () -> {
-//            if (planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.ERROR) {
-//                throw new IllegalStateException(planLog.get(PLAN_MESSAGE) + ": " + planLog.get(PLAN_ERRORS));
-//            }
-//        }).asTask();
-//
-//        Task<Object> checkAndApply =Tasks.create("Apply (if no existing deployment is found)", () -> {
-//            boolean deploymentExists = planLog.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC;
-//            if (deploymentExists) {
-//                LOG.debug("Terraform plan exists!!");
-//            } else {
-//                runApplyTask();
-//            }
-//        }).asTask();
-//
-//        retryUntilLockAvailable("launch, various terraform commands", () -> {
-//            TaskBuilder<Object> tb = Tasks.builder()
-//                    .displayName("Verify and apply terraform")
-//                    .add(verifyPlanTask)
-//                    .add(checkAndApply)
-//                    .add(refreshTaskWithName("Refresh Terraform state", false));
-//            ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).workflowTask(TerraformConfiguration.POST_APPLY_WORKFLOW)
-//                            .apply(t -> tb.add(t));
-//            runQueued(tb.build());
-//
-//            return null;
-//        });
 
         // previously we did extensive plan/checks before apply (above); but this was slow and noisy in the UI, so prefer below
         retryUntilLockAvailable("apply", () -> { runApplyTask(); return null; });

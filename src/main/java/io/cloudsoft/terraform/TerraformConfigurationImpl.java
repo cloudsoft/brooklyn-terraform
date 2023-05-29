@@ -12,7 +12,6 @@ import io.cloudsoft.terraform.entity.TerraformResource;
 import io.cloudsoft.terraform.parser.EntityParser;
 import io.cloudsoft.terraform.parser.StateParser;
 import org.apache.brooklyn.api.entity.Entity;
-
 import org.apache.brooklyn.api.location.Location;
 import org.apache.brooklyn.api.location.MachineLocation;
 import org.apache.brooklyn.api.location.MachineProvisioningLocation;
@@ -36,13 +35,15 @@ import org.apache.brooklyn.entity.software.base.SoftwareProcessImpl;
 import org.apache.brooklyn.feed.function.FunctionFeed;
 import org.apache.brooklyn.feed.function.FunctionPollConfig;
 import org.apache.brooklyn.tasks.kubectl.ContainerTaskFactory;
-import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.collections.MutableMap;
+import org.apache.brooklyn.util.core.config.ConfigBag;
 import org.apache.brooklyn.util.core.task.DynamicTasks;
 import org.apache.brooklyn.util.core.task.Tasks;
 import org.apache.brooklyn.util.core.task.system.SimpleProcessTaskFactory;
 import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.guava.Maybe;
+import org.apache.brooklyn.util.text.Identifiers;
+import org.apache.brooklyn.util.text.StringEscapes;
 import org.apache.brooklyn.util.text.Strings;
 import org.apache.brooklyn.util.time.CountdownTimer;
 import org.apache.brooklyn.util.time.Duration;
@@ -57,6 +58,7 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static io.cloudsoft.terraform.TerraformDriver.*;
 import static io.cloudsoft.terraform.entity.StartableManagedResource.RESOURCE_STATUS;
@@ -265,15 +267,54 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         protected Void getWhenHasLock() {
             PlanProcessingFunction planProcessor = new PlanProcessingFunction(entity);
             planProcessor.ignoreStateChangeBecauseGoingToReplan = true;
-            String planOutputJsonLines = getDriver().runJsonPlanTask(doTerraformRefresh);
+            String filename = "../"+ Identifiers.makeRandomId(8)+".plan";
+            String planOutputJsonLines = getDriver().runJsonPlanTask(doTerraformRefresh, filename);
             Map<String, Object> planSensorValue = planProcessor.apply(planOutputJsonLines);
 
-            if (planSensorValue.get(PLAN_STATUS).equals(TerraformStatus.STATE_CHANGE)) {
-                planProcessor.ignoreStateChangeBecauseGoingToReplan = false;
-                LOG.debug("Rerunning plan to update local state; intermediate result: "+planSensorValue);
-                planOutputJsonLines = getDriver().runJsonPlanTask(doTerraformRefresh);
-                planSensorValue = planProcessor.apply(planOutputJsonLines);
+            planProcessor.ignoreStateChangeBecauseGoingToReplan = false;
+
+            /*
+             * If something changes in AWS which contradicts our plan, we expect to get _both_ planned_change and resource_drift.
+             * If we then refresh and plan again, we only get a planned_change.
+             * If something changes in AWS which does not contract our plan, we get only a resource_drift,
+             * in which case normally we want to refresh. The next plan will not report anything.
+             * If our configuration changes, then all we get is a planned_change.
+             *
+             * Thus we want to check on a resource-by-resource basis, if it _only_ has resource_drift, but no changes planned,
+             * then we want to refresh it.
+             * But if it has planned_change (with or without resource_drift) we should _not_ refresh it.
+             *
+             * Annoyingly `terraform apply -refresh-only <plan_file>` ignores the refresh only.
+             */
+
+            Map<String,Object> driftDetectedStateChangeOnly = (Map) planSensorValue.get(RESOURCE_DRIFT_DETECTED_STATE_ONLY);
+
+            if (driftDetectedStateChangeOnly!=null && !driftDetectedStateChangeOnly.isEmpty()) {
+                LOG.debug("Apply state change only updates to resources: "+driftDetectedStateChangeOnly.keySet());
+
+                getDriver().runQueued(getDriver().newCommandTaskFactory(true,
+                                getDriver().makeCommandInTerraformActiveDir(
+                                        getDriver().prependTerraformExecutable(getDriver().applySubcommand(filename +
+                                                driftDetectedStateChangeOnly.keySet().stream().map(r ->
+                                                        " -target="+ StringEscapes.BashStringEscapes.wrapBash(r)).collect(Collectors.joining())
+                                                ))
+                                        + " && " + "rm "+filename))
+                        .summary("terraform apply (limited to state changes) and clean up")
+                        .newTask().asTask());
+
+                planOutputJsonLines = getDriver().runJsonPlanTask(doTerraformRefresh, null);
+
+            } else {
+                // either all resources in sync or have planned changes or output changed; in this case do not refresh,
+                // we can simply use the plan that was found
+                getDriver().runQueued(getDriver().newCommandTaskFactory(true,
+                                getDriver().makeCommandInTerraformActiveDir(
+                                        "rm "+filename))
+                        .summary("clean up")
+                        .newTask().asTask());
             }
+
+            planSensorValue = planProcessor.apply(planOutputJsonLines);
 
             entity.sensors().set(PLAN, planSensorValue);
             deproxied(entity).refreshOutput(false);
@@ -298,24 +339,19 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         public Map<String, Object> apply(@Nullable String tfPlanJson) {
             try {
                 Map<String, Object> tfPlanStatus = StateParser.parsePlanLogEntries(entity, tfPlanJson);
-                boolean driftChanged = false;
-                if (entity.sensors().getAll().containsKey(PLAN) && entity.sensors().get(PLAN).containsKey(RESOURCE_CHANGES) &&
-                        !entity.sensors().get(PLAN).get(RESOURCE_CHANGES).equals(tfPlanStatus.get(RESOURCE_CHANGES))) {
-                    // we had drift previously, and now either we have different drift or we don't have drift
-                    driftChanged = true;
-                }
 
                 final TerraformStatus currentPlanStatus = (TerraformStatus) tfPlanStatus.get(PLAN_STATUS);
                 final boolean ignoreDrift = !entity.getConfig(TerraformConfiguration.TERRAFORM_DRIFT_CHECK);
 
-                if (TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
+                if (TerraformConfiguration.TerraformStatus.ERROR.equals(currentPlanStatus)) {
                     LOG.debug("Setting problem because "+"state is "+tfPlanStatus);
 
-                    ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
-                            tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
+                    ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
+                    ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS,
+                            "TF-ERROR", tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
                     updateResourceStates(tfPlanStatus);
 
-                } else if (ignoreStateChangeBecauseGoingToReplan && tfPlanStatus.get(PLAN_STATUS).equals(TerraformStatus.STATE_CHANGE)) {
+                } else if (ignoreStateChangeBecauseGoingToReplan && TerraformStatus.STATE_CHANGE.equals(currentPlanStatus)) {
                     LOG.debug("Found local-state-only drift. Not updating sensors as this will handled locally and then normally re-run.");
                     return tfPlanStatus;
 
@@ -328,27 +364,35 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     ((EntityInternal)entity).sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
                     deproxied(entity).updateDeploymentState();
 
-                } else if (!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
+                } else if (!TerraformConfiguration.TerraformStatus.SYNC.equals(currentPlanStatus)) {
                     LOG.debug("Setting drift because " + "state is " + tfPlanStatus);
 
-                    entity.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
                     if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
                         ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Resources no longer match initial plan. Invoke 'apply' to synchronize configuration and infrastructure.");
+                        ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
+
                         deproxied(entity).updateDeploymentState(); // we are updating the resources anyway, because we still need to inspect our infrastructure
                         updateResourceStates(tfPlanStatus);
                     } else {
                         ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", "Outputs no longer match initial plan.This is not critical as the infrastructure is not affected. However you might want to invoke 'apply'.");
+                        ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ERROR", Entities.REMOVE);
                     }
+
                     entity.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
                     entity.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), entity.getDriver().runPlanTask());
 
                 } else {
+                    // shouldn't be possible to come here
                     LOG.debug("No action because "+"state is "+tfPlanStatus);
                 }
 
-                if (driftChanged || !entity.sensors().getAll().containsKey(DRIFT_STATUS) || !entity.sensors().get(DRIFT_STATUS).equals(tfPlanStatus.get(PLAN_STATUS))) {
-                    entity.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
+                boolean driftChanged = entity.sensors().get(PLAN)!=null && !Objects.equals(entity.sensors().get(PLAN).get(RESOURCE_CHANGES), tfPlanStatus.get(RESOURCE_CHANGES));
+                if (driftChanged || !Objects.equals(entity.sensors().get(DRIFT_STATUS), currentPlanStatus)) {
+                    // republished whenever drift has changed, or if status has changed
+                    // (deliberately republish same value, if the resources involved are different)
+                    entity.sensors().set(DRIFT_STATUS, currentPlanStatus);
                 }
+
                 deproxied(entity).lastCommandOutputs.put(PLAN.getName(), tfPlanStatus);
                 return tfPlanStatus;
 
