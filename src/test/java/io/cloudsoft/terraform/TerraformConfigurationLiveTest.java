@@ -35,38 +35,6 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
 
     private TerraformConfiguration terraformConfiguration;
 
-    List<BrooklynViewerLauncher> viewers = MutableList.of();
-
-    @AfterMethod(alwaysRun = true, timeOut = 30000L)
-    @Override
-    public void tearDown() throws Exception {
-        tearDownViewers(mgmt, viewers);
-        super.tearDown();
-    }
-
-    // method can be used in a test to add a REST API endpoint to which a UI can be attached
-    protected void attachViewerForNonRebind() {
-        attachViewerForNonRebind(mgmt, viewers);
-    }
-
-    public static void attachViewerForNonRebind(ManagementContext mgmt, Collection<BrooklynViewerLauncher> viewers) {
-        // required for REST access - otherwise it is viewed as not yet ready
-        mgmt.getHighAvailabilityManager().disabled(true);
-        //mgmt.getHighAvailabilityManager().getNodeState();
-        ((RebindManagerImpl)mgmt.getRebindManager()).setAwaitingInitialRebind(false);
-
-        BrooklynViewerLauncher viewer = BrooklynViewerLauncher.newInstance();
-        viewers.add(viewer);
-        viewer.managementContext(mgmt);
-        viewer.persistMode(PersistMode.DISABLED);
-        viewer.start();
-    }
-
-    public static void tearDownViewers(ManagementContext mgmt, Collection<BrooklynViewerLauncher> viewers) {
-        viewers.forEach(BrooklynViewerLauncher::terminate);
-        viewers.clear();
-    }
-
     @Test(groups="Live")
     public void testCreateSecurityGroupSsh() throws Exception {
         doTestCreateSecurityGroup(TerraformCommons.SSH_MODE, true);
@@ -80,7 +48,6 @@ public class TerraformConfigurationLiveTest extends TerraformConfigurationLiveTe
     void doTestCreateSecurityGroup(String mode, boolean needsLocation) throws Exception {
         attachViewerForNonRebind();
 
-        // TODO why local does not show isRunning
         terraformConfiguration = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
                 .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/create-security-group.tf")
                 .configure(TerraformCommons.TF_EXECUTION_MODE, mode)

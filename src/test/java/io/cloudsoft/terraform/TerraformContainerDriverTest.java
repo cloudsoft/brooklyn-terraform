@@ -15,9 +15,13 @@ import org.apache.brooklyn.location.jclouds.BlobStoreContextFactoryImpl;
 import org.apache.brooklyn.location.jclouds.JcloudsLocation;
 import org.apache.brooklyn.test.Asserts;
 import org.apache.brooklyn.util.collections.MutableList;
+import org.apache.brooklyn.util.collections.MutableMap;
+import org.apache.brooklyn.util.exceptions.Exceptions;
 import org.apache.brooklyn.util.stream.Streams;
 import org.apache.brooklyn.util.text.Identifiers;
 import org.apache.brooklyn.util.text.Strings;
+import org.apache.brooklyn.util.time.Duration;
+import org.apache.brooklyn.util.time.Time;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jclouds.blobstore.BlobStore;
 import org.jclouds.blobstore.domain.Blob;
@@ -52,7 +56,12 @@ public class TerraformContainerDriverTest extends AbstractYamlTest {
 
     @Test(groups="Live") // requires access to a Kubernetes cluster via kubectl
     public void simpleEmptyApp() throws Exception {
-        doTest(null, true);
+        TerraformConfigurationLiveTestFixture.attachViewerForNonRebind(mgmt(), viewers);
+        try {
+            doTest(null, true, true);
+        } catch (Exception e) {
+            throw Exceptions.propagate(e);
+        }
     }
 
     protected BlobStore getS3Access() {
@@ -97,7 +106,7 @@ public class TerraformContainerDriverTest extends AbstractYamlTest {
                 "        }",
                 "      }",
                 ""
-        ), true);
+        ), true, false);
         Blob blob = blobstore.getBlob(S3_BUCKET_NAME, key);
         Asserts.assertNotNull(blob);
         String data = Streams.readFullyString(blob.getPayload().openStream());
@@ -138,7 +147,7 @@ public class TerraformContainerDriverTest extends AbstractYamlTest {
                 "        }",
                 "      }",
                 ""
-        ), true);
+        ), true, false);
         Blob blob = blobstore.getBlob(S3_BUCKET_NAME, key);
         Asserts.assertNotNull(blob);
         String data = Streams.readFullyString(blob.getPayload().openStream());
@@ -152,7 +161,7 @@ public class TerraformContainerDriverTest extends AbstractYamlTest {
         blobstore.removeBlob(S3_BUCKET_NAME, key);
     }
 
-    public Application doTest(String lines, boolean start) throws Exception {
+    public Application doTest(String lines, boolean start, boolean assertStaysUp) throws Exception {
         addCatalogItems(loadYaml("classpath://catalog.bom"));  // adding terraform type to the catalog
 
         String blueprint =
@@ -170,6 +179,10 @@ public class TerraformContainerDriverTest extends AbstractYamlTest {
             Dumper.dumpInfo(app);
             EntityAsserts.assertAttributeEqualsEventually(app, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
             EntityAsserts.assertAttributeEqualsEventually(app, Attributes.SERVICE_UP, true);
+        }
+        if (assertStaysUp) {
+            EntityAsserts.assertAttributeEqualsContinually(MutableMap.of("timeout", Duration.ONE_MINUTE), app, Attributes.SERVICE_STATE_ACTUAL, Lifecycle.RUNNING);
+            EntityAsserts.assertAttributeEquals(app, Attributes.SERVICE_UP, true);
         }
 
         return app;
