@@ -70,7 +70,7 @@ services:
         provider "aws" {
             access_key = var.aws_access_key
             secret_key = var.aws_secret_key
-            region = "us-east-1"
+            region = "eu-north-1"
         }
 
         resource "aws_sns_topic" "my_topic" {
@@ -140,9 +140,10 @@ The entity requires a value for one of the `tf.configuration.contents` and `tf.c
 
 Other useful configurations:
 
-* `tf.execution.mode` : either `kube` (the default) to use a container via `kubectl` at the AMP server,
-  or `ssh` to run `terraform` on a server that AMP will ssh to (which should be set as the location),
-  or `local` to run locally at the AMP server (bypassing ssh and not requiring a location)
+* `tf.execution.mode` : location of the `terraform`executable
+    * `kube` (the default) to use a container via `kubectl` at the AMP server
+    * `ssh` to run `terraform` on a server that AMP will ssh to (which should be set as the location)
+    * `local` to run locally at the AMP server (bypassing ssh and not requiring a location)
 * `tf.polling.period` : how often should AMP check the status of the Terraform deployment. Default value is 15s.
 * `tf.drift.check` : default value is `true` which means AMP reports drift if Terraform does. Set this to `false` (not recommended) to disable drift checking.
 * `tf_var.*` : all configurations prefixed with `tf_var.` are converted to Terraform variables. This is a practical way to avoid using `terraform.tfvars` files and inject the values  directly from the AMP blueprint. Just don't use special characters(e.g. ".") when naming your configurations!
