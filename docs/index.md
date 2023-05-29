@@ -34,17 +34,19 @@ services:
   brooklyn.config:
     tf.execution.mode: ssh
     tf.configuration.contents: |
-        resource "aws_instance" "example" {
-            ami = "ami-408c7f28"
-            instance_type = "t1.micro"
-            tags = {
-                Name = "brooklyn-terraform-test"
-            }
-        }
-
-        resource "aws_eip" "ip" {
-            instance = "${aws_instance.example.id}"
-        }
+      resource "aws_instance" "example" {
+          ami           = "ami-092cce4a19b438926"
+          instance_type = "t3.micro"
+          tags = {
+              Name = "brooklyn-terraform-test"
+          }
+      }
+      resource "aws_eip" "ip" {
+          instance = aws_instance.example.id
+      }
+      provider "aws" {
+        region     = "eu-north-1"
+      }
 ```
 
 The above assumes your AWS credentials are configured in `~/.aws/` and the command-line `terraform`
