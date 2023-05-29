@@ -57,7 +57,9 @@ public  final class EntityParser {
         }
         if(!managedResources.isEmpty()) {
             managedResources.forEach(resource -> {
+                // TODO rename? this means whether drift is _enabled_ not whether it has drifted
                 resource.put("drift-compliance", ((TerraformConfiguration) entity).isApplyDriftComplianceToResources());
+
                 resource.put("total-resource-number", managedResourceNumber);
                 if (isRunnable.test(resource)){
                     entity.addChild(basicSpec(StartableManagedResource.class, resource, getIdPrefixFor(entity)));

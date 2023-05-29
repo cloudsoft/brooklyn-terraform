@@ -263,7 +263,19 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
         @Override
         protected Void getWhenHasLock() {
-            entity.sensors().set(PLAN, new PlanProcessingFunction(entity).apply(getDriver().runJsonPlanTask(doTerraformRefresh)));
+            PlanProcessingFunction planProcessor = new PlanProcessingFunction(entity);
+            planProcessor.ignoreStateChangeBecauseGoingToReplan = true;
+            String planOutputJsonLines = getDriver().runJsonPlanTask(doTerraformRefresh);
+            Map<String, Object> planSensorValue = planProcessor.apply(planOutputJsonLines);
+
+            if (planSensorValue.get(PLAN_STATUS).equals(TerraformStatus.STATE_CHANGE)) {
+                planProcessor.ignoreStateChangeBecauseGoingToReplan = false;
+                LOG.debug("Rerunning plan to update local state; intermediate result: "+planSensorValue);
+                planOutputJsonLines = getDriver().runJsonPlanTask(doTerraformRefresh);
+                planSensorValue = planProcessor.apply(planOutputJsonLines);
+            }
+
+            entity.sensors().set(PLAN, planSensorValue);
             deproxied(entity).refreshOutput(false);
             return null;
         }
@@ -275,6 +287,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
 
     private static final class PlanProcessingFunction implements Function<String, Map<String, Object>>  {
         private final TerraformConfiguration entity;
+        boolean ignoreStateChangeBecauseGoingToReplan = false;
 
         public PlanProcessingFunction(TerraformConfiguration entity) {
             this.entity = entity;
@@ -295,7 +308,18 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 final TerraformStatus currentPlanStatus = (TerraformStatus) tfPlanStatus.get(PLAN_STATUS);
                 final boolean ignoreDrift = !entity.getConfig(TerraformConfiguration.TERRAFORM_DRIFT_CHECK);
 
-                if (ignoreDrift || currentPlanStatus == TerraformStatus.SYNC) {
+                if (TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
+                    LOG.debug("Setting problem because "+"state is "+tfPlanStatus);
+
+                    ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
+                            tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
+                    updateResourceStates(tfPlanStatus);
+
+                } else if (ignoreStateChangeBecauseGoingToReplan && tfPlanStatus.get(PLAN_STATUS).equals(TerraformStatus.STATE_CHANGE)) {
+                    LOG.debug("Found local-state-only drift. Not updating sensors as this will handled locally and then normally re-run.");
+                    return tfPlanStatus;
+
+                } else if (ignoreDrift || currentPlanStatus == TerraformStatus.SYNC) {
                     LOG.debug("Clearing problems and refreshing state because "+"state is "+tfPlanStatus+(currentPlanStatus == TerraformStatus.SYNC ? "" : " and ignoring drift"));
                     // plan status is SYNC so no errors, no ASYNC resources OR drift is ignored
                     ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ASYNC", Entities.REMOVE);
@@ -304,15 +328,8 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     ((EntityInternal)entity).sensors().remove(Sensors.newSensor(Object.class, "tf.plan.changes"));
                     deproxied(entity).updateDeploymentState();
 
-                } else if (TerraformConfiguration.TerraformStatus.ERROR.equals(tfPlanStatus.get(PLAN_STATUS))) {
-                    LOG.debug("Setting problem because "+"state is "+tfPlanStatus);
-
-                    ServiceStateLogic.updateMapSensorEntry(entity, Attributes.SERVICE_PROBLEMS, "TF-ERROR",
-                            tfPlanStatus.get(PLAN_MESSAGE) + ":" + tfPlanStatus.get("tf.errors"));
-                    updateResourceStates(tfPlanStatus);
-
                 } else if (!tfPlanStatus.get(PLAN_STATUS).equals(TerraformConfiguration.TerraformStatus.SYNC)) {
-                    LOG.debug("Setting drift because "+"state is "+tfPlanStatus);
+                    LOG.debug("Setting drift because " + "state is " + tfPlanStatus);
 
                     entity.sensors().set(DRIFT_STATUS, (TerraformStatus) tfPlanStatus.get(PLAN_STATUS));
                     if (tfPlanStatus.containsKey(RESOURCE_CHANGES)) {
@@ -324,6 +341,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     }
                     entity.sensors().set(Sensors.newSensor(Object.class, "compliance.drift"), tfPlanStatus);
                     entity.sensors().set(Sensors.newSensor(Object.class, "tf.plan.changes"), entity.getDriver().runPlanTask());
+
                 } else {
                     LOG.debug("No action because "+"state is "+tfPlanStatus);
                 }

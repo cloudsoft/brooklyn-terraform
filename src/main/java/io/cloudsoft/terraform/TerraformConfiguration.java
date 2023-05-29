@@ -32,6 +32,7 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
         SYNC, // plan and configuration match
         DESYNCHRONIZED, // plan and configuration to not match,
         DRIFT,  // resources have changed outside terraform
+        STATE_CHANGE,  // resource state has changed, but it doesn't qualify as drift that needs correction
         ERROR // configuration was edited manually and it is incorrect
     }
 

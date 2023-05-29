@@ -8,7 +8,10 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import io.cloudsoft.terraform.TerraformConfiguration;
+import org.apache.brooklyn.core.resolve.jackson.BeanWithTypeUtils;
+import org.apache.brooklyn.core.resolve.jackson.BrooklynJacksonSerializationUtils;
 import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -33,7 +36,11 @@ public final class StateParser {
     /**
      * Resources phantom drift is reported for
      */
-    public static final ImmutableList PROBLEMATIC_RESOURCES = ImmutableList.of("aws_emr_cluster.spark_cluster");
+    public static final ImmutableSet IGNORE_PHANTOM_DRIFT_FOR_RESOURCES = ImmutableSet.of(
+            // this is known always to report drift;
+            // however TODO we should default to none and let user configure it, either in terraform, or on the entity rather than a static list
+            "aws_emr_cluster.spark_cluster"
+             );
 
     private static  Predicate<? super PlanLogEntry> providerPredicate = (Predicate<PlanLogEntry>) ple -> ple.getProvider() != PlanLogEntry.Provider.NOT_SUPPORTED;
     private static  Predicate<? super PlanLogEntry> changeSummaryPredicate = (Predicate<PlanLogEntry>) ple -> ple.type == PlanLogEntry.LType.CHANGE_SUMMARY;
@@ -171,14 +178,22 @@ public final class StateParser {
         planLogs.stream().filter(providerPredicate).findFirst().ifPresent(p -> result.put(PLAN_PROVIDER, p.getProvider()));
 
         Optional<PlanLogEntry> changeSummaryLog = planLogs.stream().filter(changeSummaryPredicate).findFirst(); // it is not there when the config is broken
-        final AtomicBoolean noChangesDetected = new AtomicBoolean(false);
+        boolean noChangesDetected = false;
         if(changeSummaryLog.isPresent()) {
-            if (NO_CHANGES.equals(changeSummaryLog.get().message)) {
+            if (changeSummaryLog.get().changes!=null &&
+                    changeSummaryLog.get().changes.get("add").equals(0) &&
+                    changeSummaryLog.get().changes.get("change").equals(0) &&
+                    changeSummaryLog.get().changes.get("remove").equals(0)) {
+                noChangesDetected = true;
+            } else if (NO_CHANGES.equals(changeSummaryLog.get().message)) {
+                noChangesDetected = true;
+            }
+
+            if (noChangesDetected) {
                 result.put(PLAN_MESSAGE, "No changes. Your infrastructure matches the configuration.");
                 result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.SYNC);
-                noChangesDetected.set(true);
             } else {
-                result.put(PLAN_MESSAGE, "Configuration and infrastructure do not match." + changeSummaryLog.get().message);
+                result.put(PLAN_MESSAGE, "Configuration and infrastructure do not match. " + changeSummaryLog.get().message);
                 result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
             }
         }
@@ -217,19 +232,29 @@ public final class StateParser {
             List<Map<String,Object>> resources = new ArrayList<>();
             planLogs.stream().filter(driftPredicate).forEach(ple -> {
                 if (!"noop".equals(ple.change.get("action"))) {
-                    boolean isProblematic =   PROBLEMATIC_RESOURCES.contains(((Map<String, String>) ple.change.get("resource")).get("addr"));
-                    if (! (noChangesDetected.get() && isProblematic)) {
+
+                    boolean isDriftIgnoredHere = IGNORE_PHANTOM_DRIFT_FOR_RESOURCES.contains(((Map<String, String>) ple.change.get("resource")).get("addr"));
+                    if (isDriftIgnoredHere) {
+                        LOG.debug("Ignoring drift detected at known phantom drifter: "+ple);
+                    } else {
+                        LOG.debug("Detected drift: "+ple);
                         resources.add(ImmutableMap.of(
                                 "resource.addr", ((Map<String, String>) ple.change.get("resource")).get("addr"),
-                                "resource.action", ple.change.get("action").toString()
-                        ));
+                                "resource.action", ple.change.get("action"))
+                        );
                     }
                 }
             });
-            if(!resources.isEmpty()) {
+
+            if (!resources.isEmpty()) {
                 result.put(RESOURCE_CHANGES, resources);
-                result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DRIFT);
-                result.put(PLAN_MESSAGE, "Drift Detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration." +  changeSummaryLog.get().message);
+                if (noChangesDetected) {
+                    result.put(PLAN_MESSAGE, "Drift detected in state. No changes required to resources but local state needs an update.");
+                    result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.STATE_CHANGE);
+                } else {
+                    result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DRIFT);
+                    result.put(PLAN_MESSAGE, "Drift detected. Configuration and infrastructure do not match. Run apply to align infrastructure and configuration. Configurations made outside terraform will be lost if not added to the configuration. " + changeSummaryLog.get().message);
+                }
             }
         }
 
@@ -262,7 +287,7 @@ public final class StateParser {
 
         if(result.get(PLAN_STATUS) == TerraformConfiguration.TerraformStatus.SYNC && result.containsKey("tf.output.changes")) {
             // infrastructure is ok, only the outputs set has changed
-            result.put(PLAN_MESSAGE, "Outputs configuration was changed." + changeSummaryLog.get().message);
+            result.put(PLAN_MESSAGE, "Outputs configuration was changed. " + changeSummaryLog.get().message);
             result.put(PLAN_STATUS, TerraformConfiguration.TerraformStatus.DESYNCHRONIZED);
         }
         return result;

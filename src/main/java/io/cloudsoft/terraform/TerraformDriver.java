@@ -102,7 +102,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return "apply -no-color -input=false -auto-approve";
     }
     default String applyRefreshOnlySubcommand(String args) {
-        return applySubcommand() + " -refresh-only" + (Strings.isNonBlank(args) ? " "+args : "");
+        return applySubcommand() + " -refresh-only -auto-approve" + (Strings.isNonBlank(args) ? " "+args : "");
     }
 
 
@@ -397,8 +397,9 @@ public interface TerraformDriver extends SoftwareProcessDriver {
                 .displayName("Update model and sensors after apply")
                 .body(() -> {
                     // replan to update drift and populate the model, then set output;
-                    // this will use -refresh=false although that doesn't speed it up as much as we would hope
-                    ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).planInternal(false);
+                    // previously we used -refresh=false but that doesn't speed it up as much as we would hope;
+                    // we also sometimes find there is additional state change found on refresh, so worth doing usually
+                    ((TerraformConfigurationImpl) Entities.deproxy(getEntity())).planInternal(true);
                 });
         runQueued(tb.build());
 
