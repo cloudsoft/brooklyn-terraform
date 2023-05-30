@@ -162,7 +162,7 @@ public class TerraformJsonPlanParsingTest {
         assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.DRIFT);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
         assertEquals(result.get(PLAN_MESSAGE),
-                "Current plan does not match infrastructure. Run apply to align infrastructure and configuration. " +
+                "Outputs have changed. Additionally: Current plan does not match infrastructure. Run apply to align infrastructure and configuration. " +
                         "Configurations made outside terraform will be lost if not added to the configuration. Plan: 1 to add, 0 to change, 0 to destroy.");
 
         List<Map<String, Object>> outputs = ((List<Map<String, Object>>)result.get("tf.output.changes"));
@@ -280,7 +280,7 @@ public class TerraformJsonPlanParsingTest {
 
         Map<String, Object> result = StateParser.parsePlanLogEntriesForTest(logs);
         assertEquals(result.size(),5);
-        assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.SYNC);
+        assertEquals(result.get(PLAN_STATUS), TerraformConfiguration.TerraformStatus.STATE_CHANGE);
         assertEquals(result.get(PLAN_PROVIDER), PlanLogEntry.Provider.AWS);
 
         // note: previously we reported this as "desynchronized", but since terraform doesn't report it as drift we won't
