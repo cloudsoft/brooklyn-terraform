@@ -20,6 +20,9 @@ plugin_cache_may_break_dependency_lock_file = true\n\
 RUN cd ~ ; \
   mkdir tmp ; cd tmp ; \
   echo "provider \"aws\" {}" > index.tf ; \
+  echo "provider \"azurerm\" {}" >> index.tf ; \
+  echo "provider \"google\" {}" >> index.tf ; \
+  echo "provider \"vsphere\" {}" >> index.tf ; \
   terraform init ; \
   cd .. ; \
   rm -rf tmp
