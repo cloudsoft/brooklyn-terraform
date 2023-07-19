@@ -141,8 +141,14 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
             "This is useful when the URL points to a GitHub or Artifactory release.")
     void reinstallConfig(@EffectorParam(name = "configUrl", description = "URL pointing to the terraform configuration") @Nullable String configUrl);
 
+    // on interface to invoke bypassing effectors
+    void reinstallConfigInternal(@Nullable String configUrl);
+
     TerraformDriver getDriver();
 
     Boolean isApplyDriftComplianceToResources();
     void setApplyDriftComplianceToResources(Boolean doApply);
+
+    // on interface so we can reinitialize them
+    void connectSensors();
 }

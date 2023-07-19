@@ -141,7 +141,7 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     }
 
     @Override
-    protected void connectSensors() {
+    public void connectSensors() {
         super.connectSensors();
         connectServiceUpIsRunning();
 
@@ -711,6 +711,10 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
     @Effector(description = "Performs Terraform apply again with the configuration provided via the provided URL. If an URL is not provided the original URL provided when this blueprint was deployed will be used." +
             "This is useful when the URL points to a GitHub or Artifactory release.")
     public void reinstallConfig(@EffectorParam(name = "configUrl", description = "URL pointing to the terraform configuration") @Nullable String configUrl) {
+        reinstallConfigInternal(configUrl);
+    }
+
+    public void reinstallConfigInternal(@Nullable String configUrl) {
         if(StringUtils.isNotBlank(configUrl)) {
             config().set(TerraformCommons.CONFIGURATION_URL, configUrl);
         }
