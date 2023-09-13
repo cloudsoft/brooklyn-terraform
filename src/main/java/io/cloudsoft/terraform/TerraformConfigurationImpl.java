@@ -151,19 +151,15 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                 .period(getConfig(TerraformCommons.POLLING_PERIOD))
                 .poll(FunctionPollConfig.forMultiple().name("Refresh terraform")
                         .supplier(new RefreshTerraformModelAndSensors(this, true))
-                        .onException(e -> {
-                            // error will get caught by the polling framework, but this will make it more prominent in the UI
-                            return DynamicTasks.queue(Tasks.fail("Error refreshing terraform", e)).getUnchecked();
-                        }))
-
-//                .poll(FunctionPollConfig.forSensor(PLAN).supplier(new PlanProvider(this, true)).name("refresh terraform plan")
-//                        .onResult(new PlanSuccessFunction())
-//                        .onFailure(new PlanFailureFunction()))
-//                .poll(FunctionPollConfig.forSensor(OUTPUT).supplier(new OutputProvider(this, false)).name("terraform output")
-//                        .onResult(new OutputSuccessFunction())
-//                        .onFailure(new OutputFailureFunction()))
-
+                        .onException(new QueueAndRunFailedTasks()) )
                 .build());
+    }
+
+    static class QueueAndRunFailedTasks implements Function<Throwable, Void> {
+        @Override
+        public Void apply(Throwable e) {
+            return DynamicTasks.queue(Tasks.fail("Error refreshing terraform", e)).getUnchecked();
+        }
     }
 
     @Override
