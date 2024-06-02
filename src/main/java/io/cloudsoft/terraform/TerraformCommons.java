@@ -61,6 +61,11 @@ public interface TerraformCommons {
             .description("Freemarker templates for files to be installed, keyed by path (in working dir, absolute, or relative to ~/), value being contents or templates")
             .build();
 
+    ConfigKey<Boolean> TF_STATE_CONFLICTS_IN_ZIP_IGNORED = ConfigKeys.builder(Boolean.class)
+            .name("tf.state_conflicts_in_zip_ignored")
+            .description("Whether if the ZIP has *.tfstate files which conflict with those on disk, to ignore them. Should be set if injecting tfstate from a ZIP.")
+            .build();
+
     @SetFromFlag("tfExecutionMode")
     ConfigKey<String> TF_EXECUTION_MODE = ConfigKeys.builder(String.class)
             .name("tf.execution.mode") // should be part of deployed the bundle

@@ -39,6 +39,20 @@ public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppL
     @BeforeMethod(alwaysRun=true)
     @Override
     public void setUp() throws Exception {
+        setUpBrooklynProperties();
+        mgmt = new LocalManagementContext(brooklynProperties);
+        super.setUp();
+        env = setUpEnv();
+    }
+
+    protected Map<String, Object> setUpEnv() {
+        return ImmutableMap.of(
+                "AWS_ACCESS_KEY_ID", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.identity", "brooklyn.jclouds.aws-ec2.identity"),
+                "AWS_SECRET_ACCESS_KEY", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.credential", "brooklyn.jclouds.aws-ec2.credential"),
+                "AWS_REGION", REGION_NAME);
+    }
+
+    protected void setUpBrooklynProperties() {
         // Don't let any defaults from brooklyn.properties (except credentials) interfere with test
         brooklynProperties = BrooklynProperties.Factory.newDefault();
         brooklynProperties.remove("brooklyn.jclouds."+PROVIDER+".image-description-regex");
@@ -49,13 +63,6 @@ public abstract class TerraformConfigurationLiveTestFixture extends BrooklynAppL
 
         // Also removes scriptHeader (e.g. if doing `. ~/.bashrc` and `. ~/.profile`, then that can cause "stdin: is not a tty")
         brooklynProperties.remove("brooklyn.ssh.config.scriptHeader");
-
-        mgmt = new LocalManagementContext(brooklynProperties);
-        super.setUp();
-        env = ImmutableMap.of(
-                "AWS_ACCESS_KEY_ID", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.identity", "brooklyn.jclouds.aws-ec2.identity"),
-                "AWS_SECRET_ACCESS_KEY", getRequiredProperty("brooklyn.location.jclouds.aws-ec2.credential", "brooklyn.jclouds.aws-ec2.credential"),
-                "AWS_REGION", REGION_NAME);
     }
 
 

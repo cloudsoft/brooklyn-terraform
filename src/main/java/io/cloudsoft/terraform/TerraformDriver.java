@@ -287,7 +287,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
 
     default void moveConfigurationFilesToBackupDir() {
         final String activePath = getTerraformActiveDir();
-        final String backupPath = activePath + "../backup/";
+        final String backupPath = activePath + getBackupDirRelativeToActiveDir();
 
         runQueued( newCommandTaskFactory(false, String.join(" ; ",
                 "mkdir -p "+activePath,
@@ -299,6 +299,10 @@ public interface TerraformDriver extends SoftwareProcessDriver {
             .summary("Move existing configuration files to backup folder")
             .allowingNonZeroExitCode()  // working directory may be empty
         );
+    }
+
+    default String getBackupDirRelativeToActiveDir() {
+        return "../backup/";
     }
 
 
@@ -354,10 +358,17 @@ public interface TerraformDriver extends SoftwareProcessDriver {
             copyTemplatesContents();
         }));
 
-        DynamicTasks.queue(newCommandTaskFactory(true,
-                "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then "
-                        + "mv " + cfgPath + " " + cfgPath + ".zip && cd " + getTerraformActiveDir() + " &&"
-                        + "unzip " + cfgPath + ".zip ; fi")
+        boolean ignoreZipStateConflicts = Boolean.TRUE.equals(getEntity().config().get(TF_STATE_CONFLICTS_IN_ZIP_IGNORED));
+        DynamicTasks.queue(newCommandTaskFactory(true, Strings.lines(
+                "if grep -q \"No errors detected\" <<< $(unzip -t "+ cfgPath +" ); then",
+                "  echo ZIP file detected. Unzipping it.",
+                "  cd "+getTerraformActiveDir(),
+                "  mv " + cfgPath + " ../latest_configuration.zip",
+                "  if (unzip -l ../latest_configuration.zip .\\* > /dev/null) ; then echo Dot files not permitted in ZIP ; exit 1 ; fi",
+                // TODO could have config to say whether -n (ignore *.tfstate files in zip which overwrite), as below,
+                // or to fail if tfstate in zip and also on disk (previous behaviour, but not intentional)
+                "  unzip "+ (ignoreZipStateConflicts ? "-n " : "") + "../latest_configuration.zip",
+                "fi"))
                 .summary("Preparing configuration (unzip if necessary)..."));
 
         runTerraformInitAndVerifyTask();
