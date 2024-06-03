@@ -109,6 +109,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
                 + (refresh ? "" : " -refresh=false");
     }
     default String applySubcommand() {
+        // TODO use new config key, if set append here getEntity().config().get(TerraformConfiguration.EXTRA_APPLY_ARGS);
         return "apply -no-color -input=false -auto-approve";
     }
     default String applyRefreshOnly() {
