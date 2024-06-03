@@ -269,9 +269,11 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
         protected Void getWhenHasLock() {
             PlanProcessingFunction planProcessor = new PlanProcessingFunction(entity);
             planProcessor.ignoreStateChangeBecauseGoingToReplan = true;
-            String filename = "../"+ Identifiers.makeRandomId(8)+".plan";
-            String planOutputJsonLines = getDriver().runJsonPlanTask(doTerraformRefresh, filename, null);
+            boolean tfCloudMode = Boolean.TRUE.equals(entity.config().get(TERRAFORM_CLOUD_MODE));
+            String filename = tfCloudMode ? null : "../"+ Identifiers.makeRandomId(8)+".plan";
+            String planOutputJsonLines = tfCloudMode ? "" : getDriver().runJsonPlanTask(doTerraformRefresh, filename, null);
             Map<String, Object> planSensorValue = planProcessor.apply(planOutputJsonLines);
+            boolean statePullNeeded = false;
 
             planProcessor.ignoreStateChangeBecauseGoingToReplan = false;
 
@@ -313,34 +315,42 @@ public class TerraformConfigurationImpl extends SoftwareProcessImpl implements T
                     // meaning TF found planned_changes to the resources which in the first plan didn't have planned changes
                     LOG.debug("Attempt to replan on state-change-only resources generated resources that now have planned changes: "+planSensorValue.get(RESOURCES_CHANGES_PLANNED));
                     // skip the application of that plan; just delete the plan
-                    getDriver().runQueued(getDriver().newCommandTaskFactory(true,
-                                    getDriver().makeCommandInTerraformActiveDir(
-                                            "rm "+filename))
-                            .summary("clean up")
-                            .newTask().asTask());
+                    if (filename!=null) {
+                        getDriver().runQueued(getDriver().newCommandTaskFactory(true,
+                                        getDriver().makeCommandInTerraformActiveDir(
+                                                "rm " + filename))
+                                .summary("clean up")
+                                .newTask().asTask());
+                    }
 
                 } else {
                     getDriver().runQueued(getDriver().newCommandTaskFactory(true,
                                     getDriver().makeCommandInTerraformActiveDir(
                                             getDriver().prependTerraformExecutable(getDriver().applySubcommand(filename))
-                                                    + " && " + "rm " + filename))
+                                                    + (filename!=null ? " && " + "rm " + filename : "")))
                             .summary("terraform apply (limited to state changes) and clean up")
                             .newTask().asTask());
                 }
 
+                // replan, if in this block
                 planOutputJsonLines = getDriver().runJsonPlanTask(doTerraformRefresh);
+                statePullNeeded = true;
 
             } else {
                 // either all resources in sync or have planned changes or output changed; in this case do not refresh,
                 // we can simply use the plan that was found
-                getDriver().runQueued(getDriver().newCommandTaskFactory(true,
-                                getDriver().makeCommandInTerraformActiveDir(
-                                        "rm "+filename))
-                        .summary("clean up")
-                        .newTask().asTask());
+                if (filename!=null) {
+                    getDriver().runQueued(getDriver().newCommandTaskFactory(true,
+                                    getDriver().makeCommandInTerraformActiveDir(
+                                            "rm " + filename))
+                            .summary("clean up")
+                            .newTask().asTask());
+                }
             }
 
-            planSensorValue = planProcessor.apply(planOutputJsonLines);
+            if (statePullNeeded) {
+                planSensorValue = planProcessor.apply(planOutputJsonLines);
+            }
 
             entity.sensors().set(PLAN, planSensorValue);
             deproxied(entity).refreshOutput(false);

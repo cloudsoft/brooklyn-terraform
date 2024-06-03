@@ -161,10 +161,13 @@ public interface TerraformDriver extends SoftwareProcessDriver {
         return Os.mergePathsUnix(getTerraformActiveDir(), ".terraform.tfstate.lock.info");
     }
 
-    default void runTerraformInitAndVerifyTask() {
+    default void runTerraformInitAndVerifyResults() {
         String initialized = runQueued(taskForTerraformSubCommand(initSubcommand(), "terraform init"));
         if (initialized.contains(EMPTY_TF_CFG_WARN)) {
             throw new IllegalStateException("Invalid or missing Terraform configuration: " + initialized);
+        }
+        if (initialized.contains("calculate lock file checksums locally")) {
+            runQueued(taskForTerraformSubCommand("providers lock", "terraform providers lock (detected as required)"));
         }
     }
 
@@ -371,7 +374,7 @@ public interface TerraformDriver extends SoftwareProcessDriver {
                 "fi"))
                 .summary("Preparing configuration (unzip if necessary)..."));
 
-        runTerraformInitAndVerifyTask();
+        runTerraformInitAndVerifyResults();
         DynamicTasks.waitForLast();
     }
 

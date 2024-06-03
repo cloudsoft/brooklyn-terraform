@@ -53,6 +53,13 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
             .defaultValue("")
             .build();
 
+    ConfigKey<Boolean> TERRAFORM_CLOUD_MODE = ConfigKeys.builder(Boolean.class)
+            .name("tf.cloud.enabled")
+            // TODO there are other ways to get the plan from TFC/HCP, which we could do
+            .description("Enable TFC mode. This means not running terraform plan -out=file because TFC doesn't support that, and weaken output requirements.")
+            .defaultValue(false)
+            .build();
+
     @SetFromFlag("tfDriftCheck")
     ConfigKey<Boolean> TERRAFORM_DRIFT_CHECK = ConfigKeys.builder(Boolean.class)
             .name("tf.drift.check")

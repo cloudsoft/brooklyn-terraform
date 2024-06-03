@@ -4,10 +4,13 @@ import java.util.Map;
 
 import com.google.common.collect.ImmutableMap;
 import org.apache.brooklyn.api.entity.EntitySpec;
-import org.apache.brooklyn.core.entity.Dumper;
+import org.apache.brooklyn.core.entity.Attributes;
+import org.apache.brooklyn.core.entity.Entities;
+import org.apache.brooklyn.core.entity.lifecycle.Lifecycle;
 import org.apache.brooklyn.core.internal.BrooklynProperties;
 import org.apache.brooklyn.entity.software.base.SoftwareProcess;
 import org.apache.brooklyn.test.Asserts;
+import org.apache.brooklyn.util.collections.MutableMap;
 import org.apache.brooklyn.util.text.StringEscapes.JavaStringEscapes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +61,36 @@ public class TerraformConfigurationIntegrationTest extends TerraformConfiguratio
 
         LOG.debug("Stopping application ...");
         app.stop();
+    }
+
+    @Test(groups="Live")
+    public void testRandomUsingTfc() throws Exception {
+        attachViewerForNonRebind();
+        env = MutableMap.copyOf(env);
+        env.put("TF_TOKEN_app_terraform_io", Asserts.assertNotNull(System.getenv("TF_TOKEN_app_terraform_io"),
+            "Must set env var TF_TOKEN_app_terraform_io to run this test"));
+
+        tc = app.createAndManageChild(EntitySpec.create(TerraformConfiguration.class)
+                .configure(TerraformCommons.CONFIGURATION_URL, "classpath://plans/random_using_tfc.tf")
+                .configure(TerraformCommons.TF_EXECUTION_MODE, TerraformCommons.LOCAL_MODE)
+                .configure(TerraformConfiguration.TERRAFORM_CLOUD_MODE, true)
+                .configure(SoftwareProcess.SHELL_ENVIRONMENT, env));
+        app.start(null);
+
+        Lifecycle status = app.sensors().get(Attributes.SERVICE_STATE_ACTUAL);
+        assertAttributeEventuallyNonNull(tc, TerraformConfiguration.OUTPUT);
+        String output = tc.sensors().get(TerraformConfiguration.OUTPUT);
+
+        // don't stop it; leave it running for other demos (should clean up so this creates, etc)
+//        app.stop();
+        Entities.unmanage(app);
+        LOG.debug("Unmanaging application (leaving TF running) ...");
+        app = null;
+
+        // do the assertion after unmanaging so it isn't removed
+        // NB: this output might be changed out of band; if so, update or weaken the assertion
+        Asserts.assertStringContains(output, JavaStringEscapes.wrapJavaString("mzzzbd"));
+        Asserts.assertEquals(status, Lifecycle.RUNNING);
     }
 
 }

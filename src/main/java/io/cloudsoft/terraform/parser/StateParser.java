@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.cloudsoft.terraform.TerraformConfiguration;
+import io.cloudsoft.terraform.TerraformConfiguration.TerraformStatus;
 import org.apache.brooklyn.api.entity.Entity;
 import org.apache.brooklyn.util.collections.MutableList;
 import org.apache.brooklyn.util.collections.MutableMap;
@@ -151,6 +152,12 @@ public final class StateParser {
     }
 
     public static Map<String, Object> parsePlanLogEntries(Entity entity, final String planLogEntriesAsStr) {
+        if (entity.config().get(TerraformConfiguration.TERRAFORM_CLOUD_MODE)) {
+            return MutableMap.of(PLAN_MESSAGE, "Plan output unavailable because using cloud."
+                    // always assume it is SYNC for cloud, otherwise we get errors
+                    , PLAN_STATUS, TerraformStatus.SYNC
+            );
+        }
         return parsePlanLogEntries(planLogEntriesAsStr, entity.config().get(TerraformConfiguration.TERRAFORM_RESOURCES_IGNORED_FOR_DRIFT));
     }
 
@@ -165,7 +172,12 @@ public final class StateParser {
 
         List<PlanLogEntry> planLogs = Arrays.stream(planLogEntries).map(log -> {
             try {
-                return objectMapper.readValue(log, PlanLogEntry.class);
+                if (!log.trim().startsWith("{")) {
+                    // in some cases, including with terraform cloud, non-json lines are included
+                    return null;
+                } else {
+                    return objectMapper.readValue(log, PlanLogEntry.class);
+                }
             } catch (JsonProcessingException e) {
                 LOG.warn("Unable to parse plan log entry: "+log, e);
             }
