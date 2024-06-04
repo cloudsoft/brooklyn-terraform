@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -109,9 +110,11 @@ public interface TerraformDriver extends SoftwareProcessDriver {
                 + (refresh ? "" : " -refresh=false");
     }
     default String applySubcommand() {
-        // TODO use new config key, if set append here getEntity().config().get(TerraformConfiguration.EXTRA_APPLY_ARGS);
-        return "apply -no-color -input=false -auto-approve";
+        // TODO use new config key, if set append here
+        List<String> args = getEntity().config().get(TerraformConfiguration.EXTRA_APPLY_ARGS);
+        return "apply -no-color -input=false -auto-approve" + (args==null ? "" : " "+Strings.join(args, " "));
     }
+
     default String applyRefreshOnly() {
         return applySubcommand("-refresh-only");
     }

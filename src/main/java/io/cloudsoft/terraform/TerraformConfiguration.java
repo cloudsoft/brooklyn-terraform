@@ -2,6 +2,7 @@ package io.cloudsoft.terraform;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 import com.google.common.reflect.TypeToken;
@@ -99,6 +100,12 @@ public interface TerraformConfiguration extends SoftwareProcess, TerraformCommon
             .build();
 
     ConfigKey<CustomWorkflowStep> POST_DESTROY_WORKFLOW = ConfigKeys.builder(CustomWorkflowStep.class, "post_destroy.workflow")
+            .description("workflow to run after destroy")
+            .runtimeInheritance(ConfigInheritance.NONE)
+            .build();
+
+
+    ConfigKey<List<String>> EXTRA_APPLY_ARGS = ConfigKeys.builder(new TypeToken<List<String>>() {}, "tf.apply.extra_args")
             .description("workflow to run after destroy")
             .runtimeInheritance(ConfigInheritance.NONE)
             .build();
