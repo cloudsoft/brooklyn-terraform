@@ -63,9 +63,6 @@ public final class StateParser {
             if(!root.get("values").has("root_module")) {
                 throw new  IllegalArgumentException ("A valid deployment state should have a root_module node!");
             }
-            if(!root.get("values").get("root_module").has("resources")) {
-                throw new  IllegalArgumentException ("A valid deployment state should have a resources node!");
-            }
 
             JsonNode resourceNode = root.at("/values/root_module/resources");
             resourceNode.forEach(resource ->  {
