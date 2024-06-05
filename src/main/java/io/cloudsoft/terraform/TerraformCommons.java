@@ -24,7 +24,7 @@ public interface TerraformCommons {
     @SetFromFlag("tfPollingPeriod")
     ConfigKey<Duration> POLLING_PERIOD = ConfigKeys.builder(Duration.class)
             .name("tf.polling.period")
-            .description("Contents of the configuration file that will be applied by Terraform.")
+            .description("How often to refresh Terraform state. Default quite often, 30s.")
             .defaultValue(Duration.seconds(30))
             //.constraint(Constraints.lessThan(Duration.seconds(15))) // if shorter than 15s difficulties of executing 'apply' appear
             .build();
