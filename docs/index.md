@@ -157,7 +157,7 @@ When started the entity installs Terraform and applies the configured plan.
 
 ### Terraform Outputs
 
-The Terraform plan's [outputs](https://www.terraform.io/intro/getting-started/outputs.html) are published as Brooklyn sensors prefixed with `tf.output.`. Use this to communicate
+The Terraform plan's [outputs](https://terraform-docs.io/user-guide/configuration/output/) are published as Brooklyn sensors prefixed with `tf.output.`. Use this to communicate
 information about the infrastructure created by Terraform to other components of the blueprint via Brooklyn's [dependent configuration](https://docs.cloudsoft.io/blueprints/syntax-yaml-reference.html#dsl-commands).
 
 For example, to attach a `TomcatServer` to an AWS security group that was created by a Terraform plan:
