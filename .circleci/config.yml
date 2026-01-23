@@ -1,5 +1,11 @@
 version: 2.1
 
+default-context: &default-context
+  context:
+    - cloudsoft-artifactory
+    - cloudsoft-sonatype
+    - cloudsoft-docker-registry
+
 # An executor type defines the underlying technology or environment in which to run a job.
 executors:
   tf-executor: # default executor image for most cloudsoft projects
