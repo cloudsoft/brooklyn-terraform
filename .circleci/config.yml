@@ -126,19 +126,15 @@ jobs:
 workflows:
   terraform-build-publish-cloudsoft:
     jobs:
-    - build-and-test: # this builds everytime something changes on this repo
-        context:
-        - cloudsoft-artifactory
-        - cloudsoft-sonatype
-    - deploy-cloudsoft:
-        requires:
-          - build-and-test
-        filters:
-          branches:
-            only: [ main ] # trigger only on main
-        context:
-          - cloudsoft-artifactory
-          - cloudsoft-sonatype
+      - build-and-test: # this builds everytime something changes on this repo
+          <<: *default-context
+      - deploy-cloudsoft:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: [ main ] # trigger only on main
+          <<: *default-context
 
   terraform-publish-all:
     triggers:
@@ -149,19 +145,12 @@ workflows:
               only: [ main ] # trigger only on main
     jobs:
       - build-and-test: # this builds everytime something changes on this repo
-          context:
-            - cloudsoft-artifactory
-            - cloudsoft-sonatype
+          <<: *default-context
       - deploy-cloudsoft:
           requires:
             - build-and-test
-          context:
-            - cloudsoft-artifactory
-            - cloudsoft-sonatype
+          <<: *default-context
       - deploy-sonatype:
           requires:
             - build-and-test
-          context:
-            - cloudsoft-artifactory
-            - cloudsoft-sonatype
-
+          <<: *default-context
